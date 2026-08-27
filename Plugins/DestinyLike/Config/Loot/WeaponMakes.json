@@ -1,0 +1,18 @@
+{
+  "weaponMakes": [
+    {
+      "id": "nox_l9",
+      "classId": "sidearm",
+      "displayName": "Nox L9",
+      "massKg": 0.84,
+      "barrelLengthCm": 10.2,
+      "ammoGrains": 124,
+      "muzzleVelocityMps": 350,
+      "grip": 0.62,
+      "compensator": 0.08,
+      "drawSeconds": 0.15,
+      "stowSeconds": 0.13,
+      "stock": "none"
+    }
+  ]
+}

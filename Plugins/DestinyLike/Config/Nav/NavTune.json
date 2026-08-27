@@ -1,0 +1,84 @@
+{
+  "jumpApexCm": 400,
+  "coverHeightCm": 140,
+  "maxStepHeightCm": 70,
+  "agentRadiusCm": 42,
+  "agentHeightCm": 192,
+  "agentMaxSlopeDeg": 55,
+  "probe": {
+    "maxCm": 1800,
+    "jumpableHeadClearCm": 500,
+    "jumpFaceCm": 180,
+    "headLiftCm": 70,
+    "walkableNormalZ": 0.55,
+    "upSlopeMin": 0.04,
+    "lipDropMinCm": 30,
+    "floorProbeMaxCm": 2500,
+    "sampleStepCm": 70,
+    "walkOffGapMaxCm": 250,
+    "coverDepthCm": 160,
+    "startBackupCm": 40
+  },
+  "links": [
+    {
+      "name": "CoverOver",
+      "jumpLength": 200,
+      "jumpDistanceFromEdge": 20,
+      "jumpMaxDepth": 8,
+      "jumpHeight": "coverHeight",
+      "jumpEndsHeightTolerance": 12,
+      "samplingSeparationFactor": 2,
+      "filterDistanceThreshold": 120,
+      "downArea": "default",
+      "upArea": "default"
+    },
+    {
+      "name": "DropDown",
+      "jumpLength": 280,
+      "jumpDistanceFromEdge": 25,
+      "jumpMaxDepth": "survivingDrop",
+      "jumpHeight": 10,
+      "jumpEndsHeightTolerance": "survivingDrop",
+      "samplingSeparationFactor": 2,
+      "filterDistanceThreshold": 180,
+      "downArea": "default",
+      "upArea": "null"
+    },
+    {
+      "name": "JumpUp",
+      "jumpLength": 280,
+      "jumpDistanceFromEdge": 20,
+      "jumpMaxDepth": "-jumpApex",
+      "jumpHeight": "jumpApex",
+      "jumpEndsHeightTolerance": "jumpApex",
+      "samplingSeparationFactor": 2,
+      "filterDistanceThreshold": 120,
+      "downArea": "null",
+      "upArea": "default"
+    },
+    {
+      "name": "JumpDown",
+      "jumpLength": 400,
+      "jumpDistanceFromEdge": 25,
+      "jumpMaxDepth": "survivingDrop",
+      "jumpHeight": "coverHeight",
+      "jumpEndsHeightTolerance": "survivingDrop",
+      "samplingSeparationFactor": 2,
+      "filterDistanceThreshold": 180,
+      "downArea": "default",
+      "upArea": "null"
+    },
+    {
+      "name": "JumpOver",
+      "jumpLength": 280,
+      "jumpDistanceFromEdge": 20,
+      "jumpMaxDepth": 12,
+      "jumpHeight": "jumpApex",
+      "jumpEndsHeightTolerance": 20,
+      "samplingSeparationFactor": 2,
+      "filterDistanceThreshold": 160,
+      "downArea": "longJump",
+      "upArea": "longJump"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "tables": [
+    {
+      "id": "world_common",
+      "rolls": [
+        { "itemKind": "weapon", "weight": 70, "rarity": "common", "slots": ["Primary", "Special"] },
+        { "itemKind": "armor", "weight": 30, "rarity": "common" }
+      ]
+    },
+    {
+      "id": "pvp_match_complete",
+      "rolls": [
+        { "itemKind": "weapon", "weight": 55, "rarity": "uncommon", "slots": ["Primary", "Special"] },
+        { "itemKind": "armor", "weight": 35, "rarity": "uncommon" },
+        { "itemKind": "weapon", "weight": 10, "rarity": "rare", "slots": ["Primary", "Special"] }
+      ]
+    },
+    {
+      "id": "raid_chamber_1",
+      "rolls": [
+        { "itemKind": "weapon", "weight": 50, "rarity": "uncommon", "slots": ["Primary", "Special"] },
+        { "itemKind": "armor", "weight": 35, "rarity": "uncommon" },
+        { "itemKind": "weapon", "weight": 15, "rarity": "rare", "slots": ["Primary", "Special"] }
+      ]
+    },
+    {
+      "id": "raid_chamber_2",
+      "rolls": [
+        { "itemKind": "weapon", "weight": 40, "rarity": "rare", "slots": ["Primary", "Special"] },
+        { "itemKind": "armor", "weight": 35, "rarity": "rare" },
+        { "itemKind": "weapon", "weight": 25, "rarity": "epic", "slots": ["Primary", "Special"] }
+      ]
+    },
+    {
+      "id": "raid_chamber_3",
+      "rolls": [
+        { "itemKind": "weapon", "weight": 35, "rarity": "rare", "slots": ["Primary", "Special"] },
+        { "itemKind": "armor", "weight": 30, "rarity": "epic" },
+        { "itemKind": "weapon", "weight": 35, "rarity": "epic", "slots": ["Primary", "Special"] }
+      ]
+    },
+    {
+      "id": "raid_chamber_4",
+      "rolls": [
+        { "itemKind": "weapon", "weight": 40, "rarity": "epic", "slots": ["Primary", "Special"] },
+        { "itemKind": "armor", "weight": 30, "rarity": "epic" },
+        { "itemKind": "weapon", "weight": 25, "rarity": "legendary", "slots": ["Special"] },
+        { "itemKind": "weapon", "weight": 5, "rarity": "exotic", "slots": ["Primary", "Special"] }
+      ]
+    },
+    {
+      "id": "practice_debug",
+      "rolls": [
+        { "itemKind": "weapon", "weight": 100, "rarity": "rare", "slots": ["Primary", "Special"] }
+      ]
+    },
+    {
+      "id": "gl_prox_debug",
+      "rolls": [
+        { "itemKind": "weapon", "weight": 100, "rarity": "rare", "slots": ["Special"], "classId": "grenade_rifle", "forceBehavior": "prox_detonate" }
+      ]
+    }
+  ],
+  "rarityModifierCounts": {
+    "common": 1,
+    "uncommon": 2,
+    "rare": 3,
+    "epic": 4,
+    "legendary": 4,
+    "exotic": 4
+  },
+  "armorPieces": ["helm", "arms", "chest", "legs"]
+}

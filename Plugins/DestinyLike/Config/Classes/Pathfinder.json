@@ -1,0 +1,13 @@
+{
+  "id": "pathfinder",
+  "characterClass": "DLPathfinderCharacter",
+  "slots": {
+    "jump": { "ability": "rocket_pulse", "args": { "airControl": 0.55, "secondJumpZ": 580 } },
+    "dash": { "ability": "blink_step" },
+    "melee": { "ability": "knife_lunge" },
+    "grenade": { "ability": "drone_canister" },
+    "shield": { "ability": "light_ads" },
+    "evasion": { "ability": "ripple_camo" },
+    "super": { "ability": "mind_control" }
+  }
+}

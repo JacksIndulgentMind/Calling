@@ -1,0 +1,37 @@
+{
+  "comment": "Sketch only — not loaded this pass. A Three-lane+courtyard block is one assembly. Chain macros into snakes, folded loops, or triangles instead of unique mega-maps.",
+  "moduleMeters": 5,
+  "macros": {
+    "three_lane_courtyard": {
+      "recipe": "PvpThreeLane.json",
+      "footprintM": [300, 48]
+    }
+  },
+  "chains": [
+    {
+      "id": "snake",
+      "note": "Place assemblies end-to-end, rotate 0/180 so pads meet.",
+      "steps": [
+        { "macro": "three_lane_courtyard", "yaw": 0 },
+        { "macro": "three_lane_courtyard", "yaw": 180, "offsetM": [300, 0] }
+      ]
+    },
+    {
+      "id": "folded_loop",
+      "note": "Two assemblies side-by-side sharing a long rail; courtyard pits offset.",
+      "steps": [
+        { "macro": "three_lane_courtyard", "yaw": 0 },
+        { "macro": "three_lane_courtyard", "yaw": 0, "offsetM": [0, 60] }
+      ]
+    },
+    {
+      "id": "triangle",
+      "note": "Three assemblies at 120 degrees, pads as vertices.",
+      "steps": [
+        { "macro": "three_lane_courtyard", "yaw": 0 },
+        { "macro": "three_lane_courtyard", "yaw": 120 },
+        { "macro": "three_lane_courtyard", "yaw": 240 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "entries": [
+    { "nav": "CoverCycler", "engagement": "Pusher", "weight": 3.0, "planningHorizonSeconds": 1.2, "aggression": 0.55, "coverDiscipline": 0.7, "flankBias": 0.3 },
+    { "nav": "Flanker", "engagement": "Flanker", "weight": 2.5, "planningHorizonSeconds": 1.6, "aggression": 0.65, "coverDiscipline": 0.4, "flankBias": 0.8 },
+    { "nav": "HoldGround", "engagement": "Sniper", "weight": 2.0, "planningHorizonSeconds": 1.8, "aggression": 0.35, "coverDiscipline": 0.85, "flankBias": 0.1 },
+    { "nav": "AggressivePush", "engagement": "Pusher", "weight": 2.0, "planningHorizonSeconds": 1.0, "aggression": 0.85, "coverDiscipline": 0.2, "flankBias": 0.4 },
+    { "nav": "CoverCycler", "engagement": "Grenadier", "weight": 1.5, "planningHorizonSeconds": 1.4, "aggression": 0.5, "coverDiscipline": 0.6, "flankBias": 0.3 },
+    { "nav": "HoldGround", "engagement": "Ambusher", "weight": 1.5, "planningHorizonSeconds": 2.0, "aggression": 0.4, "coverDiscipline": 0.9, "flankBias": 0.2 },
+    { "nav": "Wanderer", "engagement": "CeilingShooter", "weight": 0.4, "planningHorizonSeconds": 0.8, "aggression": 0.2, "coverDiscipline": 0.1, "flankBias": 0.1 },
+    { "nav": "CircleConfused", "engagement": "WeaponThrower", "weight": 0.2, "planningHorizonSeconds": 0.5, "aggression": 0.1, "coverDiscipline": 0.0, "flankBias": 0.0 },
+    { "nav": "Wanderer", "engagement": "IdleTroll", "weight": 0.1, "planningHorizonSeconds": 0.5, "aggression": 0.0, "coverDiscipline": 0.0, "flankBias": 0.0 }
+  ]
+}

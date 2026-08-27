@@ -1,0 +1,162 @@
+{
+	"version": 1,
+	"binds":
+	{
+		"Fire":
+		{
+			"primary":
+			{
+				"key": "SpaceBar",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"ADS":
+		{
+			"primary":
+			{
+				"key": "Left",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Reload":
+		{
+			"primary":
+			{
+				"key": "R",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Swap":
+		{
+			"primary":
+			{
+				"key": "One",
+				"alt": false
+			},
+			"secondary":
+			{
+				"key": "MouseScrollUp",
+				"alt": false
+			}
+		},
+		"Jump":
+		{
+			"primary":
+			{
+				"key": "LeftControl",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Sprint":
+		{
+			"primary":
+			{
+				"key": "LeftShift",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Crouch":
+		{
+			"primary":
+			{
+				"key": "X",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Slide":
+		{
+			"primary":
+			{
+				"key": "Right",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Dodge":
+		{
+			"primary":
+			{
+				"key": "MiddleMouseButton",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Grenade":
+		{
+			"primary":
+			{
+				"key": "Q",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Melee":
+		{
+			"primary":
+			{
+				"key": "C",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Dash":
+		{
+			"primary":
+			{
+				"key": "V",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Shield":
+		{
+			"primary":
+			{
+				"key": "G",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		},
+		"Evasion":
+		{
+			"primary":
+			{
+				"key": "E",
+				"alt": false
+			},
+			"secondary":
+			{
+			}
+		}
+	}
+}

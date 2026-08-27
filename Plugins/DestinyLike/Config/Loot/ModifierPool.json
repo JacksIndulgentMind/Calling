@@ -1,0 +1,110 @@
+{
+  "maxSlots": 4,
+  "maxStatDelta": 0.12,
+  "maxBehaviorScale": 0.15,
+  "modifiers": [
+    {
+      "id": "steady_hand",
+      "displayName": "Steady Hand",
+      "rarity": "common",
+      "type": "stat",
+      "stats": { "stability": 0.08, "handling": 0.04 }
+    },
+    {
+      "id": "quickdraw_lite",
+      "displayName": "Quickdraw Lite",
+      "rarity": "common",
+      "type": "stat",
+      "stats": { "handling": 0.10 }
+    },
+    {
+      "id": "range_finder",
+      "displayName": "Range Finder",
+      "rarity": "common",
+      "type": "stat",
+      "stats": { "range": 0.08 }
+    },
+    {
+      "id": "reload_mw",
+      "displayName": "Field Reload",
+      "rarity": "common",
+      "type": "stat",
+      "stats": { "reload": 0.10 }
+    },
+    {
+      "id": "lightweight",
+      "displayName": "Lightweight Frame",
+      "rarity": "uncommon",
+      "type": "stat",
+      "stats": { "handling": 0.08, "mobilityBonus": 0.05 }
+    },
+    {
+      "id": "flinch_resist",
+      "displayName": "Unflinching",
+      "rarity": "uncommon",
+      "type": "stat",
+      "stats": { "flinchResist": 0.12 }
+    },
+    {
+      "id": "slide_shot",
+      "displayName": "Slideways",
+      "rarity": "rare",
+      "type": "behavior",
+      "behaviorId": "ads_while_slide_bonus",
+      "behaviorScale": 0.10,
+      "description": "Slight ADS accuracy bonus while sliding."
+    },
+    {
+      "id": "tap_the_trigger",
+      "displayName": "Tap the Trigger",
+      "rarity": "rare",
+      "type": "behavior",
+      "behaviorId": "first_shot_accuracy",
+      "behaviorScale": 0.12,
+      "description": "Mild first-shot accuracy improvement."
+    },
+    {
+      "id": "outlaw_lite",
+      "displayName": "Outlaw Lite",
+      "rarity": "rare",
+      "type": "behavior",
+      "behaviorId": "precision_reload_speed",
+      "behaviorScale": 0.15,
+      "description": "Precision kills briefly speed reload (capped)."
+    },
+    {
+      "id": "kill_clip_lite",
+      "displayName": "Kill Clip Lite",
+      "rarity": "epic",
+      "type": "behavior",
+      "behaviorId": "kill_damage_window",
+      "behaviorScale": 0.10,
+      "description": "Short mild damage window after a kill."
+    },
+    {
+      "id": "opening_shot",
+      "displayName": "Opening Shot",
+      "rarity": "epic",
+      "type": "behavior",
+      "behaviorId": "opening_shot_range",
+      "behaviorScale": 0.12,
+      "description": "Slight range/accuracy on first shot after ready."
+    },
+    {
+      "id": "proximity_fuse",
+      "displayName": "Proximity Fuse",
+      "rarity": "rare",
+      "type": "behavior",
+      "behaviorId": "prox_detonate",
+      "behaviorScale": 0.10,
+      "description": "In-flight grenade explodes near an enemy. Optional; stock GL is manual detonate."
+    },
+    {
+      "id": "snapshot_lite",
+      "displayName": "Snapshot Lite",
+      "rarity": "epic",
+      "type": "stat",
+      "stats": { "handling": 0.12, "adsSpeed": 0.10 }
+    }
+  ]
+}

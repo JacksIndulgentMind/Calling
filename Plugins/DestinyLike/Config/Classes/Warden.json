@@ -1,0 +1,13 @@
+{
+  "id": "warden",
+  "characterClass": "DLWardenCharacter",
+  "slots": {
+    "jump": { "ability": "inertia_dampers" },
+    "dash": { "ability": "air_strafe_thrust" },
+    "melee": { "ability": "drain_palm" },
+    "grenade": { "ability": "nanite_vortex" },
+    "shield": { "ability": "interceptor_drones" },
+    "evasion": { "ability": "superposition" },
+    "super": { "ability": "mind_control" }
+  }
+}
