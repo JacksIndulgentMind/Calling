@@ -1,0 +1,126 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "CLGreyboxFloors.generated.h"
+
+class UStaticMeshComponent;
+class UDirectionalLightComponent;
+class USkyLightComponent;
+class USkyAtmosphereComponent;
+class UStaticMesh;
+class UMaterialInterface;
+class APlayerStart;
+class UCLGreyboxRescue;
+
+UENUM(BlueprintType)
+enum class ECLGreyboxLayout : uint8
+{
+	SocialExtracted UMETA(DisplayName = "Social (parked extracted social floors, unused)"),
+	PvpExtracted UMETA(DisplayName = "PvP (parked extracted PvP lanes, unused)"),
+	RaidCourt UMETA(DisplayName = "Raid 01 (court)"),
+	RaidApproach UMETA(DisplayName = "Raid 02 (approach)"),
+	RaidArena UMETA(DisplayName = "Raid 03 (arena)"),
+	RaidPit UMETA(DisplayName = "Raid 04 (pit)"),
+	SocialSquare UMETA(DisplayName = "Social (100 m square)"),
+	PvpThreeLane UMETA(DisplayName = "PvP (3-lane ravine courtyard)")
+};
+
+/**
+ * Original white greybox only. Social square, 3-lane PvP ravine, raid
+ * raid chambers. No imported meshes.
+ */
+UCLASS()
+class CALLING_API ACLGreyboxFloors : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	ACLGreyboxFloors();
+
+	virtual void PostInitializeComponents() override;
+	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Greybox")
+	ECLGreyboxLayout Layout = ECLGreyboxLayout::SocialSquare;
+
+	/** World-space spawn (cm). PvP returns Red (west). */
+	FVector GetPlayerStartLocation() const;
+
+	/** Blue (east) spawn. Valid for PvpThreeLane. */
+	FVector GetBluePlayerStartLocation() const;
+
+	/** Z below which RescueFallenPawns teleports. Pit maps sit lower than spawn. */
+	float GetRescueMinZ() const;
+
+	/** Encounter director circle radius that stays on these floors. */
+	float GetSuggestedArenaHalfExtent() const;
+
+	static ACLGreyboxFloors* SpawnIfMissing(UWorld* World, ECLGreyboxLayout Layout);
+
+	/** Spawn or move a PlayerStart so FindPlayerStart never falls back to WorldSettings (0,0,0). */
+	static APlayerStart* EnsurePlayerStart(UWorld* World, const FVector& Location);
+
+	/** Spawn or move a tagged start (Red / Blue). */
+	static APlayerStart* EnsureTaggedPlayerStart(UWorld* World, FName Tag, const FVector& Location, const FRotator& Rotation);
+
+	/** Pit maps sit below default KillZ. Engine bounds checks would destroy/recurse on fall. */
+	static void ApplyVoidWorldSettings(UWorld* World);
+
+	int32 NumPlatforms() const { return Platforms.Num(); }
+
+	/** Teleport any pawn that already fell through the void back onto the pad. */
+	void RescueFallenPawns() const;
+
+	void AddPlatform(const FVector& CenterCm, float SizeXMeters, float SizeYMeters, float SizeZCm = 20.f);
+	void AddBox(const FVector& CenterCm, const FVector& SizeCm, const FRotator& Rotation);
+	/** 5 m × 5 m catalog: floor, ramp_low, ramp_mid, ramp_steep, rail, cover_half, cover_full. */
+	void StampModule(FName Id, const FVector& CenterCm, const FRotator& Rotation = FRotator::ZeroRotator);
+	void StampFillFloor(const FVector& CenterCm, float SizeXMeters, float SizeYMeters, float SlabZCm);
+	void BuildPvpThreeLane();
+
+protected:
+	void EnsureBuilt();
+	void BuildLayout();
+	void ApplyVisibleShading();
+	void ScheduleNavRebuild();
+	UFUNCTION()
+	void OnNavRebuildTimer();
+	/** Recast from NavTune.json (agent + jump links). Surviving drop is spawn Z minus rescue Z. */
+	void RebuildNavigation();
+
+	UPROPERTY(VisibleAnywhere, Category = "Calling|Greybox")
+	TObjectPtr<USceneComponent> Root;
+
+	UPROPERTY(VisibleAnywhere, Category = "Calling|Greybox")
+	TObjectPtr<UDirectionalLightComponent> Sun;
+
+	UPROPERTY(VisibleAnywhere, Category = "Calling|Greybox")
+	TObjectPtr<USkyLightComponent> Sky;
+
+	UPROPERTY(VisibleAnywhere, Category = "Calling|Greybox")
+	TObjectPtr<USkyAtmosphereComponent> Atmosphere;
+
+	UPROPERTY(VisibleAnywhere, Category = "Calling|Greybox")
+	TObjectPtr<class UExponentialHeightFogComponent> Fog;
+
+	UPROPERTY(VisibleAnywhere, Category = "Calling|Greybox")
+	TObjectPtr<class UPostProcessComponent> PostProcess;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> Platforms;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMesh> CubeMesh;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> ShapeMat;
+
+	UPROPERTY()
+	TObjectPtr<UCLGreyboxRescue> Rescue;
+
+	ECLGreyboxLayout BuiltLayout = ECLGreyboxLayout::SocialSquare;
+	bool bHasBuilt = false;
+	FTimerHandle NavRebuildTimer;
+};

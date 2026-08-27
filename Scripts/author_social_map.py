@@ -1,9 +1,9 @@
-"""Author a walkable 100x100 m pad, lights, and PlayerStart into DL_Social."""
+"""Author a walkable 100x100 m pad, lights, and PlayerStart into CL_Social."""
 
 import unreal
 
 
-MAP_PATH = "/Game/Maps/DL_Social"
+MAP_PATH = "/Game/Maps/CL_Social"
 
 
 def _spawn(actor_subsystem, cls, location, rotation=None):
@@ -26,7 +26,7 @@ def main():
 
     existing = actor_subsystem.get_all_level_actors()
     if _has_label(existing, "SocialPad") and _has_label(existing, "PlayerStart"):
-        unreal.log("DL_Social already has SocialPad and PlayerStart; skipping.")
+        unreal.log("CL_Social already has SocialPad and PlayerStart; skipping.")
         return
 
     if not _has_label(existing, "PlayerStart"):
@@ -75,9 +75,9 @@ def main():
         cube.set_actor_scale3d(unreal.Vector(100.0, 100.0, 0.4))
 
     if not level_editor.save_current_level():
-        unreal.log_error("Failed to save DL_Social.")
+        unreal.log_error("Failed to save CL_Social.")
         raise SystemExit(1)
-    unreal.log("Saved DL_Social with pad, lights, and PlayerStart.")
+    unreal.log("Saved CL_Social with pad, lights, and PlayerStart.")
 
 
 if __name__ == "__main__":

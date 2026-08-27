@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "destiny-like-agent": {
+      "command": "node",
+      "args": ["Scripts/dl-agent-mcp/index.mjs"]
+    }
+  }
+}

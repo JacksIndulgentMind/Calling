@@ -1,0 +1,25 @@
+{
+  "sights": [
+    {
+      "id": "iron",
+      "displayName": "Iron Sights",
+      "viewKind": "iron",
+      "adsFov": 78,
+      "adsZoomSeconds": 0
+    },
+    {
+      "id": "red_dot",
+      "displayName": "Red Dot",
+      "viewKind": "red_dot",
+      "adsFov": 70,
+      "adsZoomSeconds": 0
+    },
+    {
+      "id": "scope",
+      "displayName": "Scope",
+      "viewKind": "scope",
+      "adsFov": 38,
+      "adsZoomSeconds": 0.08
+    }
+  ]
+}

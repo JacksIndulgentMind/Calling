@@ -19,7 +19,11 @@
 			]
 		},
 		{
-			"Name": "DestinyLike",
+			"Name": "OnlineSubsystem",
+			"Enabled": true
+		},
+		{
+			"Name": "OnlineSubsystemUtils",
 			"Enabled": true
 		},
 		{

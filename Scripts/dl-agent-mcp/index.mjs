@@ -1,0 +1,449 @@
+#!/usr/bin/env node
+/**
+ * Stdio MCP for the Calling PIE/game agent bridge.
+ * Talks only to 127.0.0.1 — the game rejects HTTP from anywhere else.
+ * `boot` can spawn UnrealEditor; `director` drives the I-menu overlay.
+ */
+import http from "node:http";
+import readline from "node:readline";
+import path from "node:path";
+import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const HOST = "127.0.0.1";
+const PORT = Number(process.env.DL_AGENT_PORT || 18765);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = process.env.DL_REPO || path.resolve(HERE, "../..");
+const EDITOR =
+  process.env.DL_UE_EDITOR ||
+  "C:\\Program Files\\Epic Games\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
+const UPROJECT =
+  process.env.DL_UPROJECT || path.join(REPO, "Calling.uproject");
+const PLAY_PY = path.join(REPO, "Scripts", "dl-editor-play.py");
+
+function request(method, pathname, body, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const payload = body ? Buffer.from(JSON.stringify(body)) : null;
+    const req = http.request(
+      {
+        host: HOST,
+        port: PORT,
+        path: pathname,
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(payload ? { "Content-Length": payload.length } : {}),
+        },
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          try {
+            resolve(JSON.parse(text));
+          } catch {
+            resolve({ raw: text, status: res.statusCode });
+          }
+        });
+      }
+    );
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      reject(new Error("timeout"));
+    });
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function probeState() {
+  try {
+    return await request("GET", "/state", null, 2500);
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function waitForHttp(deadlineMs) {
+  const start = Date.now();
+  while (Date.now() - start < deadlineMs) {
+    const s = await probeState();
+    if (s) return s;
+    await sleep(1500);
+  }
+  return null;
+}
+
+function launchUnreal(mode) {
+  if (!existsSync(EDITOR)) {
+    throw new Error(`editor_missing ${EDITOR}`);
+  }
+  if (!existsSync(UPROJECT)) {
+    throw new Error(`uproject_missing ${UPROJECT}`);
+  }
+  const args =
+    mode === "editor"
+      ? [UPROJECT, `-ExecutePythonScript=${PLAY_PY}`]
+      : [UPROJECT, "-game", "-WINDOWED", "-ResX=1600", "-ResY=900", "-NOSPLASH"];
+  const child = spawn(EDITOR, args, {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: false,
+  });
+  child.unref();
+  return { pid: child.pid, args };
+}
+
+async function boot(args) {
+  const mode = (args.mode || "game").toLowerCase();
+  const activity = (args.activity || "pvp").toLowerCase();
+  const waitMs = Math.max(15, Number(args.waitSeconds || 90)) * 1000;
+  let launched = false;
+  let spawnInfo = null;
+  let state = await probeState();
+  if (!state) {
+    spawnInfo = launchUnreal(mode === "editor" ? "editor" : "game");
+    launched = true;
+    state = await waitForHttp(waitMs);
+    if (!state) {
+      return {
+        ok: false,
+        error: "http_timeout",
+        launched,
+        ...spawnInfo,
+        hint: "Wait for Boot/Social, then retry director. Close a hung editor first.",
+      };
+    }
+    const leaveBoot = Date.now() + 45000;
+    if (state?.scene === "boot") {
+      try {
+        await request("POST", "/director", { action: "enter" });
+      } catch {
+        /* travel still may proceed */
+      }
+    }
+    while (state?.scene === "boot" && Date.now() < leaveBoot) {
+      await sleep(500);
+      state = (await probeState()) || state;
+    }
+  }
+  if (activity && activity !== "none") {
+    try {
+      await request("POST", "/director", { action: activity });
+    } catch (err) {
+      return { ok: false, error: String(err.message || err), launched, state };
+    }
+    const until = Date.now() + 25000;
+    while (Date.now() < until) {
+      await sleep(1000);
+      state = (await probeState()) || state;
+      const scene = state?.scene;
+      if (scene === activity) break;
+      if (activity === "pvp" && (scene === "composer" || scene === "pvp")) break;
+      if (activity === "composer" && scene === "composer") break;
+      if (activity === "arena" && scene === "pvp") break;
+    }
+  }
+  return { ok: true, launched, ...spawnInfo, state };
+}
+
+const tools = [
+  {
+    name: "state",
+    description:
+      "Read a Calling pawn and scene. Pass seat to sample that hub seat's driven pawn (GET /state?seat=). Omit seat for the listen-server / last-joined pawn. PIE or -game must be running.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        seat: { type: "string", description: "Hub seat id (GUID). Two agents must not share one probe." },
+      },
+    },
+  },
+  {
+    name: "intent",
+    description:
+      "No-lobby motor: drive the HTTP singleton pawn and abort its sequence/goto. Prefer hub plan/goto with a seat. Empty {} releases the stick.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        move: {
+          type: "object",
+          properties: { x: { type: "number" }, y: { type: "number" } },
+        },
+        look: {
+          type: "object",
+          properties: {
+            yaw: { type: "number" },
+            pitch: { type: "number" },
+            yawAbs: { type: "number" },
+            pitchAbs: { type: "number" },
+          },
+        },
+        sprint: { type: "boolean" },
+        crouch: { type: "boolean" },
+        ads: { type: "boolean" },
+        fire: { type: "boolean" },
+        jump: { type: "boolean" },
+        dodge: { type: "boolean" },
+        dash: { type: "boolean" },
+        reload: { type: "boolean" },
+        swap: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "hold",
+    description:
+      "No-lobby: queue one timed hold on the HTTP singleton (30 Hz). Prefer hub plan with a seat when a lobby exists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        seconds: { type: "number" },
+        move: {
+          type: "object",
+          properties: { x: { type: "number" }, y: { type: "number" } },
+        },
+        look: {
+          type: "object",
+          properties: {
+            yaw: { type: "number" },
+            pitch: { type: "number" },
+            yawAbs: { type: "number" },
+            pitchAbs: { type: "number" },
+          },
+        },
+        sprint: { type: "boolean" },
+        crouch: { type: "boolean" },
+        ads: { type: "boolean" },
+        fire: { type: "boolean" },
+        jump: { type: "boolean" },
+        dodge: { type: "boolean" },
+        dash: { type: "boolean" },
+        reload: { type: "boolean" },
+        swap: { type: "boolean" },
+        replaceFrom: { type: "string", description: "now (default) or afterCurrent" },
+      },
+      required: ["seconds"],
+    },
+  },
+  {
+    name: "sequence",
+    description:
+      "No-lobby: queue timed steps on the HTTP singleton. Prefer hub plan with a seat when a lobby exists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        replaceFrom: { type: "string", description: "now (default) or afterCurrent" },
+        steps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              seconds: { type: "number" },
+              move: {
+                type: "object",
+                properties: { x: { type: "number" }, y: { type: "number" } },
+              },
+              look: {
+                type: "object",
+                properties: {
+                  yaw: { type: "number" },
+                  pitch: { type: "number" },
+                  yawAbs: { type: "number" },
+                  pitchAbs: { type: "number" },
+                },
+              },
+              sprint: { type: "boolean" },
+              crouch: { type: "boolean" },
+              ads: { type: "boolean" },
+              fire: { type: "boolean" },
+              jump: { type: "boolean" },
+              dodge: { type: "boolean" },
+              dash: { type: "boolean" },
+              reload: { type: "boolean" },
+              swap: { type: "boolean" },
+            },
+          },
+        },
+      },
+      required: ["steps"],
+    },
+  },
+  {
+    name: "goto",
+    description:
+      "No-lobby Recast follow on the HTTP singleton pawn. Prefer hub type goto with seatId when a lobby exists. Cancelled by intent or sequence.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        x: { type: "number" },
+        y: { type: "number" },
+        z: { type: "number" },
+      },
+      required: ["x", "y"],
+    },
+  },
+  {
+    name: "respawn",
+    description:
+      "Teleport the local pawn to start (or RestartPlayer if it was destroyed). Use after a void fall instead of relaunching PvP.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "director",
+    description:
+      "I-menu overlay + composer HUD twins. action: open, close, toggle, director, keybinds, pvp/composer (Compose PvP), host, guest, ready, go/start, arena (solo skip), raid, practice, social. Remote join/ready/go/goto/mindControl are hub.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          description: "open | close | toggle | director | keybinds | pvp | composer | host | guest | ready | go | start | arena | raid | practice | social",
+        },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "hub",
+    description:
+      "Session hub (same codec as ws://127.0.0.1:18766). Drive pawns here: join headless (kind cursor by default), mindControl, setTeam, ready, go, plan, goto, subscribe. Loopback POST /hub.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: { type: "string", description: "join | subscribe | ready | go | mindControl | setTeam | plan | goto" },
+        displayName: { type: "string" },
+        headless: { type: "boolean" },
+        kind: { type: "string", description: "cursor (default on this MCP) | remoteAgent | algorithmic" },
+        seatId: { type: "string" },
+        targetSeatId: { type: "string" },
+        team: { type: "string", description: "red | blue | unassigned" },
+        ready: { type: "boolean" },
+        x: { type: "number" },
+        y: { type: "number" },
+        z: { type: "number" },
+        replaceFrom: { type: "string", description: "now, afterCurrent, or remainder" },
+        steps: { type: "array", items: { type: "object" } },
+      },
+      required: ["type"],
+    },
+  },
+  {
+    name: "boot",
+    description:
+      "If 18765 is down, spawn UnrealEditor (standalone -game by default, or editor+PIE). Then POST /director for activity (pvp default). Does not kill an existing editor.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode: {
+          type: "string",
+          description: "game (standalone, default) or editor (UnrealEditor + PIE python)",
+        },
+        activity: {
+          type: "string",
+          description: "pvp/composer (Compose PvP, default), arena (solo skip), raid, practice, social, or none",
+        },
+        waitSeconds: { type: "number", description: "HTTP wait after spawn (default 90)" },
+      },
+    },
+  },
+];
+
+async function callTool(name, args) {
+  const a = args || {};
+  if (name === "state") {
+    const q = a.seat ? `?seat=${encodeURIComponent(a.seat)}` : "";
+    return request("GET", `/state${q}`);
+  }
+  if (name === "intent") {
+    return request("POST", "/intent", a);
+  }
+  if (name === "hold") {
+    return request("POST", "/sequence", {
+      steps: [{ ...a, seconds: a.seconds }],
+      replaceFrom: a.replaceFrom,
+    });
+  }
+  if (name === "sequence") {
+    return request("POST", "/sequence", a);
+  }
+  if (name === "goto") {
+    return request("POST", "/goto", a);
+  }
+  if (name === "respawn") {
+    return request("POST", "/respawn", a);
+  }
+  if (name === "director") {
+    return request("POST", "/director", { action: a.action || "toggle" });
+  }
+  if (name === "hub") {
+    const body = { ...a };
+    if (String(body.type || "").toLowerCase() === "join" && !body.kind) {
+      body.kind = "cursor";
+    }
+    return request("POST", "/hub", body);
+  }
+  if (name === "boot") {
+    return boot(a);
+  }
+  throw new Error(`unknown tool ${name}`);
+}
+
+function reply(id, result, error) {
+  const msg = error
+    ? { jsonrpc: "2.0", id, error }
+    : { jsonrpc: "2.0", id, result };
+  process.stdout.write(JSON.stringify(msg) + "\n");
+}
+
+const rl = readline.createInterface({ input: process.stdin });
+rl.on("line", async (line) => {
+  if (!line.trim()) return;
+  let msg;
+  try {
+    msg = JSON.parse(line);
+  } catch {
+    return;
+  }
+  const { id, method, params } = msg;
+  try {
+    if (method === "initialize") {
+      reply(id, {
+        protocolVersion: "2024-11-05",
+        capabilities: { tools: {} },
+        serverInfo: { name: "destiny-like-agent", version: "0.3.0" },
+      });
+      return;
+    }
+    if (method === "notifications/initialized" || method === "initialized") {
+      return;
+    }
+    if (method === "tools/list") {
+      reply(id, { tools });
+      return;
+    }
+    if (method === "tools/call") {
+      const name = params?.name;
+      const args = params?.arguments || {};
+      const data = await callTool(name, args);
+      reply(id, {
+        content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+      });
+      return;
+    }
+    if (method === "ping") {
+      reply(id, {});
+      return;
+    }
+    reply(id, undefined, { code: -32601, message: `Unknown method ${method}` });
+  } catch (err) {
+    reply(id, undefined, { code: -32000, message: String(err.message || err) });
+  }
+});

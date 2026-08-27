@@ -1,0 +1,53 @@
+# Agents
+
+This is the **Calling** Unreal 5.8 C++ game. Types and assets use the `CL*` prefix. Do not change `AirControl=0.35` or `BaseStrafeSpeed=380` unless the user is chasing a new feel bug.
+
+Cursor **cloud** agents cannot build or run Unreal. The recipes below need a Windows machine with UE 5.8. On cloud, read this file and the skills; do not pretend a circle run passed.
+
+## Skills (read these)
+
+| Skill | When |
+|-------|------|
+| [`.cursor/skills/dl-agent-control/SKILL.md`](.cursor/skills/dl-agent-control/SKILL.md) | Hub vs director, seats, playbooks, join / mind-control / ready / go |
+| [`.cursor/skills/dl-agent-nav/SKILL.md`](.cursor/skills/dl-agent-nav/SKILL.md) | `/goto`, probes, look, recover instead of fail-fast |
+| [`.cursor/skills/dl-circle-run/SKILL.md`](.cursor/skills/dl-circle-run/SKILL.md) | Compose PvP ring verify (`VERIFY_OK`, diving, megalith 8/8) |
+
+## Spin up
+
+1. Stop Unreal Editor if it is running. It locks `UnrealEditor-Calling.dll`; `Build.bat` while the editor is up will fail. Live Coding will not pick C++ up.
+2. From this repo root:
+
+```
+Scripts/dl-rebuild.ps1
+```
+
+Defaults: standalone `-game`, then `POST /director {"action":"pvp"}` into **composer** (not the arena). `-Activity none` skips director. `-Mode editor` opens the editor and requests PIE.
+
+3. If `GET http://127.0.0.1:18765/state` `scene` is `boot`, `POST /director {"action":"enter"}` creates a default Player / Vanguard and travels to Social. Rebuild does this automatically.
+
+Agent HTTP is **localhost only** (`127.0.0.1:18765`). WebSocket hub is `ws://127.0.0.1:18766`. Same JSON codec as `POST /hub`, including `type: plan`.
+
+Stdio MCP: `Scripts/dl-agent-mcp/index.mjs` (tools `hub`, `state`, `director`, `boot`; loopback `intent` / `sequence` / `goto` are no-lobby only).
+
+## Overlay vs hub
+
+| Plane | Where | Use for |
+|-------|--------|---------|
+| Overlay | `POST /director` | I-menu: `open`, `pvp` / `composer`, `host`, `guest`, `ready`, `go`, `social`, `raid`, `practice`, `arena` |
+| Hub | `POST /hub` and WS 18766 | `join`, `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, `plan`, `goto`, `view` |
+
+Director is not the pawn motor. Drive seats through the hub. See the control skill.
+
+## Circle run
+
+With the game already up after rebuild:
+
+```
+Scripts/dl-verify-dual-composer.ps1 -Sequence ring
+```
+
+Pass: script prints `VERIFY_OK`, `diving=true`, megalith sticks `8/8`. Fail only after retries in the script. Details: circle-run skill.
+
+## Rebuild ritual
+
+Every C++ / link change: stop editor → `Scripts/dl-rebuild.ps1` → leave the game running. Do not leave the editor down after a rebuild if the user still wants to play or verify.

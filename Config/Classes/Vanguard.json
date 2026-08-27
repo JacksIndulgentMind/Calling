@@ -1,0 +1,13 @@
+{
+  "id": "vanguard",
+  "characterClass": "CLVanguardCharacter",
+  "slots": {
+    "jump": { "ability": "rocket_pulse" },
+    "dash": { "ability": "knee_thrust" },
+    "melee": { "ability": "exo_bash" },
+    "grenade": { "ability": "napalm" },
+    "shield": { "ability": "buckler_plate" },
+    "evasion": { "ability": "fortify" },
+    "super": { "ability": "mind_control" }
+  }
+}
