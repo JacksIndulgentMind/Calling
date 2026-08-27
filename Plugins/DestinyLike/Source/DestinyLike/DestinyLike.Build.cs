@@ -5,6 +5,7 @@ public class DestinyLike : ModuleRules
 	public DestinyLike(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+		bUseUnity = false;
 
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
