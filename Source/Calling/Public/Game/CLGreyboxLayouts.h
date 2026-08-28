@@ -37,7 +37,7 @@ struct FCLPvpThreeLaneRecipe
 	/** South court nav edge → island on the AirDiveDown Recast chord.
 	 *  PadDropFromLipCm is survivable-fall minus end-tol minus jump apex
 	 *  (island is that drop below the lip, not strain-plus-buffer).
-	 *  ChordCm is MaxLaunchXY (hull). Must stay past DropDown (~2.8 m) so Recast
+	 *  ChordCm is MaxLaunchXY at the apex-drop hull (worst-case jump then dive). Must stay past DropDown (~2.8 m) so Recast
 	 *  bakes AirDiveDown, not a walk-off. */
 	void EdgeAirDiveEnds(FVector& OutLip, FVector& OutPad, float ChordCm, float JumpDistanceFromEdgeCm,
 		float PadDropFromLipCm) const

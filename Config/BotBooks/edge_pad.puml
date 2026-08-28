@@ -10,6 +10,12 @@ if (qualify hasMarker edge_pad) then (yes)
     goodEnough: distXY 280
     fail.timeout: 45
   end note
+  :airDive marker=edge_pad;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 12
+  end note
 else (skip)
 endif
 stop

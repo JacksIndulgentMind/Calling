@@ -41,6 +41,11 @@
 
 namespace
 {
+	float EdgePadDropFromApexCm()
+	{
+		return CLNavAbility::AirDivePadDropFromApexCm();
+	}
+
 	float EdgePadDropFromLipCm()
 	{
 		return CLNavAbility::AirDivePadDropFromLipCm(CLNavTune::Get().JumpApexCm);
@@ -50,7 +55,7 @@ namespace
 	{
 		FCLMovementTune Move;
 		Move.LoadFromIni();
-		return CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(), EdgePadDropFromLipCm());
+		return CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(), EdgePadDropFromApexCm());
 	}
 
 	float EdgePadPlaceChordCm()
@@ -813,7 +818,8 @@ void ACLGreyboxFloors::BuildPracticePillar()
 	const float Drop = CLNavAbility::AirDivePadDropFromLipCm(CLNavTune::Get().JumpApexCm);
 	FCLMovementTune Move;
 	Move.LoadFromIni();
-	const float Range = CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(), Drop);
+	const float Range = CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(),
+		CLNavAbility::AirDivePadDropFromApexCm());
 	const float PadX = Range * 0.90f;
 	AddPlatform(FVector(0.f, 0.f, 0.f), 8.f, 8.f, 40.f);
 	AddPlatform(FVector(PadX, 0.f, -Drop), 3.5f, 3.5f, 400.f);
@@ -863,8 +869,9 @@ void ACLGreyboxFloors::StampTaskMarkers()
 	{
 		FCLMovementTune Move;
 		Move.LoadFromIni();
-		const float Drop = 3000.f;
-		const float PadX = CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(), Drop) * 0.90f;
+		const float Drop = CLNavAbility::AirDivePadDropFromLipCm(CLNavTune::Get().JumpApexCm);
+		const float PadX = CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(),
+			CLNavAbility::AirDivePadDropFromApexCm()) * 0.90f;
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("pillar_top")), GetPlayerStartLocation());
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("pillar_pad")), FVector(PadX, 0.f, -Drop));
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("spawn_default")), GetPlayerStartLocation());

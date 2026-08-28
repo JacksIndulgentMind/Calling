@@ -18,7 +18,7 @@ Game must already be up (`Scripts/dl-rebuild.ps1` first). Then:
 Scripts/dl-verify-dual-composer.ps1 -Sequence ring
 ```
 
-Pass when the script prints `VERIFY_OK`, `diving=true`, and megalith sticks `8/8`. Radar/sighted regression:
+Pass when the script prints `VERIFY_OK`, `diving=true`, megalith sticks `8/8`, and the **edge hop** sticks the south island then **recalls to the court lip** (not spawn). Catalog `edge_pad` should ride Recast (`edgePadLinked=true`) rather than the script's JIT `airDive` fallback. Radar/sighted regression:
 
 ```
 Scripts/dl-verify-dual-composer.ps1 -Sequence pillar
@@ -38,7 +38,7 @@ If you drive it by hand instead of the script:
 
 Do **not** auto-Go when `ready >= min`. Host Start is required.
 
-After PvP: `navTiles > 0`. Red ~`(-14500,0,98)`, Blue ~`(14500,0,98)`. **Cover first** via BotBooks (`cover_then_peek`, markers `hide_center_lee` / `menhir_0_approach`). Drive the ring with `appendBotBook` `ring_lap` then `megalith_hop`. Megalith hops are `airDive marker=menhir_N` (jump / dive / release are inside that leaf): [Docs/NavAbilities.md](../../../Docs/NavAbilities.md). Agents drive pawns with BotBooks only — do not use MCP `plan` / `goto` for this path. `GET /state?seat=` includes `botBook`. Pass: `VERIFY_OK`, `diving=true`, megalith sticks `8/8`.
+After PvP: `navTiles > 0`. Red ~`(-14500,0,98)`, Blue ~`(14500,0,98)`. **Cover first** via BotBooks (`cover_then_peek`, markers `hide_center_lee` / `menhir_0_approach`). Ring script runs **EdgeHop** (`edge_lip` then catalog `edge_pad`) before `ring_lap` / `megalith_hop`. Megalith hops are `airDive marker=menhir_N`. Agents drive pawns with BotBooks only — do not use MCP `plan` / `goto` for this path. Pass: `VERIFY_OK`, island stick + lip recall, `diving=true`, megalith sticks `8/8`.
 
 **Recover, do not fail-fast.** `branchBotBook` or append a new JIT tree on stall; rewrite from live `/state`. Z-collapse (west through-floor) still stops that seat. Fail only after retries.
 

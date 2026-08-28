@@ -102,4 +102,4 @@ MCP tools: `hub`, `state` (`seat` query), `director`, `boot`. `hold`/`sequence`/
 
 Unreal yaw **0 = +X**. `/state` also has `air`, `diving`, `sliding`, `health`, `shield`.
 
-If `/state` says `no_local_pawn` on a live scene, `POST /respawn` once (void / KillZ) for the listen-server human only. Greybox also auto-teleports below rescue Z. If `/respawn` 404s, PIE is the old binary or not running — stop.
+If `/state` says `no_local_pawn` on a live scene, `POST /respawn` once (void / KillZ) for the listen-server human only. Greybox **void rescue** teleports below rescue Z to the **south court lip** (not spawn). **Pad recall:** standing on the island 0.45 s uses the same lip teleport. If `/respawn` 404s, PIE is the old binary or not running — stop.

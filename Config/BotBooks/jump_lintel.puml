@@ -10,7 +10,7 @@ if (qualify hasMarker menhir_0) then (yes)
     goodEnough: distXY 400
     fail.timeout: 20
   end note
-  :jump marker=menhir_0;
+  :airDive marker=menhir_0;
   note right
     success: distXY 180
     goodEnough: distXY 280

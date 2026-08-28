@@ -286,7 +286,7 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 	if (FVector::Dist2D(Loc, Goal) <= GotoArriveRadius)
 	{
 		const UCLCombatMovementComponent* Move = Char->GetCombatMovement();
-		const bool bNeedLand = bFlight;
+		const bool bNeedLand = bFlight || (Goal.Z + 80.f < Loc.Z - 120.f);
 		const bool bOnPad = CLNavAbility::StandingOnGoalFloor(Loc, Goal);
 		if (!bNeedLand || (Move && Move->IsMovingOnGround() && !Move->IsDiving() && bOnPad))
 		{
@@ -308,8 +308,7 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 		}
 		if (Flight.bFinished)
 		{
-			bFlight = false;
-			Flight.Reset();
+			Cancel();
 			Char->ClearAgentIntent();
 			return;
 		}
