@@ -92,6 +92,25 @@ namespace CLNavAbility
 	bool ReadyToAirDive(const FCLMovementTune& Tune, float MaxAccel, float SpeedXY, const FVector& From, const FVector& To);
 	/** Bake + runtime search: min(MaxLaunchXY, NavTune cap). Cap 0 = physics only. */
 	float SearchRadiusCm(const FCLMovementTune& Tune, const FCLNavTune& NavTune, float DropCm);
+	/** Greybox island XY is this fraction of the apex-drop hull, then rim-inset. */
+	inline constexpr float AirDivePadPlaceFrac = 0.90f;
+	inline float AirDivePadPlaceChordCm(const FCLMovementTune& Tune, const FCLNavTune& NavTune)
+	{
+		return SearchRadiusCm(Tune, NavTune, AirDivePadDropFromApexCm()) * AirDivePadPlaceFrac;
+	}
+	inline float AirDivePadRimInsetCm(float JumpDistanceFromEdgeCm)
+	{
+		return FMath::Max(200.f, JumpDistanceFromEdgeCm + 160.f);
+	}
+	/** Recast JumpLength for AirDiveDown. Sampler floors the spine END, not mid-chord
+	 *  ground, so this must land on the island (place-chord minus rim inset plus edge). */
+	inline float AirDiveBakeJumpLengthCm(const FCLMovementTune& Tune, const FCLNavTune& NavTune,
+		float JumpDistanceFromEdgeCm)
+	{
+		const float Place = AirDivePadPlaceChordCm(Tune, NavTune);
+		const float Inward = AirDivePadRimInsetCm(JumpDistanceFromEdgeCm);
+		return FMath::Max(Place - Inward + JumpDistanceFromEdgeCm, 800.f);
+	}
 
 	FCLNavAbilityBox JumpTo(const FCLMovementTune& Tune, int32 JumpsUsed);
 	bool JumpToInEnvelope(const FCLMovementTune& Tune, const FVector& From, const FVector& To);

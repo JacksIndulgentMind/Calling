@@ -1,6 +1,6 @@
 # Nav abilities (jump / dive / slide / dash / strafe)
 
-Agents drive pawns with **BotBooks**. This file is how a **leaf** lands a point in space. Recast `goto` is a different leaf: it may *compose* these. Do not retune `AirControl=0.35` or `BaseStrafeSpeed=380`.
+Agents drive pawns with **BotBooks**. This file is how a **leaf** lands a point in space. Recast `goto` is a different leaf: it may *compose* these. Tiles, jump-gen, and off-mesh snap: [RecastLinks.md](RecastLinks.md). Do not retune `AirControl=0.35` or `BaseStrafeSpeed=380`.
 
 Numbers below come from `FCLMovementTune` / `DefaultCalling.ini` and Recast `Config/Nav/NavTune.json`. They are **range boxes**, not a neural net. A later brain can sit on top; the leaf still evaluates the box **every tick**.
 
@@ -38,7 +38,7 @@ Every **Tick** (NetHz, 20):
 | Map rescue Z | greybox `SurvivingDropCm` | JumpDown depth; rescue yank. Stays below strain so a 30 m dive is not yanked. |
 | Locks | `AirControl=0.35`, `BaseStrafeSpeed=380` | validator asserts; do not retune |
 
-On nav rebuild, `CLNavAbilityValidate` checks locks, `jumpApexCm` ≥ single-jump apex, and that `airDiveSearchMaxCm` does not exceed `MaxLaunchXY` at the strain 30 m drop. Failures go through `UCLErrorBoundary`. **AirDiveDown** / **AirDiveOver** `jumpLength` is overwritten from `SearchRadiusCm` (`MaxLaunchXY`, then optional cap). Recast `JumpMaxDepth` is the strain survivable fall (not strain plus apex plus end-tol). The island sits **strain minus end-tol** below jump apex so a landed dive is still inside the body budget. Do **not** grow Recast `TileSizeUU` to that hull — JumpLength may exceed tile size; huge tiles drop spawn→court walking. The validator does **not** rewrite NavTune.json.
+On nav rebuild, `CLNavAbilityValidate` checks locks, `jumpApexCm` ≥ single-jump apex, and that `airDiveSearchMaxCm` does not exceed `MaxLaunchXY` at the strain 30 m drop. Failures go through `UCLErrorBoundary`. Recast `JumpMaxDepth` is the strain survivable fall from the walkable edge (3000). The island sits **strain minus end-tol minus apex** below the lip. How Recast bakes AirDiveDown, simple hints, and neighbor-tile snap: [RecastLinks.md](RecastLinks.md). The validator does **not** rewrite NavTune.json.
 
 ## Search radius
 
@@ -48,7 +48,7 @@ Recast does not search the whole courtyard. Each link kind looks only as far as 
 
 **DropDown** is a short XY chord (~2.8 m) with strain depth: pad right under the lip is a walk-off, not a Launch. **AirDiveDown** is the long-XY drop Recast searches from the **walkable edge** (JumpMaxDepth = strain **30 m**). Walk-off-then-dive can use that full 30 m. **AirDiveOver** is the long spanning gap. Both AirDive* use `UCLNavArea_AirDive`; `goto` Launchs those edges only.
 
-The **greybox test island** is the **worst-case jump**: lowest floor you can survive from **triple-jump apex** (strain minus 300 cm end-tol ≈ **27 m** below apex ≈ **23 m** below the lip). Lateral placement is **90% of `MaxLaunchXY` at that apex drop**, inset from the rim so you are not jumping from the exact edge. That is farther than a walk-off-only hop. `/state.edgePadLinked` is the bake-time Recast probe (lip→island), not a promise that last night's demo used the link.
+The **greybox test island** is the **worst-case jump**: lowest floor you can survive from **triple-jump apex** (strain minus 300 cm end-tol ≈ **27 m** below apex ≈ **23 m** below the lip). Lateral placement is **90% of `MaxLaunchXY` at that apex drop**, inset from the rim so you are not jumping from the exact edge. Recast must connect that chord before catalog `goto marker=edge_pad` can ride it — see [RecastLinks.md](RecastLinks.md). `/state.edgePadLinked` is the bake-time path (complete, DistXY > 800, dZ < −1500).
 
 ## Shared speeds (do not retune the two locks)
 

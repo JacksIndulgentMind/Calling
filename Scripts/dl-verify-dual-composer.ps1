@@ -1072,32 +1072,7 @@ stop
   }
   Write-Host ("edge_pad x={0:N0} y={1:N0} z={2:N0} linked={3} diving={4}" -f `
     [double]$st.x, [double]$st.y, [double]$st.z, $st.edgePadLinked, $divedPad)
-  if (-not $padOk) {
-    Write-Host "edge_pad catalog missed, JIT airDive marker=edge_pad"
-    $divePad = @"
-@startuml jit_edge_air
-start
-:airDive marker=edge_pad;
-note right
-  success: distXY 180
-  goodEnough: distXY 280
-  fail.timeout: 12
-end note
-stop
-@enduml
-"@
-    Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $divePad } | Out-Null
-    $until = (Get-Date).AddSeconds(16)
-    while ((Get-Date) -lt $until) {
-      Start-Sleep -Milliseconds 200
-      $st = Seat $seatA
-      if ($st.diving -eq $true) { $divedPad = $true; Write-Host "edge_pad diving=true" }
-      $z = [double]$st.z
-      if ($z -lt -3500 -and $z -gt -5200 -and $st.diving -ne $true -and $st.air -ne $true) { $padOk = $true; break }
-      if ($st.ok -and -not (BookBusy $st) -and -not $st.goto) { break }
-    }
-    Write-Host ("edge_pad jit z={0:N0} diving={1}" -f [double]$st.z, $divedPad)
-  }
+  if ($st.edgePadLinked -ne $true) { throw "edgePadLinked=false: Recast AirDiveDown did not connect lip to island" }
   if (-not $padOk) { throw "edge_pad not stuck" }
   Write-Host "wait island recall to lip"
   $re = (Get-Date).AddSeconds(8)

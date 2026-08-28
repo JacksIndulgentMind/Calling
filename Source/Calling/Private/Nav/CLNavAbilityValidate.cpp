@@ -54,18 +54,27 @@ FCLNavAbilityValidateResult CLNavAbilityValidate::Check(const FCLMovementTune& M
 		R.Message = FString::Printf(TEXT("AirDive JumpLength %.0f != MaxLaunchXY %.0f at %.0f drop"), BakedLen, PhysLen, CLNavAbility::AirDiveRefDropCm());
 		return R;
 	}
+	float AirDiveEdgeCm = 40.f;
 	for (const FCLNavLinkTune& L : Nav.Links)
 	{
 		if (!CLNavTune::IsAirDiveLink(L.Name))
 		{
 			continue;
 		}
+		AirDiveEdgeCm = L.JumpDistanceFromEdge;
 		if (L.JumpLength > PhysLen * 1.05f)
 		{
 			R.bApplyAirDiveLink = false;
 			R.Message = FString::Printf(TEXT("%s json jumpLength %.0f > MaxLaunchXY %.0f"), *L.Name.ToString(), L.JumpLength, PhysLen);
 			return R;
 		}
+	}
+	const float DownLen = CLNavAbility::AirDiveBakeJumpLengthCm(Move, Nav, AirDiveEdgeCm);
+	if (DownLen > PhysLen * 1.05f)
+	{
+		R.bApplyAirDiveLink = false;
+		R.Message = FString::Printf(TEXT("AirDiveDown bake JumpLength %.0f > MaxLaunchXY %.0f"), DownLen, PhysLen);
+		return R;
 	}
 
 	return R;
