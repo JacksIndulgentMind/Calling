@@ -178,12 +178,20 @@ void CLAgentNavProbe::FillStateJson(const TSharedRef<FJsonObject>& Root, UWorld*
 	{
 		for (TActorIterator<ACLGreyboxFloors> It(World); It; ++It)
 		{
-			Root->SetBoolField(TEXT("edgePadLinked"), It->bEdgePadRecastLinked);
+			Root->SetBoolField(TEXT("findPathMeshOk"), It->bFindPathMeshOk);
+			Root->SetBoolField(TEXT("edgePadLipOk"), It->bEdgePadLipOk);
+			Root->SetBoolField(TEXT("edgePadPadOk"), It->bEdgePadPadOk);
+			Root->SetBoolField(TEXT("edgePadPartial"), It->bEdgePadPartial);
 			Root->SetNumberField(TEXT("edgePadPoints"), It->EdgePadPathPoints);
-			Root->SetNumberField(TEXT("edgePadDistXY"), It->EdgePadDistXY);
-			Root->SetNumberField(TEXT("edgePadDeltaZ"), It->EdgePadDeltaZ);
+			Root->SetNumberField(TEXT("edgePadOffMesh"), It->EdgePadOffMesh);
+			Root->SetNumberField(TEXT("edgePadValidEndsMax"), It->EdgePadValidEndsMax);
+			Root->SetNumberField(TEXT("edgePadX"), It->CachedEdgePad.X);
+			Root->SetNumberField(TEXT("edgePadY"), It->CachedEdgePad.Y);
+			Root->SetNumberField(TEXT("edgePadZ"), It->CachedEdgePad.Z);
 			Root->SetNumberField(TEXT("airDiveJumpLength"), It->AirDiveJumpLengthCm);
 			Root->SetNumberField(TEXT("airDiveJumpMaxDepth"), It->AirDiveJumpMaxDepthCm);
+			Root->SetNumberField(TEXT("airDiveJumpHeight"), It->AirDiveJumpHeightCm);
+			Root->SetNumberField(TEXT("edgePadBakeMs"), It->EdgePadBakeMs);
 			break;
 		}
 	}

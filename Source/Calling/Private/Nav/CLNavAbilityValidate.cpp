@@ -19,6 +19,8 @@ FCLNavAbilityValidateResult CLNavAbilityValidate::Check(const FCLMovementTune& M
 {
 	FCLNavAbilityValidateResult R;
 	(void)SurvivingDropCm;
+	// Feel locks only. Do not disable AirDive because JumpLength / search / place chord
+	// exceeds MaxLaunchXY — those are not JumpLength ceilings.
 	if (!Near(Move.BaseStrafeSpeed, 380.f, 0.02f) || !Near(Move.AirControl, 0.35f, 0.02f))
 	{
 		R.bLocksOk = false;
@@ -27,54 +29,28 @@ FCLNavAbilityValidateResult CLNavAbilityValidate::Check(const FCLMovementTune& M
 		return R;
 	}
 
-	const float SingleApex = CLNavAbility::JumpApexUpCm(Move, 1);
-	if (Nav.JumpApexCm + 1.f < SingleApex * 0.95f)
+	const float TripleApex = CLNavAbility::JumpApexUpCm(Move, FMath::Max(1, Move.MaxJumps));
+	if (Nav.JumpApexCm + 1.f < TripleApex * 0.95f)
 	{
 		R.bApplyAirDiveLink = false;
-		R.Message = FString::Printf(TEXT("jumpApexCm %.0f < single jump apex %.0f"), Nav.JumpApexCm, SingleApex);
+		R.Message = FString::Printf(TEXT("jumpApexCm %.0f < triple jump apex %.0f"), Nav.JumpApexCm, TripleApex);
 		return R;
 	}
 
-	if (Nav.AirDiveSearchMaxCm > 0.f)
-	{
-		const float PhysMax = CLNavAbility::MaxLaunchXY(Move, CLNavAbility::AirDiveRefDropCm());
-		if (Nav.AirDiveSearchMaxCm > PhysMax * 1.05f)
-		{
-			R.bApplyAirDiveLink = false;
-			R.Message = FString::Printf(TEXT("airDiveSearchMaxCm %.0f > MaxLaunchXY %.0f"), Nav.AirDiveSearchMaxCm, PhysMax);
-			return R;
-		}
-	}
-
-	const float PhysLen = CLNavAbility::MaxLaunchXY(Move, CLNavAbility::AirDiveRefDropCm());
-	const float BakedLen = CLNavAbility::SearchRadiusCm(Move, Nav, CLNavAbility::AirDiveRefDropCm());
-	if (!Near(BakedLen, PhysLen, 0.05f) && Nav.AirDiveSearchMaxCm <= 0.f)
-	{
-		R.bApplyAirDiveLink = false;
-		R.Message = FString::Printf(TEXT("AirDive JumpLength %.0f != MaxLaunchXY %.0f at %.0f drop"), BakedLen, PhysLen, CLNavAbility::AirDiveRefDropCm());
-		return R;
-	}
-	float AirDiveEdgeCm = 40.f;
 	for (const FCLNavLinkTune& L : Nav.Links)
 	{
 		if (!CLNavTune::IsAirDiveLink(L.Name))
 		{
 			continue;
 		}
-		AirDiveEdgeCm = L.JumpDistanceFromEdge;
-		if (L.JumpLength > PhysLen * 1.05f)
+		const float Height = CLNavTune::ResolveScalar(L.JumpHeight, TripleApex, Nav, SurvivingDropCm);
+		if (Height + 1.f < TripleApex * 0.95f)
 		{
 			R.bApplyAirDiveLink = false;
-			R.Message = FString::Printf(TEXT("%s json jumpLength %.0f > MaxLaunchXY %.0f"), *L.Name.ToString(), L.JumpLength, PhysLen);
+			R.Message = FString::Printf(TEXT("%s JumpHeight %.0f < triple apex %.0f"),
+				*L.Name.ToString(), Height, TripleApex);
 			return R;
 		}
-	}
-	const float DownLen = CLNavAbility::AirDiveBakeJumpLengthCm(Move, Nav, AirDiveEdgeCm);
-	if (DownLen > PhysLen * 1.05f)
-	{
-		R.bApplyAirDiveLink = false;
-		R.Message = FString::Printf(TEXT("AirDiveDown bake JumpLength %.0f > MaxLaunchXY %.0f"), DownLen, PhysLen);
-		return R;
 	}
 
 	return R;

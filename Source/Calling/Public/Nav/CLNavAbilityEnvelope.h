@@ -57,6 +57,10 @@ namespace CLNavAbility
 	float PinnedDiveXY(const FCLMovementTune& Tune, float DropCm);
 	/** Recast search + Launch envelope: JumpSteerXY(3) + PinnedDiveXY(drop). */
 	float MaxLaunchXY(const FCLMovementTune& Tune, float DropCm);
+	/** Stick-forward triple that returns to lip height (full up+down of JumpApex). No PinnedDiveXY. Recast JumpLength. */
+	float SamePlaneJumpLengthCm(const FCLMovementTune& Tune);
+	/** Epic parabola intercept with the launch plane: x0 = L·(2H+2√(H(H+D)))/(D+2H+2√(H(H+D))). */
+	float RecastJumpLaunchPlaneInterceptCm(float JumpLength, float JumpHeight, float JumpMaxDepth);
 	/** Drop needed so hang+pinned 1g XY reach covers DistXY. */
 	float MinDropCmForDistXY(const FCLMovementTune& Tune, float DistXY);
 	/** Jump pulses to get above the pad with enough drop for DistXY. */
@@ -75,16 +79,17 @@ namespace CLNavAbility
 	{
 		return FMath::Max(400.f, AirDiveRefDropCm() - AirDiveChordEndZTolCm);
 	}
-	/** Lip-floor to island. Recast searches from the walkable edge, not apex. */
-	inline float AirDivePadDropFromLipCm(float JumpApexCm)
+	/** Lip-floor to island: apex-drop minus full triple. Movement tune only — not Recast jumpApexCm. */
+	inline float AirDivePadDropFromLipCm(const FCLMovementTune& Tune)
 	{
-		return FMath::Max(800.f, AirDivePadDropFromApexCm() - FMath::Max(0.f, JumpApexCm));
+		const float Triple = JumpApexUpCm(Tune, FMath::Max(1, Tune.MaxJumps));
+		return FMath::Max(800.f, AirDivePadDropFromApexCm() - Triple);
 	}
-	/** Recast AirDive JumpMaxDepth: the survivable fall, not strain plus buffers. */
-	inline float AirDiveChordMaxDepthCm(float JumpApexCm)
+	/** Recast long-recipe JumpMaxDepth: Abs(triple apex − maxFall). Never raw 3000/30000. */
+	inline float AirDiveChordMaxDepthCm(const FCLMovementTune& Tune)
 	{
-		(void)JumpApexCm;
-		return AirDiveRefDropCm();
+		const float Apex = JumpApexUpCm(Tune, FMath::Max(1, Tune.MaxJumps));
+		return FMath::Abs(Apex - AirDiveRefDropCm());
 	}
 	/** CharacterMovement MaxAcceleration default; JumpSteerXY uses this * AirControl. */
 	inline constexpr float JumpAirAccelCm = 2048.f;
@@ -92,22 +97,18 @@ namespace CLNavAbility
 	bool ReadyToAirDive(const FCLMovementTune& Tune, float MaxAccel, float SpeedXY, const FVector& From, const FVector& To);
 	/** Bake + runtime search: min(MaxLaunchXY, NavTune cap). Cap 0 = physics only. */
 	float SearchRadiusCm(const FCLMovementTune& Tune, const FCLNavTune& NavTune, float DropCm);
-	/** Greybox island XY is this fraction of the apex-drop hull, then rim-inset. */
-	inline constexpr float AirDivePadPlaceFrac = 0.90f;
-	inline float AirDivePadPlaceChordCm(const FCLMovementTune& Tune, const FCLNavTune& NavTune)
-	{
-		return SearchRadiusCm(Tune, NavTune, AirDivePadDropFromApexCm()) * AirDivePadPlaceFrac;
-	}
+	/** Greybox island chord = Recast launch-plane intercept (x0). Rim inset is applied at Ends. Recast knobs must not move this after freeze. */
+	float AirDivePadPlaceChordCm(const FCLMovementTune& Tune);
+	/** Locked greybox rim inset. Recast JumpDistanceFromEdge must not move the pad. */
 	inline float AirDivePadRimInsetCm(float JumpDistanceFromEdgeCm)
 	{
-		return FMath::Max(200.f, JumpDistanceFromEdgeCm + 160.f);
+		(void)JumpDistanceFromEdgeCm;
+		return 200.f;
 	}
-	/** Recast JumpLength for AirDiveDown. Sampler floors the spine END, not mid-chord
-	 *  ground, so this must land on the island (place-chord minus rim inset plus edge). */
-	inline float AirDiveBakeJumpLengthCm(const FCLMovementTune& Tune, const FCLNavTune& NavTune,
-		float JumpDistanceFromEdgeCm)
+	/** Hop-bounds expand (not a Recast JumpLength ceiling). Lip-to-pad DistXY plus edge. */
+	inline float AirDiveBakeJumpLengthCm(const FCLMovementTune& Tune, float JumpDistanceFromEdgeCm)
 	{
-		const float Place = AirDivePadPlaceChordCm(Tune, NavTune);
+		const float Place = AirDivePadPlaceChordCm(Tune);
 		const float Inward = AirDivePadRimInsetCm(JumpDistanceFromEdgeCm);
 		return FMath::Max(Place - Inward + JumpDistanceFromEdgeCm, 800.f);
 	}

@@ -4,6 +4,7 @@
 #include "AI/CLTaskMarker.h"
 #include "Nav/CLNavAbilityEnvelope.h"
 #include "Nav/CLNavTune.h"
+#include "Nav/CLNavPathUtil.h"
 #include "Core/CLTunes.h"
 #include "Core/CLLog.h"
 #include "Components/DirectionalLightComponent.h"
@@ -37,10 +38,10 @@
 #include "Nav/CLNavLinkPolicy.h"
 #include "Nav/CLNavArea_AirDive.h"
 #include "Navigation/NavLinkProxy.h"
-#include "Kismet/GameplayStatics.h"
 #include "AI/NavigationSystemBase.h"
 #include "Components/BrushComponent.h"
 #include "TimerManager.h"
+#include "HAL/PlatformTime.h"
 
 namespace
 {
@@ -51,14 +52,16 @@ namespace
 
 	float EdgePadDropFromLipCm()
 	{
-		return CLNavAbility::AirDivePadDropFromLipCm(CLNavTune::Get().JumpApexCm);
+		FCLMovementTune Move;
+		Move.LoadFromIni();
+		return CLNavAbility::AirDivePadDropFromLipCm(Move);
 	}
 
 	float EdgeAirDiveChordCm()
 	{
 		FCLMovementTune Move;
 		Move.LoadFromIni();
-		return CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(), EdgePadDropFromApexCm());
+		return CLNavAbility::AirDivePadPlaceChordCm(Move);
 	}
 
 	float EdgeAirDiveEdgeCm()
@@ -78,14 +81,27 @@ namespace
 	{
 		FCLMovementTune Move;
 		Move.LoadFromIni();
-		return CLNavAbility::AirDiveBakeJumpLengthCm(Move, CLNavTune::Get(), EdgeAirDiveEdgeCm());
+		return CLNavAbility::AirDiveBakeJumpLengthCm(Move, EdgeAirDiveEdgeCm());
+	}
+
+	float EdgeJumpLengthCm()
+	{
+		for (const FCLNavLinkTune& L : CLNavTune::Get().Links)
+		{
+			if (L.Name.ToString().Equals(TEXT("AirDiveDown"), ESearchCase::IgnoreCase)
+				|| CLNavTune::IsAirDiveLink(L.Name))
+			{
+				return L.JumpLength;
+			}
+		}
+		return 1508.f;
 	}
 
 	float EdgePadPlaceChordCm()
 	{
 		FCLMovementTune Move;
 		Move.LoadFromIni();
-		return CLNavAbility::AirDivePadPlaceChordCm(Move, CLNavTune::Get());
+		return CLNavAbility::AirDivePadPlaceChordCm(Move);
 	}
 
 	void DestroyGreyboxAirDiveLinks(UWorld& World)
@@ -102,42 +118,6 @@ namespace
 		{
 			World.DestroyActor(Link);
 		}
-	}
-
-	void SeedEdgePadAirDiveLink(UWorld& World, const FVector& Lip, const FVector& Pad)
-	{
-		DestroyGreyboxAirDiveLinks(World);
-		const FVector LipStand(Lip.X, Lip.Y, Lip.Z + 96.f);
-		const FVector PadStand(Pad.X, Pad.Y, Pad.Z + 96.f);
-		const FTransform Xf(FRotator::ZeroRotator, LipStand);
-		ANavLinkProxy* Link = World.SpawnActorDeferred<ANavLinkProxy>(
-			ANavLinkProxy::StaticClass(), Xf, nullptr, nullptr,
-			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-		if (!Link)
-		{
-			UE_LOG(LogCalling, Warning, TEXT("Greybox AirDive NavLinkProxy spawn failed"));
-			return;
-		}
-		Link->Tags.Add(FName(TEXT("CLGreyboxAirDiveLink")));
-		Link->SetActorHiddenInGame(true);
-		Link->bSmartLinkIsRelevant = false;
-		Link->SetSmartLinkEnabled(false);
-		FNavigationLink Pt(FVector::ZeroVector, PadStand - LipStand);
-		Pt.Direction = ENavLinkDirection::LeftToRight;
-		Pt.SnapRadius = 250.f;
-		Pt.bUseSnapHeight = true;
-		Pt.SnapHeight = 400.f;
-		Pt.LeftProjectHeight = 0.f;
-		Pt.MaxFallDownLength = 0.f;
-		Pt.bSnapToCheapestArea = false;
-		Pt.SetAreaClass(UCLNavArea_AirDive::StaticClass());
-		Link->PointLinks.Reset();
-		Link->PointLinks.Add(Pt);
-		UGameplayStatics::FinishSpawningActor(Link, Xf);
-		FNavigationSystem::UpdateActorAndComponentData(*Link);
-		UE_LOG(LogCalling, Display, TEXT("Greybox AirDive Recast link lip=%s pad=%s distXY=%.0f dZ=%.0f"),
-			*LipStand.ToCompactString(), *PadStand.ToCompactString(),
-			FVector::Dist2D(LipStand, PadStand), PadStand.Z - LipStand.Z);
 	}
 }
 
@@ -460,7 +440,9 @@ float ACLGreyboxFloors::GetRescueMinZ() const
 	}
 	if (Layout == ECLGreyboxLayout::PracticePillar)
 	{
-		return -CLNavAbility::AirDivePadDropFromLipCm(CLNavTune::Get().JumpApexCm) - 500.f;
+		FCLMovementTune Move;
+		Move.LoadFromIni();
+		return -CLNavAbility::AirDivePadDropFromLipCm(Move) - 500.f;
 	}
 	return GetPlayerStartLocation().Z - 150.f;
 }
@@ -867,9 +849,28 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 	CachedEdgePad = EdgePad;
 	bHasEdgePad = true;
 	AddPlatform(EdgePad, 8.f, 8.f, 400.f);
-	UE_LOG(LogCalling, Display, TEXT("Greybox edgePad island lip=%s pad=%s distXY=%.0f dZ=%.0f (DropDown=280 AirDiveChord=%.0f bakeLen=%.0f)"),
-		*EdgeLip.ToCompactString(), *EdgePad.ToCompactString(),
-		FVector::Dist2D(EdgeLip, EdgePad), EdgePad.Z - EdgeLip.Z, EdgeAirDiveChordCm(), EdgeBakeJumpLengthCm());
+	{
+		FCLMovementTune Move;
+		Move.LoadFromIni();
+		const float DistXY = FVector::Dist2D(EdgeLip, EdgePad);
+		const float Dz = EdgePad.Z - EdgeLip.Z;
+		const float Diag = FMath::Sqrt(DistXY * DistXY + Dz * Dz);
+		const float JumpLen = EdgeJumpLengthCm();
+		const float L = CLNavAbility::SamePlaneJumpLengthCm(Move);
+		const float H = CLNavAbility::JumpApexUpCm(Move, FMath::Max(1, Move.MaxJumps));
+		const float Depth = CLNavAbility::AirDiveRefDropCm();
+		const float X0 = CLNavAbility::RecastJumpLaunchPlaneInterceptCm(L, H, Depth);
+		UE_LOG(LogCalling, Display,
+			TEXT("Greybox edgePad island lip=%s pad=%s distXY=%.0f dZ=%.0f diag=%.0f jumpLen=%.0f L=%.0f x0=%.0f chord=%.0f H-D=%.0f"),
+			*EdgeLip.ToCompactString(), *EdgePad.ToCompactString(),
+			DistXY, Dz, Diag, JumpLen, L, X0, EdgeAirDiveChordCm(), H - Depth);
+		if (Diag > JumpLen)
+		{
+			UE_LOG(LogCalling, Warning,
+				TEXT("Greybox edgePad canary 3D %.0f exceeds JumpLength %.0f (freeze JumpLength from max envelope, do not move the pad)"),
+				Diag, JumpLen);
+		}
+	}
 	UE_LOG(LogCalling, Display,
 		TEXT("Greybox PvpThreeLane padZ=0 courtZ=%.0f courtM=%.0f laneW=%.0f rampPitch=%.1f deg red=%s edgePad=%s"),
 		PitZ, CourtM, LaneW, PitchDeg,
@@ -879,15 +880,14 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 
 void ACLGreyboxFloors::BuildPracticePillar()
 {
-	const float Drop = CLNavAbility::AirDivePadDropFromLipCm(CLNavTune::Get().JumpApexCm);
 	FCLMovementTune Move;
 	Move.LoadFromIni();
-	const float Range = CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(),
-		CLNavAbility::AirDivePadDropFromApexCm());
-	const float PadX = Range * 0.90f;
+	const float Drop = CLNavAbility::AirDivePadDropFromLipCm(Move);
+	const float Chord = CLNavAbility::AirDivePadPlaceChordCm(Move);
+	const float PadX = Chord - CLNavAbility::AirDivePadRimInsetCm(40.f);
 	AddPlatform(FVector(0.f, 0.f, 0.f), 8.f, 8.f, 40.f);
 	AddPlatform(FVector(PadX, 0.f, -Drop), 3.5f, 3.5f, 400.f);
-	UE_LOG(LogCalling, Display, TEXT("Greybox PracticePillar drop=%.0f rangeXY=%.0f padX=%.0f"), Drop, Range, PadX);
+	UE_LOG(LogCalling, Display, TEXT("Greybox PracticePillar drop=%.0f chordXY=%.0f padX=%.0f"), Drop, Chord, PadX);
 }
 
 void ACLGreyboxFloors::StampTaskMarkers()
@@ -933,9 +933,9 @@ void ACLGreyboxFloors::StampTaskMarkers()
 	{
 		FCLMovementTune Move;
 		Move.LoadFromIni();
-		const float Drop = CLNavAbility::AirDivePadDropFromLipCm(CLNavTune::Get().JumpApexCm);
-		const float PadX = CLNavAbility::SearchRadiusCm(Move, CLNavTune::Get(),
-			CLNavAbility::AirDivePadDropFromApexCm()) * 0.90f;
+		const float Drop = CLNavAbility::AirDivePadDropFromLipCm(Move);
+		const float PadX = CLNavAbility::AirDivePadPlaceChordCm(Move)
+			- CLNavAbility::AirDivePadRimInsetCm(40.f);
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("pillar_top")), GetPlayerStartLocation());
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("pillar_pad")), FVector(PadX, 0.f, -Drop));
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("spawn_default")), GetPlayerStartLocation());
@@ -985,6 +985,8 @@ void ACLGreyboxFloors::RebuildNavigation()
 		return;
 	}
 
+	// One NavMeshBoundsVolume for walkable mesh AND jump-gen sampling.
+	// UE 5.8 has no separate link-bounds actor. Every platform must sit in this box.
 	FBox Box(ForceInit);
 	for (UStaticMeshComponent* Mesh : Platforms)
 	{
@@ -993,6 +995,7 @@ void ACLGreyboxFloors::RebuildNavigation()
 			Box += Mesh->Bounds.GetBox();
 		}
 	}
+	// Hop corridor Z must include the pad floor (pad Z can sit below lip−Drop).
 	if (Layout == ECLGreyboxLayout::PvpThreeLane)
 	{
 		FCLPvpThreeLaneRecipe R;
@@ -1000,9 +1003,14 @@ void ACLGreyboxFloors::RebuildNavigation()
 		FVector Lip;
 		FVector Pad;
 		R.EdgeAirDiveEnds(Lip, Pad, EdgePadPlaceChordCm(), EdgeAirDiveEdgeCm(), EdgePadDropFromLipCm());
-		const FVector Half(450.f, 450.f, 250.f);
-		Box += FBox(Pad - Half, Pad + Half);
-		Box += Lip;
+		const float LookXY = FMath::Max3(EdgeJumpLengthCm(), EdgeBakeJumpLengthCm(), static_cast<float>(FVector::Dist2D(Lip, Pad))) + 400.f;
+		const float LookZ = FMath::Max(CLNavAbility::AirDiveRefDropCm(), FMath::Abs(Lip.Z - Pad.Z)) + 800.f;
+		FBox Hop(Lip, Lip);
+		Hop += Pad;
+		Hop = Hop.ExpandBy(FVector(LookXY, LookXY, LookZ));
+		Box += Hop;
+		Box.Min.Z = FMath::Min3(Box.Min.Z, Pad.Z - LookZ, Lip.Z - LookZ);
+		Box.Max.Z = FMath::Max(Box.Max.Z, Lip.Z + 1800.f);
 	}
 	if (!Box.IsValid && Layout == ECLGreyboxLayout::PvpThreeLane)
 	{
@@ -1029,6 +1037,7 @@ void ACLGreyboxFloors::RebuildNavigation()
 	NavSys->bInitialBuildingLocked = false;
 	NavSys->ReleaseInitialBuildingLock();
 	// Empty runtime bounds volumes otherwise produce 0 tiles.
+	// This volume is not a tile-size knob: JumpLength searches within it for landings.
 	NavSys->bWholeWorldNavigable = true;
 
 	ANavMeshBoundsVolume* Vol = nullptr;
@@ -1076,23 +1085,25 @@ void ACLGreyboxFloors::RebuildNavigation()
 		const TArray<FNavLinkGenerationJumpConfig>& JumpConfigs = Recast->GetNavLinkJumpConfigs();
 		for (const FNavLinkGenerationJumpConfig& Cfg : JumpConfigs)
 		{
+			UE_LOG(LogCalling, Display,
+				TEXT("Greybox jumpCfg %s en=%s len=%.0f edge=%.0f h=%.0f d=%.0f ends=%.0f"),
+				*Cfg.Name.ToString(),
+				Cfg.bEnabled ? TEXT("yes") : TEXT("no"),
+				Cfg.JumpLength, Cfg.JumpDistanceFromEdge, Cfg.JumpHeight, Cfg.JumpMaxDepth,
+				Cfg.JumpEndsHeightTolerance);
 			if (Cfg.Name.ToString().Equals(TEXT("AirDiveDown"), ESearchCase::IgnoreCase)
 				|| (AirDiveJumpLengthCm <= 0.f && CLNavTune::IsAirDiveLink(Cfg.Name)))
 			{
 				AirDiveJumpLengthCm = Cfg.JumpLength;
 				AirDiveJumpMaxDepthCm = Cfg.JumpMaxDepth;
+				AirDiveJumpHeightCm = Cfg.JumpHeight;
 			}
 		}
 	}
 
 	if (Layout == ECLGreyboxLayout::PvpThreeLane)
 	{
-		FCLPvpThreeLaneRecipe R;
-		R.Load();
-		FVector Lip;
-		FVector Pad;
-		R.EdgeAirDiveEnds(Lip, Pad, EdgePadPlaceChordCm(), EdgeAirDiveEdgeCm(), EdgePadDropFromLipCm());
-		SeedEdgePadAirDiveLink(*World, Lip, Pad);
+		DestroyGreyboxAirDiveLinks(*World);
 	}
 
 	// Octree ignores geometry until Recast exists. Push cubes after Create.
@@ -1105,35 +1116,53 @@ void ACLGreyboxFloors::RebuildNavigation()
 		}
 	}
 
+	const double BakeStart = FPlatformTime::Seconds();
 	NavSys->Build();
-	int32 OffMeshLinks = 0;
-	int32 LongAirDiveLinks = 0;
+	EdgePadBakeMs = static_cast<float>((FPlatformTime::Seconds() - BakeStart) * 1000.0);
+	UE_LOG(LogCalling, Display, TEXT("Greybox nav bake ms=%.0f"), EdgePadBakeMs);
+	EdgePadOffMesh = 0;
+	EdgePadValidEndsMax = 0;
 	if (Recast)
 	{
 		FRecastDebugGeometry Geo;
 		Recast->GetDebugGeometryForTile(Geo, FNavTileRef());
-		OffMeshLinks = Geo.OffMeshLinks.Num();
+		EdgePadOffMesh = Geo.OffMeshLinks.Num();
 		TArray<FSupportedAreaData> Areas;
 		Recast->GetSupportedAreas(Areas);
 		const int32 AirDiveId = Recast->GetAreaID(UCLNavArea_AirDive::StaticClass());
 		UE_LOG(LogCalling, Display, TEXT("Greybox AirDive areaId=%d supported=%d"),
 			AirDiveId, Areas.Num());
+		int32 NearPad = 0;
 		for (const FRecastDebugGeometry::FOffMeshLink& Lnk : Geo.OffMeshLinks)
 		{
-			const float Dxy = FVector::Dist2D(Lnk.Left, Lnk.Right);
-			const float Dz = Lnk.Right.Z - Lnk.Left.Z;
-			if (Dxy > 800.f && Dz < -1500.f)
+			if (bHasEdgePad)
 			{
-				++LongAirDiveLinks;
-				UE_LOG(LogCalling, Display,
-					TEXT("Greybox offMesh long Dxy=%.0f dZ=%.0f area=%u validEnds=%u gen=%s L=%s R=%s"),
-					Dxy, Dz, (unsigned)Lnk.AreaID, (unsigned)Lnk.ValidEnds,
-					Lnk.bIsGenerated ? TEXT("yes") : TEXT("no"),
-					*Lnk.Left.ToCompactString(), *Lnk.Right.ToCompactString());
+				const float ToPad = FMath::Min(
+					FVector::Dist(Lnk.Right, CachedEdgePad),
+					FVector::Dist(Lnk.Left, CachedEdgePad));
+				if (ToPad < 1000.f)
+				{
+					++NearPad;
+					EdgePadValidEndsMax = FMath::Max(EdgePadValidEndsMax, static_cast<int32>(Lnk.ValidEnds));
+					UE_LOG(LogCalling, Display,
+						TEXT("Greybox offMesh nearPad toPad=%.0f validEnds=%u gen=%s L=%s R=%s"),
+						ToPad, (unsigned)Lnk.ValidEnds,
+						Lnk.bIsGenerated ? TEXT("yes") : TEXT("no"),
+						*Lnk.Left.ToCompactString(), *Lnk.Right.ToCompactString());
+				}
 			}
 		}
+		UE_LOG(LogCalling, Display,
+			TEXT("Greybox offMesh count=%d nearPad=%d validEndsMax=%d cellH=%.0f radius=%.0f tile=%.0f"),
+			EdgePadOffMesh, NearPad, EdgePadValidEndsMax,
+			Recast->GetCellHeight(ENavigationDataResolution::Default),
+			Recast->AgentRadius,
+			Recast->TileSizeUU);
 	}
-	bEdgePadRecastLinked = false;
+	bFindPathMeshOk = false;
+	bEdgePadLipOk = false;
+	bEdgePadPadOk = false;
+	bEdgePadPartial = false;
 	EdgePadPathPoints = 0;
 	if (Layout == ECLGreyboxLayout::PvpThreeLane)
 	{
@@ -1147,45 +1176,52 @@ void ACLGreyboxFloors::RebuildNavigation()
 		FNavLocation ProjLip;
 		FNavLocation ProjPad;
 		const FVector Extent(800.f, 800.f, 4000.f);
-		const bool bLip = NavSys->ProjectPointToNavigation(Lip, ProjLip, Extent);
-		const bool bPad = NavSys->ProjectPointToNavigation(Pad, ProjPad, Extent);
-		if (bLip && bPad)
+		bEdgePadLipOk = NavSys->ProjectPointToNavigation(Lip, ProjLip, Extent);
+		bEdgePadPadOk = NavSys->ProjectPointToNavigation(Pad, ProjPad, Extent);
+		if (bEdgePadLipOk && bEdgePadPadOk)
 		{
 			if (UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(
 				World, ProjLip.Location, ProjPad.Location, nullptr))
 			{
 				EdgePadPathPoints = Path->PathPoints.Num();
 				const bool bValid = Path->IsValid();
-				const bool bPartial = Path->IsPartial();
+				bEdgePadPartial = Path->IsPartial();
 				if (EdgePadPathPoints >= 2)
 				{
-					const FVector A = Path->PathPoints[0];
-					const FVector B = Path->PathPoints.Last();
-					EdgePadDistXY = FVector::Dist2D(A, B);
-					EdgePadDeltaZ = B.Z - A.Z;
 					UE_LOG(LogCalling, Display, TEXT("Greybox edgePad path valid=%s partial=%s p0=%s pN=%s"),
 						bValid ? TEXT("yes") : TEXT("no"),
-						bPartial ? TEXT("yes") : TEXT("no"),
-						*A.ToCompactString(),
-						*B.ToCompactString());
+						bEdgePadPartial ? TEXT("yes") : TEXT("no"),
+						*Path->PathPoints[0].ToCompactString(),
+						*Path->PathPoints.Last().ToCompactString());
+					bFindPathMeshOk = bValid && !bEdgePadPartial
+						&& CLNavPathUtil::PathEndsOnFromAndDestNav(
+							*NavSys, Path->PathPoints, ProjLip, ProjPad, Extent);
 				}
-				bEdgePadRecastLinked = bValid && !bPartial && EdgePadDistXY > 800.f && EdgePadDeltaZ < -1500.f;
 			}
 		}
 		UE_LOG(LogCalling, Display,
-			TEXT("Greybox edgePad Recast linked=%s points=%d distXY=%.0f dZ=%.0f airDiveLen=%.0f maxDepth=%.0f lipOk=%s padOk=%s offMesh=%d longDive=%d"),
-			bEdgePadRecastLinked ? TEXT("yes") : TEXT("no"),
+			TEXT("Greybox edgePad FindPath meshOk=%s points=%d airDiveLen=%.0f height=%.0f maxDepth=%.0f lipOk=%s padOk=%s offMesh=%d validEndsMax=%d"),
+			bFindPathMeshOk ? TEXT("yes") : TEXT("no"),
 			EdgePadPathPoints,
-			EdgePadDistXY,
-			EdgePadDeltaZ,
 			AirDiveJumpLengthCm,
+			AirDiveJumpHeightCm,
 			AirDiveJumpMaxDepthCm,
-			bLip ? TEXT("yes") : TEXT("no"),
-			bPad ? TEXT("yes") : TEXT("no"),
-			OffMeshLinks,
-			LongAirDiveLinks);
+			bEdgePadLipOk ? TEXT("yes") : TEXT("no"),
+			bEdgePadPadOk ? TEXT("yes") : TEXT("no"),
+			EdgePadOffMesh,
+			EdgePadValidEndsMax);
 	}
 	const FBox NavBox = Recast ? Recast->GetBounds() : FBox(ForceInit);
+	const bool bPadInNav = bHasEdgePad && NavBox.IsValid
+		&& CachedEdgePad.X >= NavBox.Min.X && CachedEdgePad.X <= NavBox.Max.X
+		&& CachedEdgePad.Y >= NavBox.Min.Y && CachedEdgePad.Y <= NavBox.Max.Y
+		&& CachedEdgePad.Z >= NavBox.Min.Z && CachedEdgePad.Z <= NavBox.Max.Z;
+	UE_LOG(LogCalling, Display,
+		TEXT("Greybox edgePad AABB pad=%s geoZ=[%.0f,%.0f] navZ=[%.0f,%.0f] padInNav=%s"),
+		*CachedEdgePad.ToCompactString(),
+		Box.Min.Z, Box.Max.Z,
+		NavBox.Min.Z, NavBox.Max.Z,
+		bPadInNav ? TEXT("yes") : TEXT("no"));
 	UE_LOG(LogCalling, Display, TEXT("Greybox nav rebuilt geo=%s nav=%s tiles=%d pads=%d jumpLinks=%s"),
 		*Box.ToString(),
 		*NavBox.ToString(),

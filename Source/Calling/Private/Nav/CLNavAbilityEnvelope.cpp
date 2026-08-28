@@ -21,13 +21,13 @@ float CLNavAbility::JumpApexUpCm(const FCLMovementTune& Tune, int32 JumpsUsed)
 	{
 		return 0.f;
 	}
-	const float Apex = (Tune.JumpZVelocity * Tune.JumpZVelocity) / (2.f * G);
-	if (JumpsUsed == 1)
-	{
-		return Apex;
-	}
-	// Recast JumpUp budget (stacked triple) lives on NavTune.jumpApexCm.
-	return JumpsUsed >= 3 ? CLNavTune::Get().JumpApexCm : Apex + 70.f;
+	// RocketPulse: each air jump does Max(Vz,0)+DoubleJumpZ. Envelope peak = mash
+	// all pulses at takeoff (upper bound the leaf / Recast JumpHeight must cover).
+	const float V0 = FMath::Max(0.f, Tune.JumpZVelocity);
+	const float VPulse = Tune.DoubleJumpZVelocity > 0.f ? Tune.DoubleJumpZVelocity : V0 * 0.4f;
+	const int32 AirPulses = FMath::Clamp(JumpsUsed - 1, 0, FMath::Max(0, Tune.MaxJumps - 1));
+	const float VPeak = V0 + static_cast<float>(AirPulses) * VPulse;
+	return (VPeak * VPeak) / (2.f * G);
 }
 
 float CLNavAbility::PhysicsAirDiveXY(const FCLMovementTune& Tune, float DropCm)
@@ -67,6 +67,37 @@ float CLNavAbility::PinnedDiveXY(const FCLMovementTune& Tune, float DropCm)
 float CLNavAbility::MaxLaunchXY(const FCLMovementTune& Tune, float DropCm)
 {
 	return JumpSteerXY(Tune, FMath::Max(1, Tune.MaxJumps)) + PinnedDiveXY(Tune, DropCm);
+}
+
+float CLNavAbility::SamePlaneJumpLengthCm(const FCLMovementTune& Tune)
+{
+	const int32 J = FMath::Max(1, Tune.MaxJumps);
+	const float Apex = JumpApexUpCm(Tune, J);
+	const float G = FMath::Max(1.f, Tune.GravityZ);
+	const float TUp = Apex > 1.f ? FMath::Sqrt((2.f * Apex) / G) : 0.f;
+	const float T = 2.f * TUp;
+	const float Accel = JumpAirAccelCm * FMath::Clamp(Tune.AirControl, 0.f, 1.f);
+	const float FromRest = 0.5f * Accel * T * T;
+	const float WalkCap = Tune.BaseWalkSpeed * T;
+	return FMath::Min(FromRest, WalkCap);
+}
+
+float CLNavAbility::RecastJumpLaunchPlaneInterceptCm(float JumpLength, float JumpHeight, float JumpMaxDepth)
+{
+	const float L = FMath::Max(1.f, JumpLength);
+	const float H = FMath::Max(1.f, JumpHeight);
+	const float D = FMath::Max(1.f, JumpMaxDepth);
+	const float Root = FMath::Sqrt(H * (H + D));
+	const float Num = 2.f * H + 2.f * Root;
+	return L * (Num / (D + Num));
+}
+
+float CLNavAbility::AirDivePadPlaceChordCm(const FCLMovementTune& Tune)
+{
+	const float L = SamePlaneJumpLengthCm(Tune);
+	const float H = JumpApexUpCm(Tune, FMath::Max(1, Tune.MaxJumps));
+	const float D = AirDiveRefDropCm();
+	return RecastJumpLaunchPlaneInterceptCm(L, H, D);
 }
 
 float CLNavAbility::MinDropCmForDistXY(const FCLMovementTune& Tune, float DistXY)

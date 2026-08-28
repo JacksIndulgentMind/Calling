@@ -89,12 +89,17 @@ public:
 	/** Recast from NavTune.json (agent + jump links). Surviving drop is spawn Z minus rescue Z. */
 	void RebuildNavigation();
 
-	bool bEdgePadRecastLinked = false;
+	bool bFindPathMeshOk = false;
+	bool bEdgePadLipOk = false;
+	bool bEdgePadPadOk = false;
+	bool bEdgePadPartial = false;
 	int32 EdgePadPathPoints = 0;
-	float EdgePadDistXY = 0.f;
-	float EdgePadDeltaZ = 0.f;
+	int32 EdgePadOffMesh = 0;
+	int32 EdgePadValidEndsMax = 0;
 	float AirDiveJumpLengthCm = 0.f;
 	float AirDiveJumpMaxDepthCm = 0.f;
+	float AirDiveJumpHeightCm = 0.f;
+	float EdgePadBakeMs = 0.f;
 	FVector CachedEdgeLip = FVector::ZeroVector;
 	FVector CachedEdgePad = FVector::ZeroVector;
 	bool bHasEdgePad = false;

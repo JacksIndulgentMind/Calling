@@ -38,7 +38,7 @@ Every **Tick** (NetHz, 20):
 | Map rescue Z | greybox `SurvivingDropCm` | JumpDown depth; rescue yank. Stays below strain so a 30 m dive is not yanked. |
 | Locks | `AirControl=0.35`, `BaseStrafeSpeed=380` | validator asserts; do not retune |
 
-On nav rebuild, `CLNavAbilityValidate` checks locks, `jumpApexCm` ≥ single-jump apex, and that `airDiveSearchMaxCm` does not exceed `MaxLaunchXY` at the strain 30 m drop. Failures go through `UCLErrorBoundary`. Recast `JumpMaxDepth` is the strain survivable fall from the walkable edge (3000). The island sits **strain minus end-tol minus apex** below the lip. How Recast bakes AirDiveDown, simple hints, and neighbor-tile snap: [RecastLinks.md](RecastLinks.md). The validator does **not** rewrite NavTune.json.
+On nav rebuild, `CLNavAbilityValidate` checks feel locks and that AirDive **JumpHeight** is at least triple apex. It does **not** cap or disable AirDive for large JumpLength / search radius. Jump-gen knobs come from NavTune with no Calling ceilings. [RecastLinks.md](RecastLinks.md). The validator does **not** rewrite NavTune.json.
 
 ## Search radius
 
@@ -46,9 +46,9 @@ Recast does not search the whole courtyard. Each link kind looks only as far as 
 
 `MaxLaunchXY(drop) = JumpSteerXY(3) + PinnedDiveXY(drop)`. Jump steer is AirControl **0.35** through the triple (a few meters). Pinned dive is hang **0.44 s** at `AirDiveMaxXY` **1200**, then the rest of the drop at **1g** with stick pinned — **not** 8G slam. At 30 m that is **~30 m+ XY**. Bake and `goto` share `min(MaxLaunchXY, airDiveSearchMaxCm)` with cap **0** meaning uncapped. Slam stays landing **feel** on short hops.
 
-**DropDown** is a short XY chord (~2.8 m) with strain depth: pad right under the lip is a walk-off, not a Launch. **AirDiveDown** is the long-XY drop Recast searches from the **walkable edge** (JumpMaxDepth = strain **30 m**). Walk-off-then-dive can use that full 30 m. **AirDiveOver** is the long spanning gap. Both AirDive* use `UCLNavArea_AirDive`; `goto` Launchs those edges only.
+**DropDown** is a short XY chord (~2.8 m) with strain depth: pad right under the lip is a walk-off, not a Launch. **AirDiveDown** is the long-XY drop Recast searches from the **walkable edge** (JumpMaxDepth = **Abs(apex − maxFall 3000) ≈ 1420**, not raw 30 m). Play strain still allows a 30 m fall. **AirDiveOver** is the long spanning gap. Both AirDive* use `UCLNavArea_AirDive`; `goto` Launchs those edges only.
 
-The **greybox test island** is the **worst-case jump**: lowest floor you can survive from **triple-jump apex** (strain minus 300 cm end-tol ≈ **27 m** below apex ≈ **23 m** below the lip). Lateral placement is **90% of `MaxLaunchXY` at that apex drop**, inset from the rim so you are not jumping from the exact edge. Recast must connect that chord before catalog `goto marker=edge_pad` can ride it — see [RecastLinks.md](RecastLinks.md). `/state.edgePadLinked` is the bake-time path (complete, DistXY > 800, dZ < −1500).
+The **greybox test island** sits inside Recast’s launch-plane intercept (x0 − rim inset **200**, locked Z). Recast knobs must not move it. Recast **JumpLength** is clipped same-plane launch XY (~**1508**), not MaxLaunchXY-with-fall. **JumpMaxDepth** = Abs(apex − maxFall **3000**) ≈ **1420**. Success is `findPathMeshOk` (FindPath from/dest mesh). Cheap loop: `-Sequence nav`. See [RecastLinks.md](RecastLinks.md).
 
 ## Shared speeds (do not retune the two locks)
 
@@ -66,14 +66,14 @@ The **greybox test island** is the **worst-case jump**: lowest floor you can sur
 
 **How:** `MaxJumps=3`. Ground jump sets `JumpsRemaining = 2` and `JumpZVelocity=640`. Air pulses **add** `DoubleJumpZVelocity=560` to current Vz (Rocket Pulse). No apex wait. Mash while climbing.
 
-Single-jump apex ≈ `640² / (2×980)` ≈ **209 cm** (matches “+210 from stand”). Recast **JumpUp** budget is `jumpApexCm=400` (stacked triple, ~4 m). Use Recast’s 4 m for “can I jump-up this ledge”; use ~210 cm for a *single* hop.
+Single-jump apex ≈ `640² / (2×980)` ≈ **209 cm**. RocketPulse air jumps **add** `DoubleJumpZVelocity=560` to current Vz. Full triple mash peak ≈ `(640+560+560)² / (2×980)` ≈ **1580 cm (~15.8 m)**. That is `jumpApexCm` / Recast **JumpHeight** for JumpUp and AirDive — not a fake 4 m.
 
 | Jumps used | Typical ΔZ (up) | Typical DistXY while jumping | Notes |
 |------------|-----------------|------------------------------|--------|
 | 0 | ≤ 0 (down) | walk / drop | Walk-off if `fwdKind=drop`. Do not jump. |
 | 1 | ~0–210 cm | short (air control 0.35) | Lip / crate. |
 | 2 | mid | more XY if you push stick | Second pulse before apex stacks higher. |
-| 3 | up to ~4 m (Recast) | still modest XY | Triple for JumpUp links. |
+| 3 | up to ~**15.8 m** (RocketPulse mash) | still modest XY with AirControl 0.35 | Triple for JumpUp / AirDive JumpHeight |
 
 **Envelope abandon:** no jumps left and still below the lip; or DistXY so large that air control cannot close before landing. Then Fail; `goto` or a new jump-to from a better floor.
 
@@ -94,7 +94,7 @@ Bind: **Z**. Activation (`TryAirDive`): must be **air**; not already diving; coo
 | Slice | Z | Jumps |
 |-------|---|-------|
 | stand | 0 | 0 |
-| jump1 / jump2 / jump3 | single / stacked / Recast `jumpApexCm` (~4 m) | 1 / 2 / 3 |
+| jump1 / jump2 / jump3 | single / double mash / full RocketPulse triple (`jumpApexCm` ~15.8 m) | 1 / 2 / 3 |
 | drop1 / drop2 / drop3 | same apex steps **down** | 1 / 2 / 3 |
 | strain | −`maxFallBeforeCriticalCm` (30 m) | `MaxJumps` |
 
@@ -146,7 +146,7 @@ Hold stick (strafe **380** or forward **420**/sprint). No pulse. Use for a short
 
 ## Recast `goto` vs these leaves
 
-`goto` asks Recast for a path (drop-down, jump-down, cover-over, jump-up ~4 m, jump-over = expensive, **AirDiveDown** / **AirDiveOver** = strain-depth from the walkable + `MaxLaunchXY`). It follows Recast only when the path **reaches** the destination (not `IsPartial()`, not a rim crawl). Off-mesh polys with `UCLNavArea_AirDive` run the shared Launch executor (`recastAirDive`). DropDown stays a walk-off even at 30 m if the pad is under the lip. If Recast cannot connect, `goto` tries **jump-to** when that box passes, else **Launch** when `LaunchInEnvelope` passes. A Launch / recastAirDive arm does **not** settle on DistXY while airborne — same on-ground / on-pad check as `airDive-to`. Jump-to / slide-to / strafe-to still fail a void gap; airDive-to is why goto passes. `goto` does **not** run slide-to or dash-to.
+`goto` asks Recast for a path (drop-down, jump-down, cover-over, jump-up to full triple apex, jump-over = expensive, **AirDiveDown** / **AirDiveOver** = strain-depth from the walkable + look radius). It follows Recast only when the path **reaches** the destination (not `IsPartial()`, not a rim crawl). Off-mesh polys with `UCLNavArea_AirDive` run the shared Launch executor (`recastAirDive`). DropDown stays a walk-off even at 30 m if the pad is under the lip. If Recast cannot connect, `goto` tries **jump-to** when that box passes, else **Launch** when `LaunchInEnvelope` passes. A Launch / recastAirDive arm does **not** settle on DistXY while airborne — same on-ground / on-pad check as `airDive-to`. Jump-to / slide-to / strafe-to still fail a void gap; airDive-to is why goto passes. `goto` does **not** run slide-to or dash-to.
 
 If `goto` fails `no_path` / `no_project_*` **and** both jump and launch boxes miss, rewrite the book from `/state`. Do not invent MCP `plan` / raw `/goto` when a seat exists.
 
@@ -155,7 +155,7 @@ If `goto` fails `no_path` / `no_project_*` **and** both jump and launch boxes mi
 1. Same floor, Recast up, DistXY large → **`goto`**.
 2. Same floor, DistXY ≈ slide/dash/dodge box → that pulse-to.
 3. Landing **below**, connected drop → **`goto`** or walk-off (0-jump).
-4. Landing **above** ≤ 4 m with a jump-up face → **`goto`** (JumpUp link) or jump-to if you are already at the face.
+4. Landing **above** within full triple apex with a jump-up face → **`goto`** (JumpUp link) or jump-to if you are already at the face.
 5. Landing on a **small high slab** (lintel, pipe) → **`airDive marker=`**. The leaf jumps, dives, and releases.
 
 Re-evaluate the box every tick. Leaving it is Fail, not “try harder with W”.
@@ -166,6 +166,6 @@ C++: `CLNavAbilityEnvelope` derives the torus (`FCLLaunchRecipe`) from `FCLMovem
 
 `airDive-to` Success/GoodEnough on `distXY` also requires **on ground, not diving, and standing on the goal floor** (capsule center ~40–220 cm above a floor-top marker). Same floor check applies to jump / slide / dash / dodge `-to` leaves. That rejects the pit under a menhir lintel. Menhir `menhir_N` markers sit on the **lintel top**, not the court floor; `menhir_N_approach` stays on the pit slab.
 
-Practice greybox `PracticePillar` + catalog `pillar_dive` (`goto marker=pillar_pad`) is the void-gap demo. PvP 3-lane stamps a south **edge pad** (`edge_lip` / `edge_pad`): island Z is apex-survivable below the lip; XY is 90% of the apex-drop hull, rim-inset. Catalog `edge_pad` is `:goto` then `:airDive` (Fail-advance: Recast Launch can stick it; airDive finishes if goto XY-settled early). `/state` reports `edgePadLinked` / `edgePadDistXY` / `edgePadDeltaZ`. **Standing on the island 0.45 s recalls to the lip** (`UCLGreyboxRescue`); falling below the island (Z < pad − 500) uses the same lip teleport. Court-floor `slide_end` / `dash_end` are for catalog `slide_court` / `dash_court`.
+Practice greybox `PracticePillar` + catalog `pillar_dive` (`goto marker=pillar_pad`) is the void-gap demo. PvP 3-lane stamps a south **edge pad** (`edge_lip` / `edge_pad`): island Z is apex-survivable below the lip; XY is locked inside x0. Canary bake reports `findPathMeshOk=true` (JumpLength **1508**, JumpMaxDepth **1420**). Catalog `edge_pad` is `:goto` then `:airDive` (Fail-advance play fallback if a path still misses). **Standing on the island 0.45 s recalls to the lip** (`UCLGreyboxRescue`); falling below the island (Z < pad − 500) uses the same lip teleport. Court-floor `slide_end` / `dash_end` are for catalog `slide_court` / `dash_court`.
 
 Neural-net “brain” is reserved; do not name types `brain`.

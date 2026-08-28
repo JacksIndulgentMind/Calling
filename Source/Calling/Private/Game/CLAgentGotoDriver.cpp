@@ -2,6 +2,7 @@
 #include "Player/CLPlayerCharacter.h"
 #include "Player/CLCombatMovementComponent.h"
 #include "Nav/CLAgentNavProbe.h"
+#include "Nav/CLNavPathUtil.h"
 #include "Nav/CLNavTune.h"
 #include "Nav/CLNavAbilityEnvelope.h"
 #include "AI/CLBotBookTrace.h"
@@ -21,16 +22,6 @@ namespace
 	constexpr float GotoArriveRadius = 150.f;
 	constexpr float HeadshotPitch = 0.f;
 	constexpr int32 MaxGotoRepaths = 6;
-
-	bool PathReachesDest(const TArray<FVector>& Pts, const FVector& Dest)
-	{
-		if (Pts.Num() < 2)
-		{
-			return false;
-		}
-		const FVector& Last = Pts.Last();
-		return FVector::Dist2D(Last, Dest) <= 250.f && FMath::Abs(Last.Z - Dest.Z) <= 400.f;
-	}
 
 	TArray<FVector> CourtPathForDest(const TArray<FVector>& Pts, const TArray<uint8>& Dive, const FVector& Dest,
 		TArray<uint8>& OutDive)
@@ -206,7 +197,8 @@ bool FCLAgentGotoDriver::Start(UWorld* World, ACLPlayerCharacter* Char, const FV
 		FillRecastPath(NavPath, Recast, RawPts, RawDive);
 		RecastPts = CourtPathForDest(RawPts, RawDive, Dest, RecastDive);
 	}
-	const bool bRecastComplete = RecastPts.Num() >= 2 && !NavPath->IsPartial() && PathReachesDest(RecastPts, Dest);
+	const bool bRecastComplete = RecastPts.Num() >= 2 && !NavPath->IsPartial()
+		&& CLNavPathUtil::PathReachesDest(RecastPts, Dest);
 	if (!bRecastComplete && !bJump && !bLaunch)
 	{
 		if (!NavSys)

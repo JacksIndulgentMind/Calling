@@ -34,7 +34,7 @@ struct FCLNavLinkTune
 
 struct FCLNavTune
 {
-	float JumpApexCm = 400.f;
+	float JumpApexCm = 1580.f;
 	float CoverHeightCm = 140.f;
 	float MaxStepHeightCm = 70.f;
 	float AgentRadiusCm = 42.f;

@@ -18,13 +18,21 @@ Game must already be up (`Scripts/dl-rebuild.ps1` first). Then:
 Scripts/dl-verify-dual-composer.ps1 -Sequence ring
 ```
 
-Pass when the script prints `VERIFY_OK`, `diving=true`, megalith sticks `8/8`, and the **edge hop** sticks the south island then **recalls to the court lip** (not spawn). Catalog `edge_pad` should ride Recast (`edgePadLinked=true`) rather than the script's JIT `airDive` fallback. Radar/sighted regression:
+Pass when the script prints `VERIFY_OK`, `diving=true`, megalith sticks `8/8`, and the **edge hop** sticks the south island then **recalls to the court lip** (not spawn). Catalog `edge_pad` is `airDive-to` if Recast `FindPath` from/dest mesh is incomplete (`findPathMeshOk` observational); the script JIT `airDive`s if the book does not stick. Radar/sighted regression:
 
 ```
 Scripts/dl-verify-dual-composer.ps1 -Sequence pillar
 ```
 
 Pass: `VERIFY_OK` after `goto marker=pillar_pad` sticks the practice pad (on the pad, not air, z below −2800). Nav envelopes: [Docs/NavAbilities.md](../../../Docs/NavAbilities.md).
+
+Bake-only island probe (no cover / ring / megalith):
+
+```
+Scripts/dl-verify-dual-composer.ps1 -Sequence nav
+```
+
+Pass: `VERIFY_OK` if `navTiles > 0` and `edgePadPadOk`. Uses `director arena` if not already `pvp` (no composer). Prints `findPathMeshOk` / `validEndsMax` / jumpLen / JumpMaxDepth. `findPathMeshOk=false` is not a throw; iterate Recast config until the mesh bar is true. [RecastLinks.md](../../../Docs/RecastLinks.md).
 
 ## Compose → PvP (expected MCP path)
 

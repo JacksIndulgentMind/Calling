@@ -40,9 +40,11 @@ namespace
 		Tune.Links.Add(Link(TEXT("JumpUp"), 280.f, 20.f, TEXT("-jumpApex"), TEXT("jumpApex"), TEXT("jumpApex"), 120.f, TEXT("null"), TEXT("default")));
 		Tune.Links.Add(Link(TEXT("JumpDown"), 400.f, 25.f, TEXT("survivingDrop"), TEXT("coverHeight"), TEXT("survivingDrop"), 180.f, TEXT("default"), TEXT("null")));
 		Tune.Links.Add(Link(TEXT("JumpOver"), 280.f, 20.f, TEXT("12"), TEXT("jumpApex"), TEXT("20"), 160.f, TEXT("longJump"), TEXT("longJump")));
-		FCLNavLinkTune AirDown = Link(TEXT("AirDiveDown"), 3500.f, 40.f, TEXT("strainFall"), TEXT("jumpApex"), TEXT("300"), 400.f, TEXT("airDive"), TEXT("null"));
+		FCLNavLinkTune AirDown = Link(TEXT("AirDiveDown"), 1508.f, 20.f, TEXT("apexFallAbs"), TEXT("jumpApex"), TEXT("2500"), 120.f, TEXT("airDive"), TEXT("airDive"));
+		AirDown.SamplingSeparationFactor = 1.f;
 		Tune.Links.Add(AirDown);
-		FCLNavLinkTune AirOver = Link(TEXT("AirDiveOver"), 3500.f, 40.f, TEXT("strainFall"), TEXT("jumpApex"), TEXT("300"), 400.f, TEXT("airDive"), TEXT("airDive"));
+		FCLNavLinkTune AirOver = Link(TEXT("AirDiveOver"), 1508.f, 20.f, TEXT("apexFallAbs"), TEXT("jumpApex"), TEXT("2500"), 120.f, TEXT("airDive"), TEXT("airDive"));
+		AirOver.SamplingSeparationFactor = 1.f;
 		Tune.Links.Add(AirOver);
 	}
 
@@ -182,6 +184,10 @@ float CLNavTune::ResolveScalar(const FString& TokenOrNumber, float Fallback, con
 	if (TokenOrNumber.Equals(TEXT("coverHeight"), ESearchCase::IgnoreCase))
 	{
 		return Tune.CoverHeightCm;
+	}
+	if (TokenOrNumber.Equals(TEXT("apexFallAbs"), ESearchCase::IgnoreCase))
+	{
+		return FMath::Abs(Tune.JumpApexCm - CLStrainLimits::Get().MaxFallBeforeCriticalCm);
 	}
 	if (TokenOrNumber.IsNumeric())
 	{

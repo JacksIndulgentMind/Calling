@@ -12,7 +12,7 @@ Anytime an agent drives a pawn, hub `appendBotBook` on a **seat** (catalog name 
 
 Prefer Recast `goto` (as a BotBook leaf) when `navTiles > 0` on **that seat’s** `/state`. Confirm the book settles Success/GoodEnough.
 
-1. Prefer `appendBotBook` with `goto marker=...` (or JIT xyz) when `navTiles > 0`. Recast: **drop-down**, **jump-down**, **cover-over**, **jump-up** (~4 m), **jump-over** (**high cost** — walk around when you can). If the leaf fails `no_path` / `no_project_*`, rewrite the book from `/state`.
+1. Prefer `appendBotBook` with `goto marker=...` (or JIT xyz) when `navTiles > 0`. Recast: **drop-down**, **jump-down**, **cover-over**, **jump-up** (full RocketPulse triple), **jump-over** (**high cost** — walk around when you can). If the leaf fails `no_path` / `no_project_*`, rewrite the book from `/state`.
 2. Face the goal (`setFocus` / `trackFocus` or JIT look), pitch 0, sprint forward.
 3. **Stop short of walls:** if `fwdKind` is `wall`, `fwdDist` < **400**, and `headDist` is also short, do not kiss the face.
 4. **`fwdKind`:** `walk` = connected rising floor. `drop` = lower platform you can walk off onto. `jumpDown` / `jumpUp` / `cover` / `wall` as in probe.
@@ -25,7 +25,7 @@ Do **not** use MCP `plan` / `sequence` / `intent` / raw `goto` when a seat exist
 
 ## Landing (*-to leaves)
 
-`goto` is Recast (walk, drop, jump-up ~4 m, **AirDiveDown/Over** off-mesh). It follows Recast only when the path **reaches** the marker. Disconnected slabs (lintels, the south island): **`airDive marker=`**. Catalog `edge_pad` is goto then airDive so Recast Launch can stick it. Do not invent MCP `plan` for a lintel hop. Read [Docs/NavAbilities.md](../../../Docs/NavAbilities.md).
+`goto` is Recast (walk, drop, jump-up to full triple apex, **AirDiveDown/Over** off-mesh). It follows Recast only when the path **reaches** the marker. Disconnected slabs (lintels, the south island): **`airDive marker=`**. Catalog `edge_pad` is goto then airDive. Jump-gen JumpLength is a look radius from the edge (Epic); search limited by NavMeshBoundsVolume. Do not invent MCP `plan` for a lintel hop. Read [Docs/NavAbilities.md](../../../Docs/NavAbilities.md).
 
 Air dive is how you **get to a place on the ground**, not a stylish jump. `airDive marker=` jumps as high as DistXY needs, dives when the hang+slam box covers the point, then **releases** at `success distXY − coast`. Every tick: still in the envelope? If not, Fail, zero stick, fall. Bare `:airDive;` with `success: diving` is a pulse, not a landing.
 

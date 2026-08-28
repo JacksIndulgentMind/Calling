@@ -34,11 +34,8 @@ struct FCLPvpThreeLaneRecipe
 
 	bool Load();
 
-	/** South court nav edge → island on the AirDiveDown Recast chord.
-	 *  PadDropFromLipCm is survivable-fall minus end-tol minus jump apex
-	 *  (island is that drop below the lip, not strain-plus-buffer).
-	 *  ChordCm is MaxLaunchXY at the apex-drop hull (worst-case jump then dive). Must stay past DropDown (~2.8 m) so Recast
-	 *  bakes AirDiveDown, not a walk-off. */
+	/** South court nav edge → canary island. PadDropFromLipCm is (3000 − 300) − JumpApexUpCm(3).
+	 *  ChordCm is Recast launch-plane intercept (x0); Ends apply rim inset 200. Recast knobs do not move this pad. */
 	void EdgeAirDiveEnds(FVector& OutLip, FVector& OutPad, float ChordCm, float JumpDistanceFromEdgeCm,
 		float PadDropFromLipCm) const
 	{
@@ -46,11 +43,9 @@ struct FCLPvpThreeLaneRecipe
 		const float PitZ = -RavineM * M;
 		const float Rim = CourtM * 0.5f * M;
 		OutLip = FVector(0.f, -Rim + 200.f, PitZ);
-		const float DropDownXY = 280.f;
-		const float MinAirDiveXY = DropDownXY * 8.f;
-		const float XY = FMath::Max(ChordCm, MinAirDiveXY);
-		const float Inward = FMath::Max(200.f, JumpDistanceFromEdgeCm + 160.f);
-		OutPad = FVector(0.f, OutLip.Y - XY + Inward, OutLip.Z - PadDropFromLipCm);
+		(void)JumpDistanceFromEdgeCm;
+		const float Inward = 200.f;
+		OutPad = FVector(0.f, OutLip.Y - ChordCm + Inward, OutLip.Z - PadDropFromLipCm);
 	}
 };
 

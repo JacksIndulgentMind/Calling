@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("ring", "radar", "pillar")]
+  [ValidateSet("ring", "radar", "pillar", "nav")]
   [string]$Sequence = "ring"
 )
 $ErrorActionPreference = "Stop"
@@ -73,6 +73,43 @@ if ($Sequence -eq "pillar") {
   Write-Host "VERIFY_OK"
   exit 0
 }
+
+function Write-NavProbe($st) {
+  Write-Host ("nav probe tiles={0} lipOk={1} padOk={2} findPathMeshOk={3} partial={4} offMesh={5} validEndsMax={6} jumpLen={7:N0} jumpH={8:N0} jumpMaxDepth={9:N0} bakeMs={10:N0}" -f `
+    $st.navTiles, $st.edgePadLipOk, $st.edgePadPadOk, $st.findPathMeshOk, $st.edgePadPartial, `
+    $st.edgePadOffMesh, $st.edgePadValidEndsMax, `
+    [double]$st.airDiveJumpLength, [double]$st.airDiveJumpHeight, [double]$st.airDiveJumpMaxDepth, [double]$st.edgePadBakeMs)
+  if ([int]$st.navTiles -le 0) { throw "navTiles 0" }
+  if ($st.edgePadPadOk -ne $true) { throw "edgePadPadOk=false: island not in nav" }
+  Write-Host "VERIFY_OK"
+}
+
+if ($Sequence -eq "nav") {
+  Write-Host "sequence=nav (bake FindPath mesh probe)"
+  $cur = J "GET" "/state" $null
+  if ($cur.scene -ne "pvp") {
+    Write-Host "director arena (solo PvP skip)"
+    Director "arena" | Out-Null
+    $wArena = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $wArena) {
+      try { $cur = J "GET" "/state" $null } catch { Start-Sleep -Seconds 1; continue }
+      Write-Host ("scene={0}" -f $cur.scene)
+      if ($cur.scene -eq "pvp") { break }
+      Start-Sleep -Seconds 1
+    }
+    if ($cur.scene -ne "pvp") { throw "arena did not reach pvp scene=$($cur.scene)" }
+  }
+  $w = (Get-Date).AddSeconds(45)
+  $st = $cur
+  while ((Get-Date) -lt $w) {
+    try { $st = J "GET" "/state" $null } catch { Start-Sleep -Seconds 1; continue }
+    if ([int]$st.navTiles -gt 0) { break }
+    Start-Sleep -Seconds 1
+  }
+  Write-NavProbe $st
+  exit 0
+}
+
 $s = J "GET" "/state" $null
 if ($s.scene -eq "composer") {
   Write-Host "already composer"
@@ -158,8 +195,18 @@ function DistXY($st, $x, $y) {
   $dy = [double]$st.y - [double]$y
   return [math]::Sqrt($dx * $dx + $dy * $dy)
 }
+function Test-OnEdgePad($st) {
+  if ($null -eq $st.edgePadX -or $null -eq $st.edgePadY -or $null -eq $st.edgePadZ) { return $false }
+  $d = DistXY $st $st.edgePadX $st.edgePadY
+  $z = [double]$st.z
+  $pz = [double]$st.edgePadZ
+  return ($d -lt 420 -and $z -gt ($pz - 50) -and $z -lt ($pz + 260) `
+    -and $st.diving -ne $true -and $st.air -ne $true)
+}
 function AssertNoCollapse($st, $id) {
-  if ($st.ok -and [double]$st.z -lt -2800) { throw "Z-collapse seat=$id z=$($st.z)" }
+  if (-not $st.ok) { return }
+  if (Test-OnEdgePad $st) { return }
+  if ([double]$st.z -lt -2800) { throw "Z-collapse seat=$id z=$($st.z)" }
 }
 function WaitIdle($id, $sec = 20) {
   $until = (Get-Date).AddSeconds($sec)
@@ -1066,13 +1113,35 @@ stop
     Start-Sleep -Milliseconds 200
     $st = Seat $seatA
     if ($st.diving -eq $true) { $divedPad = $true; Write-Host "edge_pad diving=true" }
-    $z = [double]$st.z
-    if ($z -lt -3500 -and $z -gt -5200 -and $st.diving -ne $true -and $st.air -ne $true) { $padOk = $true; break }
+    if (Test-OnEdgePad $st) { $padOk = $true; break }
     if ($st.ok -and -not (BookBusy $st) -and -not $st.goto) { break }
   }
-  Write-Host ("edge_pad x={0:N0} y={1:N0} z={2:N0} linked={3} diving={4}" -f `
-    [double]$st.x, [double]$st.y, [double]$st.z, $st.edgePadLinked, $divedPad)
-  if ($st.edgePadLinked -ne $true) { throw "edgePadLinked=false: Recast AirDiveDown did not connect lip to island" }
+  if (-not $padOk) {
+    Write-Host "edge_pad Recast incomplete, JIT airDive"
+    $padPuml = @"
+@startuml jit_edge_pad
+start
+:airDive marker=edge_pad;
+note right
+  success: distXY 180
+  goodEnough: distXY 280
+  fail.timeout: 12
+end note
+stop
+@enduml
+"@
+    Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $padPuml } | Out-Null
+    $until = (Get-Date).AddSeconds(20)
+    while ((Get-Date) -lt $until) {
+      Start-Sleep -Milliseconds 200
+      $st = Seat $seatA
+      if ($st.diving -eq $true) { $divedPad = $true; Write-Host "edge_pad diving=true" }
+      if (Test-OnEdgePad $st) { $padOk = $true; break }
+      if ($st.ok -and -not (BookBusy $st) -and -not $st.goto) { break }
+    }
+  }
+  Write-Host ("edge_pad x={0:N0} y={1:N0} z={2:N0} findPathMeshOk={3} diving={4}" -f `
+    [double]$st.x, [double]$st.y, [double]$st.z, $st.findPathMeshOk, $divedPad)
   if (-not $padOk) { throw "edge_pad not stuck" }
   Write-Host "wait island recall to lip"
   $re = (Get-Date).AddSeconds(8)

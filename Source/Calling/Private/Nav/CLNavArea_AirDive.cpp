@@ -4,6 +4,6 @@
 
 UCLNavArea_AirDive::UCLNavArea_AirDive()
 {
-	DefaultCost = 40.f;
+	DefaultCost = 1.f;
 	DrawColor = FColor(80, 180, 255);
 }
