@@ -1,4 +1,6 @@
 #include "Nav/CLAgentNavProbe.h"
+#include "Game/CLGreyboxFloors.h"
+#include "EngineUtils.h"
 #include "Nav/CLNavTune.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -172,6 +174,19 @@ float CLAgentNavProbe::FloorDropCm(UWorld* World, const AActor* Ignore, const FV
 void CLAgentNavProbe::FillStateJson(const TSharedRef<FJsonObject>& Root, UWorld* World, const ACharacter* Char)
 {
 	Root->SetNumberField(TEXT("navTiles"), NavTileCount(World));
+	if (World)
+	{
+		for (TActorIterator<ACLGreyboxFloors> It(World); It; ++It)
+		{
+			Root->SetBoolField(TEXT("edgePadLinked"), It->bEdgePadRecastLinked);
+			Root->SetNumberField(TEXT("edgePadPoints"), It->EdgePadPathPoints);
+			Root->SetNumberField(TEXT("edgePadDistXY"), It->EdgePadDistXY);
+			Root->SetNumberField(TEXT("edgePadDeltaZ"), It->EdgePadDeltaZ);
+			Root->SetNumberField(TEXT("airDiveJumpLength"), It->AirDiveJumpLengthCm);
+			Root->SetNumberField(TEXT("airDiveJumpMaxDepth"), It->AirDiveJumpMaxDepthCm);
+			break;
+		}
+	}
 	if (!Char || !World)
 	{
 		return;

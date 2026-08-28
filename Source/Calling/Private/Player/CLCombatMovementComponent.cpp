@@ -2,6 +2,8 @@
 #include "Player/CLHealthShieldComponent.h"
 #include "Player/CLPlayerCharacter.h"
 #include "Nav/CLNavTune.h"
+#include "Nav/CLStrainLimits.h"
+#include "Core/CLLog.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -34,8 +36,9 @@ void UCLCombatMovementComponent::BeginPlay()
 void UCLCombatMovementComponent::ReloadSettings()
 {
 	Tune.LoadFromIni();
-	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("JumpZVelocity"), JumpZVelocity, GGameIni);
-	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("DoubleJumpZVelocity"), SecondJumpZ, GGameIni);
+	JumpZVelocity = Tune.JumpZVelocity;
+	SecondJumpZ = Tune.DoubleJumpZVelocity;
+	AirControl = Tune.AirControl;
 	CrouchedHalfHeight = Tune.CrouchHalfHeight;
 	MaxStepHeight = CLNavTune::Get().MaxStepHeightCm;
 }
@@ -399,13 +402,28 @@ bool UCLCombatMovementComponent::TryAirDive()
 	return true;
 }
 
+void UCLCombatMovementComponent::SetDivePinGravity(bool bPin)
+{
+	bDivePinGravity = bPin;
+}
+
+void UCLCombatMovementComponent::SetDiveAirSteer(float Mul)
+{
+	DiveAirSteerMul = Mul;
+}
+
 void UCLCombatMovementComponent::NotifyLanded()
 {
+	// Strain stub: later apply critical HP when fall > maxFallBeforeCriticalCm. This pass only reads the file.
+	UE_LOG(LogCalling, Verbose, TEXT("NotifyLanded strain maxFallBeforeCriticalCm=%.0f diving=%s"),
+		CLStrainLimits::Get().MaxFallBeforeCriticalCm, bDiving ? TEXT("yes") : TEXT("no"));
 	if (bDiving)
 	{
 		KneeLandRemaining = 0.35f;
 	}
 	bDiving = false;
+	bDivePinGravity = false;
+	DiveAirSteerMul = -1.f;
 }
 
 bool UCLCombatMovementComponent::IsDiveReported() const
@@ -502,26 +520,39 @@ void UCLCombatMovementComponent::TickComponent(float DeltaTime, ELevelTick TickT
 		{
 			KneeLandRemaining = 0.35f;
 			bDiving = false;
+			bDivePinGravity = false;
+			DiveAirSteerMul = -1.f;
 			GravityScale = 1.f;
 		}
 		else
 		{
 			DiveElapsed += DeltaTime;
 			HoverRemaining = 0.f;
+			const ACharacter* DiveChar = GetCharacterOwner();
+			const bool bDiveSteer = DiveChar && PendingMove.SizeSquared() > 0.0225f;
 			if (DiveElapsed < Tune.DiveHangSeconds)
 			{
 				GravityScale = Tune.DiveHangGravity;
 			}
 			else
 			{
-				GravityScale = Tune.DiveFallGravity;
-				if (Velocity.Z < Tune.AirDiveDownSpeed)
+				if (Velocity.Z > 0.f)
 				{
-					Velocity.Z = Tune.AirDiveDownSpeed;
+					Velocity.Z = 0.f;
+				}
+				if (bDivePinGravity && bDiveSteer)
+				{
+					GravityScale = 1.f;
+				}
+				else
+				{
+					GravityScale = Tune.DiveFallGravity;
+					if (Velocity.Z < Tune.AirDiveDownSpeed)
+					{
+						Velocity.Z = Tune.AirDiveDownSpeed;
+					}
 				}
 			}
-			const ACharacter* DiveChar = GetCharacterOwner();
-			const bool bDiveSteer = DiveChar && PendingMove.SizeSquared() > 0.0225f;
 			if (bDiveSteer)
 			{
 				const FRotator Yaw(0.f, DiveChar->GetControlRotation().Yaw, 0.f);
@@ -534,7 +565,8 @@ void UCLCombatMovementComponent::TickComponent(float DeltaTime, ELevelTick TickT
 				{
 					Wish /= WishSize;
 				}
-				const float Accel = GetMaxAcceleration() * FMath::Clamp(Tune.AirDiveSteer, 0.f, 6.f);
+				const float SteerMul = DiveAirSteerMul >= 0.f ? DiveAirSteerMul : Tune.AirDiveSteer;
+				const float Accel = GetMaxAcceleration() * FMath::Clamp(SteerMul, 0.f, 6.f);
 				Velocity.X += Wish.X * Accel * DeltaTime;
 				Velocity.Y += Wish.Y * Accel * DeltaTime;
 				const float MaxXY = FMath::Max(GetFullSprintSpeed(), Tune.AirDiveMaxXY);

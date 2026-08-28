@@ -1,0 +1,22 @@
+@startuml dash_court
+floating note
+trySuccessFor: 0.5
+end note
+start
+if (qualify hasMarker dash_end) then (yes)
+  :goto marker=court_center;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 12
+  end note
+  :dash marker=dash_end;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 4
+  end note
+else (skip)
+endif
+stop
+@enduml

@@ -1,5 +1,6 @@
 #include "Game/CLSceneRouter.h"
 #include "Game/CLGameInstance.h"
+#include "Game/CLGameModeBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
@@ -107,6 +108,13 @@ void UCLSceneRouter::SoftTravel(const FString& MapName, ECLSceneId Scene)
 	}
 	const FString DestShort = FPackageName::GetShortName(MapName);
 	const bool bSameMap = !CurrentShort.IsEmpty() && CurrentShort.Equals(DestShort, ESearchCase::IgnoreCase);
+	if (const ACLGameModeBase* GM = Cast<ACLGameModeBase>(World->GetAuthGameMode()))
+	{
+		if (GM->GetSceneId() == Scene)
+		{
+			return;
+		}
+	}
 
 	// Same .umap + different GameMode (Social ↔ Composer): ServerTravel often no-ops. OpenLevel reloads.
 	if (bSameMap && World->HasBegunPlay())

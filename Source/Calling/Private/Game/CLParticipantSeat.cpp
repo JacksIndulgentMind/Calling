@@ -2,11 +2,11 @@
 #include "Player/CLPossessionComponent.h"
 #include "GameFramework/Pawn.h"
 
-void UCLParticipantSeat::Configure(const FGuid& InSeatId, const FString& InDisplayName, UCLControllerPlaybook* InPlaybook)
+void UCLParticipantSeat::Configure(const FGuid& InSeatId, const FString& InDisplayName, UCLSeatMotor* InMotor)
 {
 	SeatId = InSeatId;
 	DisplayName = InDisplayName;
-	Playbook = InPlaybook;
+	Motor = InMotor;
 }
 
 APawn* UCLParticipantSeat::GetDrivenPawn() const

@@ -5,7 +5,7 @@
 #include "Input/CLAgentIntent.h"
 #include "CLIntentReceiver.generated.h"
 
-/** Latched holdables and one-shot pulses from HTTP, /goto, and playbooks. */
+/** Latched holdables and one-shot pulses from HTTP, /goto, and BotBooks. */
 UCLASS(ClassGroup = (Calling), meta = (BlueprintSpawnableComponent))
 class CALLING_API UCLIntentReceiver : public UActorComponent
 {

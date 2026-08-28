@@ -4,7 +4,7 @@
 #include "Game/CLAgentCodec.h"
 #include "Game/CLAgentBridgeSubsystem.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
 #include "Core/CLLog.h"
 #include "Game/CLErrorBoundary.h"
 #include "Core/CLError.h"
@@ -342,7 +342,7 @@ void UCLSessionHub::PushSnapshots(ECLHubSnapshotReason Reason, const FGuid& Only
 			continue;
 		}
 		const UCLParticipantSeat* Seat = Lobby->FindSeat(Clients[i].SeatId);
-		if (!Seat || !Seat->GetPlaybook() || !Seat->GetPlaybook()->WantsHubSnapshot(Reason))
+		if (!Seat || !Seat->GetSeatMotor() || !Seat->GetSeatMotor()->WantsHubSnapshot(Reason))
 		{
 			continue;
 		}

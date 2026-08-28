@@ -1,6 +1,10 @@
 #include "Nav/CLNavLinkPolicy.h"
 #include "Nav/CLNavTune.h"
 #include "Nav/CLNavArea_LongJump.h"
+#include "Nav/CLNavArea_AirDive.h"
+#include "Nav/CLNavAbilityEnvelope.h"
+#include "Nav/CLNavAbilityValidate.h"
+#include "Core/CLTunes.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "NavMesh/LinkGenerationConfig.h"
 #include "NavAreas/NavArea_Default.h"
@@ -18,6 +22,10 @@ namespace
 		{
 			return UCLNavArea_LongJump::StaticClass();
 		}
+		if (Name.Equals(TEXT("airDive"), ESearchCase::IgnoreCase))
+		{
+			return UCLNavArea_AirDive::StaticClass();
+		}
 		return UNavArea_Default::StaticClass();
 	}
 }
@@ -25,6 +33,11 @@ namespace
 void CLNavLinkPolicy::ApplyToRecast(ARecastNavMesh& Recast, float SurvivingDropCm)
 {
 	const FCLNavTune& Tune = CLNavTune::Get();
+	FCLMovementTune Move;
+	Move.LoadFromIni();
+	const FCLNavAbilityValidateResult Valid = CLNavAbilityValidate::Check(Move, Tune, SurvivingDropCm);
+	CLNavAbilityValidate::Report(&Recast, Valid);
+
 	Recast.AgentRadius = Tune.AgentRadiusCm;
 	Recast.AgentHeight = Tune.AgentHeightCm;
 	Recast.AgentMaxSlope = Tune.AgentMaxSlopeDeg;
@@ -42,17 +55,45 @@ void CLNavLinkPolicy::ApplyToRecast(ARecastNavMesh& Recast, float SurvivingDropC
 	const uint16 LinkPts = static_cast<uint16>(ENavLinkBuilderFlags::CreateCenterPointLink)
 		| static_cast<uint16>(ENavLinkBuilderFlags::CreateExtremityLink);
 
+	const float AirDiveLen = CLNavAbility::SearchRadiusCm(Move, Tune, CLNavAbility::AirDiveRefDropCm());
+	// Do not inflate TileSizeUU to JumpLength. UE 5.8 Recast allows JumpLength >
+	// tile size via LinkSpillDistance. Hull-sized tiles (~40 m) collapse the
+	// 3-lane into ~18 tiles and break spawn→court walking.
+	Recast.bFixedTilePoolSize = false;
+	Recast.TilePoolSize = FMath::Max(Recast.TilePoolSize, 256);
+	Recast.AverageLayersPerTile = FMath::Max(Recast.AverageLayersPerTile, 8.f);
+	Recast.ExpectedMaxLayersPerTile = FMath::Max(Recast.ExpectedMaxLayersPerTile, 12);
+	// Court Z≈−20 m plus the AirDive island in the same nav bounds overflows
+	// Recast’s 255-span height if CellHeight stays 10. Keep voxel columns under ~240.
+	const float AirDiveMaxDepth = CLNavAbility::AirDiveChordMaxDepthCm(Tune.JumpApexCm);
+	const float CellH = FMath::Clamp(AirDiveMaxDepth / 100.f, 25.f, 40.f);
+	Recast.SetCellHeight(ENavigationDataResolution::Low, CellH);
+	Recast.SetCellHeight(ENavigationDataResolution::Default, CellH);
+	Recast.SetCellHeight(ENavigationDataResolution::High, CellH);
+	// Coarse CellHeight flattens the 9° ramp into ~80 cm ledges. Recast climb
+	// must clear those voxels; pawn MaxStepHeight stays Tune (70).
+	const float RecastStep = FMath::Max(Tune.MaxStepHeightCm, CellH * 4.f);
+	Recast.SetAgentMaxStepHeight(ENavigationDataResolution::Low, RecastStep);
+	Recast.SetAgentMaxStepHeight(ENavigationDataResolution::Default, RecastStep);
+	Recast.SetAgentMaxStepHeight(ENavigationDataResolution::High, RecastStep);
 	for (int32 i = 0; i < Tune.Links.Num(); ++i)
 	{
 		const FCLNavLinkTune& Src = Tune.Links[i];
 		FNavLinkGenerationJumpConfig& Dst = JumpConfigs[i];
-		Dst.bEnabled = true;
+		const bool bAirDive = CLNavTune::IsAirDiveLink(Src.Name);
+		Dst.bEnabled = !(bAirDive && !Valid.bApplyAirDiveLink);
 		Dst.Name = Src.Name;
-		Dst.JumpLength = Src.JumpLength;
+		Dst.JumpLength = bAirDive ? AirDiveLen : Src.JumpLength;
 		Dst.JumpDistanceFromEdge = Src.JumpDistanceFromEdge;
-		Dst.JumpMaxDepth = CLNavTune::ResolveScalar(Src.JumpMaxDepth, 8.f, Tune, SurvivingDropCm);
-		Dst.JumpHeight = CLNavTune::ResolveScalar(Src.JumpHeight, Tune.CoverHeightCm, Tune, SurvivingDropCm);
-		Dst.JumpEndsHeightTolerance = CLNavTune::ResolveScalar(Src.JumpEndsHeightTolerance, 12.f, Tune, SurvivingDropCm);
+		Dst.JumpMaxDepth = bAirDive
+			? AirDiveMaxDepth
+			: CLNavTune::ResolveScalar(Src.JumpMaxDepth, 8.f, Tune, SurvivingDropCm);
+		Dst.JumpHeight = bAirDive
+			? Tune.JumpApexCm
+			: CLNavTune::ResolveScalar(Src.JumpHeight, Tune.CoverHeightCm, Tune, SurvivingDropCm);
+		Dst.JumpEndsHeightTolerance = bAirDive
+			? CLNavAbility::AirDiveChordEndZTolCm
+			: CLNavTune::ResolveScalar(Src.JumpEndsHeightTolerance, 12.f, Tune, SurvivingDropCm);
 		Dst.SamplingSeparationFactor = Src.SamplingSeparationFactor;
 		Dst.FilterDistanceThreshold = Src.FilterDistanceThreshold;
 		Dst.LinkBuilderFlags = LinkPts;

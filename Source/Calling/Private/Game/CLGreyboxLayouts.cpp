@@ -207,6 +207,15 @@ namespace
 			Floors.AddPlatform(FVector(0.f, 0.f, 0.f), 20.f, 20.f);
 		}
 	};
+
+	class FPracticePillarLayout final : public ICLGreyboxLayout
+	{
+	public:
+		virtual void Build(ACLGreyboxFloors& Floors) override
+		{
+			Floors.BuildPracticePillar();
+		}
+	};
 }
 
 TUniquePtr<ICLGreyboxLayout> CLMakeGreyboxLayout(ECLGreyboxLayout Id)
@@ -221,6 +230,7 @@ TUniquePtr<ICLGreyboxLayout> CLMakeGreyboxLayout(ECLGreyboxLayout Id)
 	case ECLGreyboxLayout::RaidApproach: return MakeUnique<FRaidApproachLayout>();
 	case ECLGreyboxLayout::RaidArena: return MakeUnique<FRaidArenaLayout>();
 	case ECLGreyboxLayout::RaidPit: return MakeUnique<FRaidPitLayout>();
+	case ECLGreyboxLayout::PracticePillar: return MakeUnique<FPracticePillarLayout>();
 	default: return MakeUnique<FSocialSquareLayout>();
 	}
 }

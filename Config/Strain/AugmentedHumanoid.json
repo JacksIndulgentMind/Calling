@@ -1,0 +1,4 @@
+{
+  "why": "Future-war augmented body. Fall distance is a body limit, not a Recast guess and not greybox rescue Z. Other systems (fall damage, traversal risk, later stamina) read this file instead of copying 3000.",
+  "maxFallBeforeCriticalCm": 3000
+}

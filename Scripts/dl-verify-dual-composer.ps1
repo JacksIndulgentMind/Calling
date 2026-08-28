@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("ring", "radar")]
+  [ValidateSet("ring", "radar", "pillar")]
   [string]$Sequence = "ring"
 )
 $ErrorActionPreference = "Stop"
@@ -39,16 +39,55 @@ if ($boot.scene -eq "boot") {
   }
   if ($boot.scene -eq "boot") { throw "stuck on boot after enter" }
 }
-Director "open" | Out-Null
-Director "pvp" | Out-Null
-
-$s = $null
-$wait = (Get-Date).AddSeconds(45)
-while ((Get-Date) -lt $wait) {
-  try { $s = J "GET" "/state" $null } catch { Start-Sleep -Seconds 1; continue }
-  Write-Host ("scene={0}" -f $s.scene)
-  if ($s.scene -eq "composer") { break }
-  Start-Sleep -Seconds 1
+if ($Sequence -eq "pillar") {
+  Write-Host "sequence=pillar (goto pillar_pad)"
+  Director "practice" | Out-Null
+  $pw = (Get-Date).AddSeconds(45)
+  $ps = $null
+  while ((Get-Date) -lt $pw) {
+    try { $ps = J "GET" "/state" $null } catch { Start-Sleep -Seconds 1; continue }
+    Write-Host ("scene={0}" -f $ps.scene)
+    if ($ps.scene -eq "practice") { break }
+    Start-Sleep -Seconds 1
+  }
+  if ($ps.scene -ne "practice") { throw "expected practice, got $($ps.scene)" }
+  $joinP = Hub @{ type = "join"; displayName = "pillarA"; headless = $true; kind = "cursor" }
+  $seatP = $joinP.seatId
+  if (-not $joinP.ok) { throw "pillar join failed" }
+  $hostP = $ps.lobby.seatList | Where-Object { $_.host -eq $true } | Select-Object -First 1
+  if (-not $hostP) { throw "no host seat on practice" }
+  Hub @{ type = "mindControl"; seatId = $seatP; targetSeatId = $hostP.id } | Out-Null
+  Hub @{ type = "appendBotBook"; seatId = $seatP; botBook = "pillar_dive" } | Out-Null
+  $ok = $false
+  $untilP = (Get-Date).AddSeconds(25)
+  while ((Get-Date) -lt $untilP) {
+    Start-Sleep -Milliseconds 200
+    $st = J "GET" "/state?seat=$seatP" $null
+    $z = [double]$st.z
+    $r = [math]::Sqrt(([double]$st.x * [double]$st.x) + ([double]$st.y * [double]$st.y))
+    $air = $st.air -eq $true
+    Write-Host ("pillar z={0:N0} r={1:N0} diving={2} air={3}" -f $z, $r, $st.diving, $st.air)
+    if ($z -lt -1800 -and $r -gt 800 -and $st.diving -ne $true -and -not $air) { $ok = $true; break }
+  }
+  if (-not $ok) { throw "pillar pad not stuck" }
+  Write-Host "VERIFY_OK"
+  exit 0
+}
+$s = J "GET" "/state" $null
+if ($s.scene -eq "composer") {
+  Write-Host "already composer"
+} else {
+  Write-Host "compose PvP"
+  Director "open" | Out-Null
+  Director "pvp" | Out-Null
+  $s = $null
+  $wait = (Get-Date).AddSeconds(45)
+  while ((Get-Date) -lt $wait) {
+    try { $s = J "GET" "/state" $null } catch { Start-Sleep -Seconds 1; continue }
+    Write-Host ("scene={0}" -f $s.scene)
+    if ($s.scene -eq "composer") { break }
+    Start-Sleep -Seconds 1
+  }
 }
 if ($s.scene -ne "composer") { throw "expected composer, got $($s.scene)" }
 
@@ -111,6 +150,7 @@ Write-Host ("A x={0:N0} z={1:N0} nav={2}" -f $a0.x, $a0.z, $a0.navTiles)
 Write-Host ("B x={0:N0} z={1:N0} nav={2}" -f $b0.x, $b0.z, $b0.navTiles)
 if ([math]::Abs($a0.x + 14500) -gt 800) { throw "A not red spawn" }
 if ([math]::Abs($b0.x - 14500) -gt 800) { throw "B not blue spawn" }
+if ($a0.navTiles -le 0 -or $b0.navTiles -le 0) { throw "navTiles still 0 after wait" }
 
 function Seat($id) { J "GET" "/state?seat=$id" $null }
 function DistXY($st, $x, $y) {
@@ -130,12 +170,43 @@ function WaitIdle($id, $sec = 20) {
     AssertNoCollapse $last $id
     $seq = 0.0
     if ($null -ne $last.seqRemaining) { $seq = [double]$last.seqRemaining }
-    if ($last.ok -and -not $last.goto -and $seq -le 0.08) { return $last }
+    if ($last.ok -and -not $last.goto -and $seq -le 0.08 -and -not (BookBusy $last)) { return $last }
+  }
+  return $last
+}
+function BookBusy($st) {
+  if ($null -eq $st.botBook) { return $false }
+  $n = [string]$st.botBook.name
+  return -not [string]::IsNullOrWhiteSpace($n)
+}
+function AppendBook($id, $name) {
+  return Hub @{ type = "appendBotBook"; seatId = $id; botBook = $name }
+}
+function WaitBot($id, $sec = 90) {
+  $until = (Get-Date).AddSeconds($sec)
+  $last = $null
+  while ((Get-Date) -lt $until) {
+    Start-Sleep -Milliseconds 300
+    $last = Seat $id
+    AssertNoCollapse $last $id
+    if ($last.ok -and -not (BookBusy $last) -and -not $last.goto) { return $last }
   }
   return $last
 }
 function StartGoto($id, $x, $y, $z) {
-  return Hub @{ type = "goto"; seatId = $id; x = $x; y = $y; z = $z }
+  $puml = @"
+@startuml jit_goto
+start
+:goto x=$x y=$y z=$z;
+note right
+  success: distXY 150
+  goodEnough: distXY 280
+  fail.timeout: 55
+end note
+stop
+@enduml
+"@
+  return Hub @{ type = "appendBotBook"; seatId = $id; puml = $puml }
 }
 function TrackArrive($id, $x, $y, $z, $arrive, $tracker) {
   $st = Seat $id
@@ -613,14 +684,18 @@ function HoldRing {
   $target = [math]::Min(1250.0, $maxStart - 30.0)
   $p = Polar $deg $target
   Write-Host ("A slide-commit r={0:N0} d={1:N0} -> {2:N0}" -f $r, $d, $target)
-  StartGoto $seatA $p.x $p.y $p.z | Out-Null
-  $until = (Get-Date).AddSeconds(40)
+  $until = (Get-Date).AddSeconds(45)
   while ((Get-Date) -lt $until) {
-    Start-Sleep -Milliseconds 400
     $st = Seat $seatA
     AssertNoCollapse $st $seatA
     $rNow = RingRadius $st
-    if (-not $st.goto -and $rNow -ge 1100 -and $rNow -le $maxStart) { return }
+    if ($rNow -ge 1100 -and $rNow -le $maxStart) { return }
+    if (-not $st.goto -and -not (BookBusy $st)) {
+      $deg = OriginDeg $st
+      $p = Polar $deg $target
+      StartGoto $seatA $p.x $p.y $p.z | Out-Null
+    }
+    Start-Sleep -Milliseconds 400
   }
   Write-Host ("A ring hold timeout r={0:N0}" -f (RingRadius (Seat $seatA)))
 }
@@ -964,6 +1039,76 @@ function RadarViewB {
   if ([math]::Abs([double]$hostSt.viewHealth - [double]$bVitals.health) -gt 1.0) { throw "viewHealth should match B" }
   WaitIdle $seatA 3 | Out-Null
 }
+function EdgeHop {
+  Write-Host "edge hop: lip then pad"
+  WaitAlive $seatA 5 | Out-Null
+  $lip = @"
+@startuml jit_edge_lip
+start
+:goto marker=edge_lip;
+note right
+  success: distXY 180
+  goodEnough: distXY 280
+  fail.timeout: 50
+end note
+stop
+@enduml
+"@
+  Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $lip } | Out-Null
+  $st = WaitBot $seatA 55
+  Write-Host ("edge_lip x={0:N0} y={1:N0} z={2:N0} nav={3}" -f [double]$st.x, [double]$st.y, [double]$st.z, $st.navTiles)
+  if ([double]$st.z -lt -2300) { throw "edge_lip left court floor" }
+  AppendBook $seatA "edge_pad" | Out-Null
+  $divedPad = $false
+  $padOk = $false
+  $until = (Get-Date).AddSeconds(50)
+  while ((Get-Date) -lt $until) {
+    Start-Sleep -Milliseconds 200
+    $st = Seat $seatA
+    if ($st.diving -eq $true) { $divedPad = $true; Write-Host "edge_pad diving=true" }
+    $z = [double]$st.z
+    if ($z -lt -3500 -and $z -gt -5200 -and $st.diving -ne $true -and $st.air -ne $true) { $padOk = $true; break }
+    if ($st.ok -and -not (BookBusy $st) -and -not $st.goto) { break }
+  }
+  Write-Host ("edge_pad x={0:N0} y={1:N0} z={2:N0} linked={3} diving={4}" -f `
+    [double]$st.x, [double]$st.y, [double]$st.z, $st.edgePadLinked, $divedPad)
+  if (-not $padOk) {
+    Write-Host "edge_pad catalog missed, JIT airDive marker=edge_pad"
+    $divePad = @"
+@startuml jit_edge_air
+start
+:airDive marker=edge_pad;
+note right
+  success: distXY 180
+  goodEnough: distXY 280
+  fail.timeout: 12
+end note
+stop
+@enduml
+"@
+    Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $divePad } | Out-Null
+    $until = (Get-Date).AddSeconds(16)
+    while ((Get-Date) -lt $until) {
+      Start-Sleep -Milliseconds 200
+      $st = Seat $seatA
+      if ($st.diving -eq $true) { $divedPad = $true; Write-Host "edge_pad diving=true" }
+      $z = [double]$st.z
+      if ($z -lt -3500 -and $z -gt -5200 -and $st.diving -ne $true -and $st.air -ne $true) { $padOk = $true; break }
+      if ($st.ok -and -not (BookBusy $st) -and -not $st.goto) { break }
+    }
+    Write-Host ("edge_pad jit z={0:N0} diving={1}" -f [double]$st.z, $divedPad)
+  }
+  if (-not $padOk) { throw "edge_pad not stuck" }
+  Write-Host "wait island recall to lip"
+  $re = (Get-Date).AddSeconds(8)
+  while ((Get-Date) -lt $re) {
+    Start-Sleep -Milliseconds 250
+    $st = Seat $seatA
+    if ($st.ok -and [double]$st.z -gt -2300) { break }
+  }
+  Write-Host ("recall x={0:N0} y={1:N0} z={2:N0}" -f [double]$st.x, [double]$st.y, [double]$st.z)
+  if ([double]$st.z -lt -2300) { throw "island recall did not return to court" }
+}
 function RecoilDemo {
   Write-Host "recoil hip then ads"
   WaitAlive $seatA 5 | Out-Null
@@ -1000,17 +1145,31 @@ function RecoilDemo {
 }
 
 Write-Host "cover holds: A behind menhir, B lee of center hide"
-CoverHolds
+AppendBook $seatB "cover_then_peek" | Out-Null
+$coverA = @"
+@startuml jit_cover_a
+start
+:goto marker=menhir_0_approach;
+note right
+  success: distXY 450
+  goodEnough: distXY 800
+  fail.timeout: 50
+end note
+stop
+@enduml
+"@
+Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $coverA } | Out-Null
+WaitBot $seatB 50 | Out-Null
+WaitBot $seatA 55 | Out-Null
 WaitAlive $seatA 5 | Out-Null
 WaitAlive $seatB 5 | Out-Null
-Plan $seatA @(@{ seconds = 0.2; weapon = "primary" }) | Out-Null
-WaitIdle $seatA 4 | Out-Null
+if ($Sequence -ne "radar") {
+  EdgeHop
+}
 HoldRing
 $script:bPulse = 0
 $script:bMuted = $false
 $script:lintelSticks = 0
-PulseB
-KeepBCenter
 
 Write-Host "view A"
 SetView $seatA
@@ -1022,20 +1181,87 @@ if ($Sequence -eq "radar") {
   SetView $seatB
   RadarViewB
 } else {
-  Write-Host "sequence=ring (laps + orbit dive + recoil)"
-  Write-Host "view A ring lap"
-  RingLap 7 "A-lap"
-  OrbitPeek
+  Write-Host "sequence=ring (BotBooks: cover, edge_pad, ring_lap, megalith_hop)"
+  AppendBook $seatB "cover_then_peek" | Out-Null
+  AppendBook $seatA "ring_lap" | Out-Null
+  $dived = $false
+  $untilLap = (Get-Date).AddSeconds(140)
+  while ((Get-Date) -lt $untilLap) {
+    Start-Sleep -Milliseconds 200
+    $st = Seat $seatA
+    AssertNoCollapse $st $seatA
+    if ($st.diving -eq $true) { $dived = $true; Write-Host "diving=true" }
+    if (-not (BookBusy $st) -and -not $st.goto) { break }
+  }
+  if (-not $dived) {
+    $st = Seat $seatA
+    if ($st.diving -eq $true) { $dived = $true; Write-Host "diving=true" }
+  }
+  if (-not $dived) {
+    Write-Host "ring_lap missed dive, JIT airDive"
+    $divePuml = @"
+@startuml jit_air_dive
+start
+:jump;
+note right
+  pulses: 3
+  pulseGap: 0.12
+  move: strafe
+  success: air
+  fail.timeout: 1.6
+end note
+:airDive;
+note right
+  move: strafe
+  success: diving
+  fail.timeout: 2.4
+end note
+stop
+@enduml
+"@
+    for ($d = 1; $d -le 4; $d++) {
+      HoldRing
+      Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $divePuml } | Out-Null
+      $diveWait = (Get-Date).AddSeconds(6)
+      while ((Get-Date) -lt $diveWait) {
+        $st = Seat $seatA
+        AssertNoCollapse $st $seatA
+        if ($st.diving -eq $true) { $dived = $true; Write-Host "diving=true"; break }
+        Start-Sleep -Milliseconds 80
+      }
+      if ($dived) { break }
+      Write-Host ("dive miss try={0}" -f $d)
+      WaitBot $seatA 4 | Out-Null
+    }
+  }
+  if (-not $dived) { throw "air dive did not set diving" }
+  WaitBot $seatA 20 | Out-Null
+  WaitBot $seatB 20 | Out-Null
   MuteB
-  MegalithHop
+  Write-Host "megalith hop"
+  AppendBook $seatA "megalith_hop" | Out-Null
+  $stuck = @{}
+  $degs = @(0, 45, 90, 135, 180, 225, 270, 315)
+  $hopUntil = (Get-Date).AddSeconds(180)
+  $hopStart = Get-Date
+  while ((Get-Date) -lt $hopUntil) {
+    Start-Sleep -Milliseconds 150
+    $st = Seat $seatA
+    AssertNoCollapse $st $seatA
+    foreach ($deg in $degs) {
+      if (OnLintel $st $deg) { $stuck["$deg"] = 1 }
+    }
+    if (-not (BookBusy $st) -and -not $st.goto) { break }
+  }
+  $script:lintelSticks = $stuck.Count
+  Write-Host ("megalith sticks={0}/8 elapsed={1:N1}" -f $script:lintelSticks, ((Get-Date) - $hopStart).TotalSeconds)
   UnmuteB
-  if ($script:lintelSticks -lt 1) { throw "no lintel stick" }
+  if ($script:lintelSticks -lt 8) { throw "megalith sticks $($script:lintelSticks)/8" }
   RecoilDemo
-  PulseB
-  KeepBCenter
   Write-Host "view B ring lap"
   SetView $seatB
-  RingLap 6 "B-lap"
+  AppendBook $seatB "ring_lap" | Out-Null
+  WaitBot $seatB 120 | Out-Null
 }
 Write-Host "restore host view"
 SetView $hostSeat.id

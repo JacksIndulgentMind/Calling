@@ -1,0 +1,16 @@
+@startuml edge_pad
+floating note
+trySuccessFor: 0.5
+end note
+start
+if (qualify hasMarker edge_pad) then (yes)
+  :goto marker=edge_pad;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 45
+  end note
+else (skip)
+endif
+stop
+@enduml

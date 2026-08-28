@@ -8,9 +8,11 @@ Cursor **cloud** agents cannot build or run Unreal. The recipes below need a Win
 
 | Skill | When |
 |-------|------|
-| [`.cursor/skills/dl-agent-control/SKILL.md`](.cursor/skills/dl-agent-control/SKILL.md) | Hub vs director, seats, playbooks, join / mind-control / ready / go |
-| [`.cursor/skills/dl-agent-nav/SKILL.md`](.cursor/skills/dl-agent-nav/SKILL.md) | `/goto`, probes, look, recover instead of fail-fast |
+| [`.cursor/skills/dl-agent-control/SKILL.md`](.cursor/skills/dl-agent-control/SKILL.md) | Hub vs director, seats, SeatMotors, join / mind-control / ready / go |
+| [`.cursor/skills/dl-agent-nav/SKILL.md`](.cursor/skills/dl-agent-nav/SKILL.md) | BotBooks (`appendBotBook`), markers, probes; loopback `/goto` is debug |
 | [`.cursor/skills/dl-circle-run/SKILL.md`](.cursor/skills/dl-circle-run/SKILL.md) | Compose PvP ring verify (`VERIFY_OK`, diving, megalith 8/8) |
+
+Pawn scripting is **SeatMotor + BotBook** (catalog or JIT PlantUML). Anytime an agent drives a pawn — stroll, cover, ring, megalith, one test move — POST hub `appendBotBook` / `branchBotBook`. Read [Docs/BotBooks.md](Docs/BotBooks.md). Landing a point with jump / air-dive / slide / dash (vs Recast `goto`): [Docs/NavAbilities.md](Docs/NavAbilities.md). Do not invent MCP `plan` / `sequence` / `intent` / `goto`.
 
 ## Spin up
 
@@ -25,7 +27,7 @@ Defaults: standalone `-game`, then `POST /director {"action":"pvp"}` into **comp
 
 3. If `GET http://127.0.0.1:18765/state` `scene` is `boot`, `POST /director {"action":"enter"}` creates a default Player / Vanguard and travels to Social. Rebuild does this automatically.
 
-Agent HTTP is **localhost only** (`127.0.0.1:18765`). WebSocket hub is `ws://127.0.0.1:18766`. Same JSON codec as `POST /hub`, including `type: plan`.
+Agent HTTP is **localhost only** (`127.0.0.1:18765`). WebSocket hub is `ws://127.0.0.1:18766`. Same JSON codec as `POST /hub`. Drive pawns with `appendBotBook` / `branchBotBook`. Loopback `type: plan` / `/intent` / `/sequence` / `/goto` are debug only.
 
 Stdio MCP: `Scripts/dl-agent-mcp/index.mjs` (tools `hub`, `state`, `director`, `boot`; loopback `intent` / `sequence` / `goto` are no-lobby only).
 
@@ -34,7 +36,7 @@ Stdio MCP: `Scripts/dl-agent-mcp/index.mjs` (tools `hub`, `state`, `director`, `
 | Plane | Where | Use for |
 |-------|--------|---------|
 | Overlay | `POST /director` | I-menu: `open`, `pvp` / `composer`, `host`, `guest`, `ready`, `go`, `social`, `raid`, `practice`, `arena` |
-| Hub | `POST /hub` and WS 18766 | `join`, `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, `plan`, `goto`, `view` |
+| Hub | `POST /hub` and WS 18766 | `join`, `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, `appendBotBook`, `branchBotBook`, `view`. Loopback: `plan`, `goto` |
 
 Director is not the pawn motor. Drive seats through the hub. See the control skill.
 

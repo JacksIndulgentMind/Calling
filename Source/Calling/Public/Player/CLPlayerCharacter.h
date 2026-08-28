@@ -88,7 +88,7 @@ public:
 
 	void SetRippleCamo(bool bEnabled);
 
-	/** Shared intent seam: HTTP, /goto, and in-game playbooks. Holdables latch; look/pulses consume. */
+	/** Shared intent seam: HTTP, /goto, and BotBooks. Holdables latch; look/pulses consume. */
 	void ApplyAgentIntent(const FCLAgentIntent& Intent);
 
 	void ApplyAgentIntent(FVector2D MoveXY, FVector2D LookDelta, bool bSprint, bool bCrouch, bool bADS, bool bFire,

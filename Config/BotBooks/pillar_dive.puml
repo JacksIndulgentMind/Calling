@@ -1,0 +1,23 @@
+@startuml pillar_dive
+floating note
+trySuccessFor: 0.5
+end note
+start
+if (qualify hasMarker pillar_pad) then (yes)
+  :goto marker=pillar_pad;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 12
+  end note
+  :wait;
+  note right
+    success: z < -1800
+    goodEnough: z < -1500
+    trySuccessFor: 0.5
+    fail.timeout: 2
+  end note
+else (skip)
+endif
+stop
+@enduml

@@ -8,7 +8,7 @@
 #include "Game/CLSceneRouter.h"
 #include "Game/CLGameModeBase.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
 #include "Player/CLPlayerCharacter.h"
 #include "Player/CLPlayerController.h"
 #include "Player/CLCombatPawn.h"
@@ -165,7 +165,7 @@ UCLLobbySubsystem* UCLAgentBridgeSubsystem::GetLobby() const
 	return GI ? GI->GetSubsystem<UCLLobbySubsystem>() : nullptr;
 }
 
-UCLRemoteAgentPlaybook* UCLAgentBridgeSubsystem::ResolveMotor(FGuid& InOutSeatId) const
+UCLRemoteAgentSeatMotor* UCLAgentBridgeSubsystem::ResolveMotor(FGuid& InOutSeatId) const
 {
 	UCLLobbySubsystem* Lobby = GetLobby();
 	if (!Lobby)
@@ -177,7 +177,7 @@ UCLRemoteAgentPlaybook* UCLAgentBridgeSubsystem::ResolveMotor(FGuid& InOutSeatId
 		InOutSeatId = AgentSeatId.IsValid() ? AgentSeatId : Lobby->GetLastJoinedSeatId();
 	}
 	UCLParticipantSeat* Seat = Lobby->FindSeat(InOutSeatId);
-	if (!Seat || !Seat->GetPlaybook() || !Seat->GetPlaybook()->IsA<UCLRemoteAgentPlaybook>())
+	if (!Seat || !Seat->GetSeatMotor() || !Seat->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 	{
 		Seat = Lobby->FindOrCreateLoopbackSeat();
 	}
@@ -186,7 +186,7 @@ UCLRemoteAgentPlaybook* UCLAgentBridgeSubsystem::ResolveMotor(FGuid& InOutSeatId
 		return nullptr;
 	}
 	InOutSeatId = Seat->GetSeatId();
-	return Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook());
+	return Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor());
 }
 
 ACLPlayerCharacter* UCLAgentBridgeSubsystem::FindLocalPawn() const
@@ -258,12 +258,12 @@ TSharedRef<FJsonObject> UCLAgentBridgeSubsystem::BuildStateJson(const FGuid& Sea
 {
 	const FGuid ProbeSeat = SeatId.IsValid() ? SeatId : AgentSeatId;
 	ACLPlayerCharacter* Char = SeatId.IsValid() ? ResolvePawnForSeat(SeatId) : FindLocalPawn();
-	const UCLRemoteAgentPlaybook* Remote = nullptr;
+	const UCLRemoteAgentSeatMotor* Remote = nullptr;
 	if (UCLLobbySubsystem* Lobby = GetLobby())
 	{
 		if (const UCLParticipantSeat* Seat = Lobby->FindSeat(ProbeSeat))
 		{
-			Remote = Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook());
+			Remote = Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor());
 		}
 	}
 	return FCLAgentStateSerializer::Build(GetGameInstance(), Char, FindLocalController(), Remote, AgentSeatId, ProbeSeat);
@@ -307,7 +307,7 @@ bool UCLAgentBridgeSubsystem::HandleIntent(const FHttpServerRequest& Request, co
 	}
 
 	FGuid SeatId;
-	UCLRemoteAgentPlaybook* Motor = ResolveMotor(SeatId);
+	UCLRemoteAgentSeatMotor* Motor = ResolveMotor(SeatId);
 	if (Motor)
 	{
 		Motor->CancelMotor();
@@ -362,7 +362,7 @@ bool UCLAgentBridgeSubsystem::HandleSequence(const FHttpServerRequest& Request, 
 	bool bRemainder = false;
 	CLAgentCodec::ParseSteps(Root, Steps, bRemainder);
 	FGuid SeatId = CLAgentCodec::ParseGuid(CLAgentCodec::JsonStr(Root, TEXT("seatId")));
-	UCLRemoteAgentPlaybook* Motor = ResolveMotor(SeatId);
+	UCLRemoteAgentSeatMotor* Motor = ResolveMotor(SeatId);
 	if (!Motor)
 	{
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::NotFound, TEXT("not_remote_agent")));
@@ -427,7 +427,7 @@ bool UCLAgentBridgeSubsystem::HandleGoto(const FHttpServerRequest& Request, cons
 	}
 
 	FGuid SeatId = CLAgentCodec::ParseGuid(CLAgentCodec::JsonStr(Root, TEXT("seatId")));
-	UCLRemoteAgentPlaybook* Motor = ResolveMotor(SeatId);
+	UCLRemoteAgentSeatMotor* Motor = ResolveMotor(SeatId);
 	if (!Motor)
 	{
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::NotFound, TEXT("not_remote_agent")));
@@ -469,7 +469,7 @@ bool UCLAgentBridgeSubsystem::HandleRespawn(const FHttpServerRequest& Request, c
 	}
 
 	FGuid SeatId;
-	if (UCLRemoteAgentPlaybook* Motor = ResolveMotor(SeatId))
+	if (UCLRemoteAgentSeatMotor* Motor = ResolveMotor(SeatId))
 	{
 		Motor->CancelMotor();
 		if (ACLPlayerCharacter* Char = ResolvePawnForSeat(SeatId))

@@ -30,7 +30,7 @@ enum class ECLPvpTeam : uint8
 	Blue UMETA(DisplayName = "Blue")
 };
 
-/** Why the hub would push a seat snapshot. Playbook decides which reasons it wants. */
+/** Why the hub would push a seat snapshot. SeatMotor decides which reasons it wants. */
 UENUM(BlueprintType)
 enum class ECLHubSnapshotReason : uint8
 {

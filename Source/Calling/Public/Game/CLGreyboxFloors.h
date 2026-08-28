@@ -23,7 +23,8 @@ enum class ECLGreyboxLayout : uint8
 	RaidArena UMETA(DisplayName = "Raid 03 (arena)"),
 	RaidPit UMETA(DisplayName = "Raid 04 (pit)"),
 	SocialSquare UMETA(DisplayName = "Social (100 m square)"),
-	PvpThreeLane UMETA(DisplayName = "PvP (3-lane ravine courtyard)")
+	PvpThreeLane UMETA(DisplayName = "PvP (3-lane ravine courtyard)"),
+	PracticePillar UMETA(DisplayName = "Practice (pillar air-dive)")
 };
 
 /**
@@ -53,6 +54,10 @@ public:
 
 	/** Z below which RescueFallenPawns teleports. Pit maps sit lower than spawn. */
 	float GetRescueMinZ() const;
+	/** Court lip stand after an island dive. Empty if this layout has no edge pad. */
+	FVector GetEdgeRecallLocation() const;
+	bool IsOnEdgePad(const FVector& Loc) const;
+	bool HasEdgePad() const { return bHasEdgePad; }
 
 	/** Encounter director circle radius that stays on these floors. */
 	float GetSuggestedArenaHalfExtent() const;
@@ -79,6 +84,20 @@ public:
 	void StampModule(FName Id, const FVector& CenterCm, const FRotator& Rotation = FRotator::ZeroRotator);
 	void StampFillFloor(const FVector& CenterCm, float SizeXMeters, float SizeYMeters, float SlabZCm);
 	void BuildPvpThreeLane();
+	void BuildPracticePillar();
+	void StampTaskMarkers();
+	/** Recast from NavTune.json (agent + jump links). Surviving drop is spawn Z minus rescue Z. */
+	void RebuildNavigation();
+
+	bool bEdgePadRecastLinked = false;
+	int32 EdgePadPathPoints = 0;
+	float EdgePadDistXY = 0.f;
+	float EdgePadDeltaZ = 0.f;
+	float AirDiveJumpLengthCm = 0.f;
+	float AirDiveJumpMaxDepthCm = 0.f;
+	FVector CachedEdgeLip = FVector::ZeroVector;
+	FVector CachedEdgePad = FVector::ZeroVector;
+	bool bHasEdgePad = false;
 
 protected:
 	void EnsureBuilt();
@@ -87,8 +106,6 @@ protected:
 	void ScheduleNavRebuild();
 	UFUNCTION()
 	void OnNavRebuildTimer();
-	/** Recast from NavTune.json (agent + jump links). Surviving drop is spawn Z minus rescue Z. */
-	void RebuildNavigation();
 
 	UPROPERTY(VisibleAnywhere, Category = "Calling|Greybox")
 	TObjectPtr<USceneComponent> Root;

@@ -10,7 +10,7 @@ Calling is an Unreal Engine **5.8** C++ project: gunplay, movement, greybox maps
 
 You boot into a local profile, land in a social square, then compose a match or jump into practice / raid placeholders. Combat is a **digital dance**: slide, dodge, dash, and air-dive chain without dead frames. Loot is data-driven JSON (weapon classes, sights, modifiers). There is no online account and no live service — saves live under `Saved/Calling/Profiles/`.
 
-Agents are **seats**, not extra HTTP pawn ids. `POST /hub` on `127.0.0.1:18765` and WebSocket `ws://127.0.0.1:18766` share one codec. `POST /director` is the I-menu overlay only (compose PvP, ready, go). The game rejects non-loopback HTTP.
+Agents are **seats**, not extra HTTP pawn ids. Anytime an agent drives a pawn, use **BotBooks** (PlantUML) on the hub — see [Docs/BotBooks.md](Docs/BotBooks.md). How a leaf lands a point (`jump` / `airDive` / `slide` vs Recast `goto`): [Docs/NavAbilities.md](Docs/NavAbilities.md). `POST /hub` on `127.0.0.1:18765` and WebSocket `ws://127.0.0.1:18766` share one codec. `POST /director` is the I-menu overlay only (compose PvP, ready, go). The game rejects non-loopback HTTP.
 
 Types and assets use the `CL*` / `Calling` prefix. Do not retune `AirControl=0.35` or `BaseStrafeSpeed=380` unless you are chasing a new feel bug.
 

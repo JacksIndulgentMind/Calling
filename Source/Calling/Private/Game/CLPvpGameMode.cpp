@@ -79,6 +79,10 @@ AActor* ACLPvpGameMode::ChoosePlayerStart_Implementation(AController* Player)
 void ACLPvpGameMode::StartPlay()
 {
 	Super::StartPlay();
+	for (TActorIterator<ACLGreyboxFloors> It(GetWorld()); It; ++It)
+	{
+		It->RebuildNavigation();
+	}
 	UCLLobbySubsystem* Lobby = GetGameInstance()->GetSubsystem<UCLLobbySubsystem>();
 	if (Lobby)
 	{

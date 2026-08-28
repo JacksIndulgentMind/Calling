@@ -21,8 +21,10 @@ Scripts/dl-verify-dual-composer.ps1 -Sequence ring
 Pass when the script prints `VERIFY_OK`, `diving=true`, and megalith sticks `8/8`. Radar/sighted regression:
 
 ```
-Scripts/dl-verify-dual-composer.ps1 -Sequence radar
+Scripts/dl-verify-dual-composer.ps1 -Sequence pillar
 ```
+
+Pass: `VERIFY_OK` after `goto marker=pillar_pad` sticks the practice pad (on the pad, not air, z below −2800). Nav envelopes: [Docs/NavAbilities.md](../../../Docs/NavAbilities.md).
 
 ## Compose → PvP (expected MCP path)
 
@@ -36,9 +38,9 @@ If you drive it by hand instead of the script:
 
 Do **not** auto-Go when `ready >= min`. Host Start is required.
 
-After PvP: `navTiles > 0`. Red ~`(-14500,0,98)`, Blue ~`(14500,0,98)`. **Cover first:** do not rendezvous in the open pit. A behind a trilithon (~Polar 0° / 1250 cm). **B peeks from the lee of the center hide** (~`(0,400,-2000)`, north of the hide slab — not on A’s y=0 chord). Seat **B first**, then A; parallel `goto` through the pit shoves B off path. Return-fire is a glance then ADS (~0.55 s) with `lookAtSeat` A (not `FireUntilHit`, not a turret). Hurt (`shield` 0 or health missing): **no fire**, `goto` hide, crouch ~1.2 s — cover + regen, not a strafe in the pit. **A laps outside the menhirs** (~1200–1300 cm) with `lookAtSeat` B (no `yawAbs` snaps), **strafe-sliding** the full `SlideDuration` and holding `fire` when not hugging a post (commit only if predicted chord stays in-band; do not truncate). Heading slews at 420/280 deg/s; if B moves, ~100 ms then catch-up. Hub `{ "type":"view", "seatId" }` locks the window: lap 1 is A (1P + eased 3P peek on dodge/dash/dive), lap 2 is B **true 1P** (boom arm 0, body OwnerNoSee — not a stuck 3P boom). Then each back to **their** spawn. `GET /state?seat=` per seat. `/state` also reports `slideDuration`, `slideDistanceCm`, `dashDuration`, `dodgeDuration`.
+After PvP: `navTiles > 0`. Red ~`(-14500,0,98)`, Blue ~`(14500,0,98)`. **Cover first** via BotBooks (`cover_then_peek`, markers `hide_center_lee` / `menhir_0_approach`). Drive the ring with `appendBotBook` `ring_lap` then `megalith_hop`. Megalith hops are `airDive marker=menhir_N` (jump / dive / release are inside that leaf): [Docs/NavAbilities.md](../../../Docs/NavAbilities.md). Agents drive pawns with BotBooks only — do not use MCP `plan` / `goto` for this path. `GET /state?seat=` includes `botBook`. Pass: `VERIFY_OK`, `diving=true`, megalith sticks `8/8`.
 
-**Recover, do not fail-fast.** Retry `goto` on stall or `partial`; rewrite a short `plan` from live `/state`. Do not chain six independent ring gotos. Z-collapse (west through-floor) still stops that seat. Fail only after retries.
+**Recover, do not fail-fast.** `branchBotBook` or append a new JIT tree on stall; rewrite from live `/state`. Z-collapse (west through-floor) still stops that seat. Fail only after retries.
 
 Recording check: A 1P tracers from the barrel + casings; B 3P gun + body flinch; A hip screen punch vs ADS reticle walk.
 

@@ -1,0 +1,22 @@
+@startuml cover_then_peek
+floating note
+fallbacks: wander_wait
+onRespawn: cover_then_peek
+trySuccessFor: 1.5
+end note
+start
+if (qualify navTiles > 0) then (yes)
+  :setFocus focus=enemy;
+  :goto marker=hide_center_lee;
+  note right
+    while: trackFocus, maintainADS
+    success: distXY 200
+    goodEnough: distXY 500
+    trySuccessFor: 1.5
+    fail.timeout: 60
+  end note
+  :ref peek_fire;
+else (skip)
+endif
+stop
+@enduml

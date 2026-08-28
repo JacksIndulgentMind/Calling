@@ -169,7 +169,7 @@ const tools = [
   {
     name: "intent",
     description:
-      "No-lobby motor: drive the HTTP singleton pawn and abort its sequence/goto. Prefer hub plan/goto with a seat. Empty {} releases the stick.",
+      "No-lobby motor: drive the HTTP singleton pawn and abort its sequence/goto. Loopback only. Do not use when a lobby seat exists — hub appendBotBook. Empty {} releases the stick.",
     inputSchema: {
       type: "object",
       properties: {
@@ -201,7 +201,7 @@ const tools = [
   {
     name: "hold",
     description:
-      "No-lobby: queue one timed hold on the HTTP singleton (30 Hz). Prefer hub plan with a seat when a lobby exists.",
+      "No-lobby: queue one timed hold on the HTTP singleton (30 Hz). Loopback only. Do not use when a lobby seat exists — hub appendBotBook.",
     inputSchema: {
       type: "object",
       properties: {
@@ -236,7 +236,7 @@ const tools = [
   {
     name: "sequence",
     description:
-      "No-lobby: queue timed steps on the HTTP singleton. Prefer hub plan with a seat when a lobby exists.",
+      "No-lobby: queue timed steps on the HTTP singleton. Loopback only. Do not use when a lobby seat exists — hub appendBotBook.",
     inputSchema: {
       type: "object",
       properties: {
@@ -279,7 +279,7 @@ const tools = [
   {
     name: "goto",
     description:
-      "No-lobby Recast follow on the HTTP singleton pawn. Prefer hub type goto with seatId when a lobby exists. Cancelled by intent or sequence.",
+      "No-lobby Recast follow on the HTTP singleton pawn. Loopback only. Do not use when a lobby seat exists — hub appendBotBook (JIT puml goto, or catalog marker). Cancelled by intent or sequence.",
     inputSchema: {
       type: "object",
       properties: {
@@ -299,7 +299,7 @@ const tools = [
   {
     name: "director",
     description:
-      "I-menu overlay + composer HUD twins. action: open, close, toggle, director, keybinds, pvp/composer (Compose PvP), host, guest, ready, go/start, arena (solo skip), raid, practice, social. Remote join/ready/go/goto/mindControl are hub.",
+      "I-menu overlay + composer HUD twins. action: open, close, toggle, director, keybinds, pvp/composer (Compose PvP), host, guest, ready, go/start, arena (solo skip), raid, practice, social. Remote join/ready/go/appendBotBook/mindControl are hub.",
     inputSchema: {
       type: "object",
       properties: {
@@ -314,11 +314,11 @@ const tools = [
   {
     name: "hub",
     description:
-      "Session hub (same codec as ws://127.0.0.1:18766). Drive pawns here: join headless (kind cursor by default), mindControl, setTeam, ready, go, plan, goto, subscribe. Loopback POST /hub.",
+      "Session hub (same codec as ws://127.0.0.1:18766). Anytime you drive a pawn, use appendBotBook / branchBotBook (catalog name or JIT puml). join headless is an anchor only (kind cursor by default); then mindControl. setTeam, ready, go, subscribe, view. Loopback plan/goto only when no seat exists. POST /hub.",
     inputSchema: {
       type: "object",
       properties: {
-        type: { type: "string", description: "join | subscribe | ready | go | mindControl | setTeam | plan | goto" },
+        type: { type: "string", description: "join | subscribe | ready | go | mindControl | setTeam | appendBotBook | branchBotBook | view | plan | goto" },
         displayName: { type: "string" },
         headless: { type: "boolean" },
         kind: { type: "string", description: "cursor (default on this MCP) | remoteAgent | algorithmic" },
@@ -326,10 +326,14 @@ const tools = [
         targetSeatId: { type: "string" },
         team: { type: "string", description: "red | blue | unassigned" },
         ready: { type: "boolean" },
+        botBook: { type: "string", description: "Catalog BotBook name (appendBotBook / branchBotBook)" },
+        puml: { type: "string", description: "JIT PlantUML body (restricted subset). xyz goto allowed only here." },
+        afterId: { type: "string", description: "branchBotBook: node id to replace from" },
+        offset: { type: "number", description: "branchBotBook: remaining-walk offset" },
         x: { type: "number" },
         y: { type: "number" },
         z: { type: "number" },
-        replaceFrom: { type: "string", description: "now, afterCurrent, or remainder" },
+        replaceFrom: { type: "string", description: "now, afterCurrent, or remainder (loopback plan)" },
         steps: { type: "array", items: { type: "object" } },
       },
       required: ["type"],

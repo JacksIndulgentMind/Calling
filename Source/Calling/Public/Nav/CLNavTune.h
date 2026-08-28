@@ -40,6 +40,8 @@ struct FCLNavTune
 	float AgentRadiusCm = 42.f;
 	float AgentHeightCm = 192.f;
 	float AgentMaxSlopeDeg = 55.f;
+	/** 0 = uncapped MaxLaunchXY. Narrows AirDive bake+runtime search; must be <= MaxLaunchXY. */
+	float AirDiveSearchMaxCm = 0.f;
 	FCLNavProbeTune Probe;
 	TArray<FCLNavLinkTune> Links;
 };
@@ -48,4 +50,5 @@ namespace CLNavTune
 {
 	const FCLNavTune& Get();
 	float ResolveScalar(const FString& TokenOrNumber, float Fallback, const FCLNavTune& Tune, float SurvivingDropCm);
+	bool IsAirDiveLink(FName Name);
 }

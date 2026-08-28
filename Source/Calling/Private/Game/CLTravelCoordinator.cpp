@@ -2,7 +2,7 @@
 #include "Game/CLInvoiceService.h"
 #include "Game/CLSeatRegistry.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
 #include "Game/CLLobbyTypes.h"
 #include "Player/CLPlayerCharacter.h"
 #include "Player/CLHeadlessAgent.h"
@@ -32,10 +32,10 @@ namespace
 		Seats->Reset();
 		for (const FCLInvoiceSeat& Row : Live->Roster)
 		{
-			UCLParticipantSeat* Seat = Seats->MakeSeat(Row.DisplayName, UCLSeatRegistry::PlaybookClassFromKind(Row.Kind), Row.SeatId, Gate);
+			UCLParticipantSeat* Seat = Seats->MakeSeat(Row.DisplayName, UCLSeatRegistry::SeatMotorClassFromKind(Row.Kind), Row.SeatId, Gate);
 			Seat->SetTeam(Row.Team);
 			Seat->SetHeadlessJoin(Row.bHeadless);
-			Seat->SetDriveSeatId(Row.DriveSeatId.IsValid() ? Row.DriveSeatId : Row.SeatId);
+			Seat->SetDriveSeatId(Row.DriveSeatId);
 			if (Row.Kind == TEXT("human"))
 			{
 				Seat->SetHost(true);
@@ -67,7 +67,7 @@ void UCLTravelCoordinator::StampRosterOntoInvoice(UCLInvoiceService* Invoices, U
 		Row.SeatId = Seat->GetSeatId();
 		Row.DisplayName = Seat->GetDisplayName();
 		Row.Team = Seat->GetTeam();
-		Row.Kind = Seat->GetPlaybook() ? Seat->GetPlaybook()->GetKindId() : TEXT("none");
+		Row.Kind = Seat->GetSeatMotor() ? Seat->GetSeatMotor()->GetKindId() : TEXT("none");
 		Row.DriveSeatId = Seat->GetDriveSeatId();
 		Row.bHeadless = Seat->IsHeadlessJoin();
 		Live->Value.Roster.Add(Row);
@@ -92,7 +92,7 @@ void UCLTravelCoordinator::RestoreBodiesAfterTravel(UCLInvoiceService* Invoices,
 		{
 			continue;
 		}
-		if (UCLRemoteAgentPlaybook* Remote = Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook()))
+		if (UCLRemoteAgentSeatMotor* Remote = Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()))
 		{
 			Remote->CancelPlan();
 			Remote->CancelGoto();
@@ -130,7 +130,7 @@ void UCLTravelCoordinator::RestoreBodiesAfterTravel(UCLInvoiceService* Invoices,
 		{
 			continue;
 		}
-		if (!Seat->GetPlaybook() || !Seat->GetPlaybook()->IsA<UCLRemoteAgentPlaybook>())
+		if (!Seat->GetSeatMotor() || !Seat->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 		{
 			continue;
 		}
@@ -150,8 +150,8 @@ void UCLTravelCoordinator::RestoreBodiesAfterTravel(UCLInvoiceService* Invoices,
 		}
 
 		const FGuid DriveId = Seat->GetDriveSeatId();
-		const bool bOwnBody = !DriveId.IsValid() || DriveId == Seat->GetSeatId();
-		if (bOwnBody)
+		const bool bDrivingOther = DriveId.IsValid() && DriveId != Seat->GetSeatId();
+		if (!bDrivingOther)
 		{
 			if (APawn* Body = Seats->SpawnAgentPawn(Seat->GetTeam()))
 			{

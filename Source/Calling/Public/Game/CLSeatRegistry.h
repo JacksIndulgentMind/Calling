@@ -6,7 +6,7 @@
 #include "CLSeatRegistry.generated.h"
 
 class UCLParticipantSeat;
-class UCLRemoteAgentPlaybook;
+class UCLRemoteAgentSeatMotor;
 class ACLPlayerCharacter;
 class APawn;
 class AController;
@@ -32,9 +32,9 @@ public:
 	ACLPlayerCharacter* FindHumanPawn() const;
 	int32 ReadyCount() const;
 
-	UCLParticipantSeat* MakeSeat(const FString& DisplayName, UClass* PlaybookClass, const FGuid& ExistingId, const FCLLobbyGate* Gate);
+	UCLParticipantSeat* MakeSeat(const FString& DisplayName, UClass* MotorClass, const FGuid& ExistingId, const FCLLobbyGate* Gate);
 	UCLParticipantSeat* EnsureLocalHuman(const FString& ProfileName, const FCLLobbyGate* Gate);
-	static UClass* PlaybookClassFromKind(const FString& Kind);
+	static UClass* SeatMotorClassFromKind(const FString& Kind);
 
 	APawn* SpawnAgentPawn(ECLPvpTeam Team) const;
 	AActor* FindTeamPlayerStart(ECLPvpTeam Team) const;

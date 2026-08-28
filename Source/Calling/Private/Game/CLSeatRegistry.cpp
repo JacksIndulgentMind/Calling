@@ -1,7 +1,7 @@
 #include "Game/CLSeatRegistry.h"
 #include "Game/CLLobbyTypes.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
 #include "Player/CLPlayerCharacter.h"
 #include "Player/CLCombatPawn.h"
 #include "Player/CLPossessionComponent.h"
@@ -89,7 +89,7 @@ UCLParticipantSeat* UCLSeatRegistry::FindLocal() const
 {
 	for (UCLParticipantSeat* Seat : Seats)
 	{
-		if (Seat && Seat->GetPlaybook() && Seat->GetPlaybook()->IsA<UCLHumanPlaybook>())
+		if (Seat && Seat->GetSeatMotor() && Seat->GetSeatMotor()->IsA<UCLHumanSeatMotor>())
 		{
 			return Seat;
 		}
@@ -144,7 +144,7 @@ bool UCLSeatRegistry::IsRemotelyDriven(const APawn* Pawn) const
 		{
 			continue;
 		}
-		if (Seat->GetPlaybook() && Seat->GetPlaybook()->IsA<UCLRemoteAgentPlaybook>())
+		if (Seat->GetSeatMotor() && Seat->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 		{
 			return Seat->GetPossession()->GetMode() == ECLPossessionMode::MindControl
 				|| !Pawn->IsLocallyControlled();
@@ -184,12 +184,12 @@ int32 UCLSeatRegistry::ReadyCount() const
 	return Count;
 }
 
-UCLParticipantSeat* UCLSeatRegistry::MakeSeat(const FString& DisplayName, UClass* PlaybookClass, const FGuid& ExistingId, const FCLLobbyGate* Gate)
+UCLParticipantSeat* UCLSeatRegistry::MakeSeat(const FString& DisplayName, UClass* MotorClass, const FGuid& ExistingId, const FCLLobbyGate* Gate)
 {
 	UCLParticipantSeat* Seat = NewObject<UCLParticipantSeat>(this);
-	UCLControllerPlaybook* Book = NewObject<UCLControllerPlaybook>(Seat, PlaybookClass);
+	UCLSeatMotor* Book = NewObject<UCLSeatMotor>(Seat, MotorClass);
 	Seat->Configure(ExistingId.IsValid() ? ExistingId : FGuid::NewGuid(), DisplayName, Book);
-	if (UCLRemoteAgentPlaybook* Remote = Cast<UCLRemoteAgentPlaybook>(Book))
+	if (UCLRemoteAgentSeatMotor* Remote = Cast<UCLRemoteAgentSeatMotor>(Book))
 	{
 		if (Gate)
 		{
@@ -218,7 +218,7 @@ UCLParticipantSeat* UCLSeatRegistry::EnsureLocalHuman(const FString& ProfileName
 	}
 
 	const FString Name = ProfileName.IsEmpty() ? TEXT("Host") : ProfileName;
-	UCLParticipantSeat* Seat = MakeSeat(Name, UCLHumanPlaybook::StaticClass(), FGuid(), Gate);
+	UCLParticipantSeat* Seat = MakeSeat(Name, UCLHumanSeatMotor::StaticClass(), FGuid(), Gate);
 	Seat->SetHost(true);
 	if (ACLPlayerCharacter* Pawn = FindHumanPawn())
 	{
@@ -232,21 +232,21 @@ UCLParticipantSeat* UCLSeatRegistry::EnsureLocalHuman(const FString& ProfileName
 	return Seat;
 }
 
-UClass* UCLSeatRegistry::PlaybookClassFromKind(const FString& Kind)
+UClass* UCLSeatRegistry::SeatMotorClassFromKind(const FString& Kind)
 {
 	if (Kind == TEXT("cursor"))
 	{
-		return UCLCursorPlaybook::StaticClass();
+		return UCLCursorSeatMotor::StaticClass();
 	}
 	if (Kind == TEXT("remoteAgent"))
 	{
-		return UCLRemoteAgentPlaybook::StaticClass();
+		return UCLRemoteAgentSeatMotor::StaticClass();
 	}
 	if (Kind == TEXT("algorithmic"))
 	{
-		return UCLAlgorithmicPlaybook::StaticClass();
+		return UCLAlgorithmicSeatMotor::StaticClass();
 	}
-	return UCLHumanPlaybook::StaticClass();
+	return UCLHumanSeatMotor::StaticClass();
 }
 
 APawn* UCLSeatRegistry::SpawnAgentPawn(ECLPvpTeam Team) const

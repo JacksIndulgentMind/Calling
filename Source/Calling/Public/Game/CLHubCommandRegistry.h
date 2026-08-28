@@ -7,7 +7,7 @@ class UCLLobbySubsystem;
 
 /**
  * One hub codec. HTTP POST /hub and WebSocket 18766 both call Dispatch.
- * Strategy per `type` (join, subscribe, ready, go, mindcontrol, setteam, plan, goto, view).
+ * Strategy per `type` (join, subscribe, ready, go, mindcontrol, setteam, appendBotBook, branchBotBook, plan, goto, view).
  */
 struct CALLING_API FCLHubCommandRegistry
 {

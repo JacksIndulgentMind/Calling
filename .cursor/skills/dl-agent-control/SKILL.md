@@ -8,24 +8,25 @@ description: >-
 
 # Control (hub + seats)
 
-Agents are seats. Drive them through the **session hub**, not the MCP loopback motor. Director HTTP is **I-menu overlays only**. Rebuild and spin-up: [AGENTS.md](../../../AGENTS.md). Stroll nav: [dl-agent-nav](../dl-agent-nav/SKILL.md). Ring verify: [dl-circle-run](../dl-circle-run/SKILL.md).
+Agents are seats. Anytime you drive a pawn, POST a **BotBook** (`appendBotBook` / `branchBotBook`). Do not use MCP `plan` / `sequence` / `intent` / raw `goto` when a seat exists. Director HTTP is **I-menu overlays only**. Rebuild and spin-up: [AGENTS.md](../../../AGENTS.md). Stroll nav: [dl-agent-nav](../dl-agent-nav/SKILL.md). Ring verify: [dl-circle-run](../dl-circle-run/SKILL.md).
 
 ### Control model (do not flatten to flags)
 
 | Mechanism | What it is |
 |-----------|------------|
-| Seat + playbook | `UCLParticipantSeat` + polymorphic `UCLControllerPlaybook`. Join `kind`: `human` / `algorithmic` / `remoteAgent` / **`cursor`**. MCP defaults to `cursor`. |
-| Possession | `UCLPossessionComponent` is the only input owner: own pawn, mind-control, headless. Hub `goto`/`plan`/`GET /state?seat=` use **that seat’s driven pawn**. |
-| Mind-control | Headless `join` spawns `ACLCombatPawn` + `ACLSeatController` and possesses it. Second Cursor seat `mindControl`s the **host** pawn so the listen-server human is not Enhanced Input. |
+| Seat + motor | `UCLParticipantSeat` + polymorphic `UCLSeatMotor`. Join `kind`: `human` / `algorithmic` / `remoteAgent` / **`cursor`**. MCP defaults to `cursor`. |
+| BotBook | PlantUML pawn script. Hub `appendBotBook` / `branchBotBook` (catalog name or JIT `puml`). See [Docs/BotBooks.md](../../../Docs/BotBooks.md). Landing *-to leaves: [Docs/NavAbilities.md](../../../Docs/NavAbilities.md). |
+| Possession | `UCLPossessionComponent` is the only input owner: own pawn, mind-control, headless. Hub BotBooks / `GET /state?seat=` use **that seat’s driven pawn**. |
+| Mind-control | Headless `join` is an anchor (no combat body). Drive a pawn with `mindControl` (host camera pawn, or an NPC), then `appendBotBook` on the **cursor** seat. `/state?seat=` must match that driven pawn. |
 | Composer | Real scene on `CL_Social` (`CLComposerGameMode`), not Social and not “lobby on the arena.” Overlay Compose PvP / director `pvp`. Menu Host/Guest, Ready, Start. |
 | Ready / Start | Same lobby calls from UI and hub. Local host Ready+Start; local guest Ready only; remote guest hub `ready`; remote host hub `go`. No auto-Go at min ready. |
-| Snapshots | `WantsHubSnapshot`. Cursor: stale only (no MCP filter). `remoteAgent`: also lobbyDirty + lowLookahead. Push never cancels plan/`goto`. Pull: `GET /state?seat=`. |
+| Snapshots | `WantsHubSnapshot`. Cursor: stale only (no MCP filter). `remoteAgent`: also lobbyDirty + lowLookahead. Push never cancels a BotBook. Pull: `GET /state?seat=`. |
 
 | Plane | Where | Use for |
 |-------|--------|---------|
 | Overlay | `POST /director` on **127.0.0.1:18765** | I-menu: `open`, `composer` / `pvp` (Compose PvP), `host`, `guest`, `ready`, `go`/`start`, `social`, `raid`, `practice`, `arena` (solo PvP skip) |
-| Hub | `POST /hub` on 18765 **and** `ws://127.0.0.1:18766` (same `FCLHubCommandRegistry`, including `plan`) | `join` (`headless: true`, `kind: cursor`), `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, `plan`, `goto` |
-| Loopback codec | `POST /intent` `/sequence` `/goto` | No-lobby tests only. Not the default stroll path. |
+| Hub | `POST /hub` on 18765 **and** `ws://127.0.0.1:18766` (same `FCLHubCommandRegistry`) | `join` (`headless: true`, `kind: cursor`), `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, **`appendBotBook`**, **`branchBotBook`**, `view`. Loopback: `plan`, `goto` |
+| Loopback codec | `POST /intent` `/sequence` `/goto` | No-lobby tests only. Not how agents drive pawns. |
 
 Loopback is enforced in game. If `/state` is unreachable, spawn the editor/game then Compose PvP: MCP `boot` (or Shell `UnrealEditor.exe` + `POST /director {"action":"pvp"}`). Default boot is standalone `-game`. `mode: editor` opens UnrealEditor and requests PIE.
 
@@ -49,19 +50,21 @@ Every hub body includes `seatId` once you have one (join returns it). Same JSON 
 
 | `type` | Body | Notes |
 |--------|------|--------|
-| `join` | `{ "displayName", "headless": true, "kind": "cursor" }` | Cursor playbook (MCP default). `kind: remoteAgent` for a lightweight LLM. Spawns a combat body and mind-controls it |
+| `join` | `{ "displayName", "headless": true, "kind": "cursor" }` | Cursor SeatMotor (MCP default). `kind: remoteAgent` for a lightweight LLM. Headless is an anchor only — no combat body. Then `mindControl`. |
 | `subscribe` | `{ "seatId" }` | Bind this WebSocket to a seat already joined over HTTP |
 | `mindControl` | `{ "seatId", "targetSeatId" }` | Drive another seat’s pawn (host pawn: Cursor is not Enhanced Input) |
 | `setTeam` | `{ "seatId", "team": "red"\|"blue"\|"unassigned" }` | Own seat, or host any seat |
 | `ready` | `{ "seatId", "ready": true\|false }` | Toggle until Go queues start |
 | `go` | `{}` | Host. Queues countdown if `ready >= min`. Composer then stamps roster and travels to PvP |
-| `plan` | `{ "seatId", "steps", "replaceFrom" }` | Timed motor on **that** driven pawn (NetHz) |
-| `goto` | `{ "seatId", "x", "y", "z?" }` | Recast on **that** driven pawn |
+| `appendBotBook` | `{ "seatId", "botBook": "ring_lap" }` or `{ "seatId", "puml": "@startuml..." }` | Catalog or JIT PlantUML. **This is how agents script pawns.** |
+| `branchBotBook` | `{ "seatId", "afterId"\|"offset", "botBook" or "puml" }` | Replace remaining walk; if already past, append |
+| `plan` | `{ "seatId", "steps", "replaceFrom" }` | Loopback timed motor. **Do not use** when a seat exists — `appendBotBook`. |
+| `goto` | `{ "seatId", "x", "y", "z?" }` | Loopback Recast. **Do not use** when a seat exists — JIT BotBook `goto` (marker, or xyz only on JIT). |
 | `view` | `{ "seatId" }` | Blend the listen-server camera onto that seat’s driven pawn (~0.45s ease). Empty `seatId` restores the host pawn |
 
-Headless join of the host: join, then `mindControl` the host seat so the agent drives the human pawn.
+Headless join of the host: join (no body), then `mindControl` the host seat so the agent drives the human pawn. After PvP travel, a headless seat that never grabbed another pawn gets its own team body; a seat already driving the host does not.
 
-Hub **push** (`{type:"state", reason}`) is a playbook virtual, not a Cursor-side filter. `UCLCursorPlaybook` holds and only pushes `reason: stale` (`PlanStaleSeconds`, default 3) when there is no live plan/`goto`. `UCLRemoteAgentPlaybook` also gets `lobbyDirty` and `lowLookahead`. A push never cancels plan/`goto`. `GET /state?seat=` remains pull when you choose to sample.
+Hub **push** (`{type:"state", reason}`) is a SeatMotor virtual, not a Cursor-side filter. `UCLCursorSeatMotor` holds and only pushes `reason: stale` (`PlanStaleSeconds`, default 3) when there is no live BotBook/plan/`goto`. `UCLRemoteAgentSeatMotor` also gets `lobbyDirty` and `lowLookahead`. A push never cancels a BotBook. `GET /state?seat=` remains pull when you choose to sample.
 
 ## Overlay vs net (ready / start)
 
@@ -80,7 +83,7 @@ Do **not** auto-Go when `ready >= min`. Host Start is required.
 
 ## Loopback codec (no lobby)
 
-Keep `/intent` `/sequence` `/goto` for Practice or a scene with no invoice. Game sim is **30 Hz**. Queue timed sticks **in game**. `POST /intent` (including `{}`) **cancels** the HTTP sequence/goto singleton — it does not cancel a hub seat’s goto.
+Keep `/intent` `/sequence` `/goto` for Practice or a scene with no invoice. Game sim is **30 Hz**. Queue pawn work as a **BotBook** (named or JIT). `POST /intent` (including `{}`) **cancels** the HTTP sequence/goto singleton — it does not cancel a hub seat’s BotBook.
 
 Do **not** poll HTTP at render rate. Sample `/state` at most ~10 Hz.
 

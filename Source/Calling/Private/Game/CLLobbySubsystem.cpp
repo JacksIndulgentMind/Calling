@@ -1,7 +1,8 @@
 ﻿#include "Game/CLLobbySubsystem.h"
 #include "Game/CLLobbyTypes.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
+#include "AI/CLBotBookManager.h"
 #include "Game/CLHubCommandRegistry.h"
 #include "Game/CLInvoiceService.h"
 #include "Game/CLSeatRegistry.h"
@@ -290,13 +291,13 @@ UCLParticipantSeat* UCLLobbySubsystem::JoinRemoteAgent(const FString& DisplayNam
 
 	const FString Name = DisplayName.IsEmpty() ? TEXT("agent") : DisplayName;
 	const FString UseKind = Kind.IsEmpty() ? TEXT("remoteAgent") : Kind;
-	UClass* PlaybookClass = UCLSeatRegistry::PlaybookClassFromKind(UseKind);
-	if (!PlaybookClass || !PlaybookClass->IsChildOf(UCLRemoteAgentPlaybook::StaticClass()))
+	UClass* MotorClass = UCLSeatRegistry::SeatMotorClassFromKind(UseKind);
+	if (!MotorClass || !MotorClass->IsChildOf(UCLRemoteAgentSeatMotor::StaticClass()))
 	{
 		OutError = TEXT("not_remote_kind");
 		return nullptr;
 	}
-	UCLParticipantSeat* Seat = SeatReg->MakeSeat(Name, PlaybookClass, FGuid(), GateClock->GetGate());
+	UCLParticipantSeat* Seat = SeatReg->MakeSeat(Name, MotorClass, FGuid(), GateClock->GetGate());
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -320,11 +321,6 @@ UCLParticipantSeat* UCLLobbySubsystem::JoinRemoteAgent(const FString& DisplayNam
 		Seat->SetPossession(Anchor->GetPossession());
 		Seat->SetHeadlessJoin(true);
 		Anchor->GetPossession()->GoHeadless();
-		if (APawn* Body = SeatReg->SpawnAgentPawn(Seat->GetTeam()))
-		{
-			Anchor->GetPossession()->MindControl(Body);
-			Seat->SetDriveSeatId(Seat->GetSeatId());
-		}
 	}
 	else
 	{
@@ -540,7 +536,7 @@ bool UCLLobbySubsystem::MindControl(const FGuid& AgentSeatId, const FGuid& Targe
 {
 	UCLParticipantSeat* Agent = FindSeat(AgentSeatId);
 	UCLParticipantSeat* Target = FindSeat(TargetSeatId);
-	if (!Agent || !Agent->GetPlaybook() || !Agent->GetPlaybook()->IsA<UCLRemoteAgentPlaybook>())
+	if (!Agent || !Agent->GetSeatMotor() || !Agent->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 	{
 		OutError = TEXT("agent_only");
 		return false;
@@ -560,7 +556,7 @@ bool UCLLobbySubsystem::MindControl(const FGuid& AgentSeatId, const FGuid& Targe
 bool UCLLobbySubsystem::QueuePlan(const FGuid& SeatId, const TArray<FCLAgentStep>& Steps, bool bRemainder, FString& OutError)
 {
 	UCLParticipantSeat* Seat = FindSeat(SeatId);
-	UCLRemoteAgentPlaybook* Remote = Seat ? Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook()) : nullptr;
+	UCLRemoteAgentSeatMotor* Remote = Seat ? Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()) : nullptr;
 	if (!Remote)
 	{
 		OutError = TEXT("not_remote_agent");
@@ -617,7 +613,7 @@ bool UCLLobbySubsystem::StartGoto(const FGuid& SeatId, const FVector& Dest, FStr
 	{
 		Seat = FindSeat(LastJoinedSeatId);
 	}
-	UCLRemoteAgentPlaybook* Remote = Seat ? Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook()) : nullptr;
+	UCLRemoteAgentSeatMotor* Remote = Seat ? Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()) : nullptr;
 	if (!Remote)
 	{
 		OutError = TEXT("not_remote_agent");
@@ -662,15 +658,15 @@ void UCLLobbySubsystem::TickNet(float DeltaSeconds)
 
 	for (UCLParticipantSeat* Seat : SeatReg->GetAll())
 	{
-		if (Seat && Seat->GetPlaybook())
+		if (Seat && Seat->GetSeatMotor())
 		{
-			Seat->GetPlaybook()->TickNet(DeltaSeconds, Seat);
-			if (UCLRemoteAgentPlaybook* Remote = Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook()))
+			Seat->GetSeatMotor()->TickNet(DeltaSeconds, Seat);
+			if (UCLRemoteAgentSeatMotor* Remote = Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()))
 			{
 				ECLHubSnapshotReason Reason = ECLHubSnapshotReason::Stale;
 				while (Remote->ConsumePendingSnapshot(Reason))
 				{
-					if (Seat->GetPlaybook()->WantsHubSnapshot(Reason))
+					if (Seat->GetSeatMotor()->WantsHubSnapshot(Reason))
 					{
 						NotifyHubSnapshots(Reason, Seat->GetSeatId());
 					}
@@ -751,7 +747,7 @@ void UCLLobbySubsystem::FillStateJson(const TSharedRef<FJsonObject>& Root) const
 		TSharedRef<FJsonObject> Row = MakeShared<FJsonObject>();
 		Row->SetStringField(TEXT("id"), GuidStr(Seat->GetSeatId()));
 		Row->SetStringField(TEXT("name"), Seat->GetDisplayName());
-		Row->SetStringField(TEXT("kind"), Seat->GetPlaybook() ? Seat->GetPlaybook()->GetKindId() : TEXT("none"));
+		Row->SetStringField(TEXT("kind"), Seat->GetSeatMotor() ? Seat->GetSeatMotor()->GetKindId() : TEXT("none"));
 		Row->SetBoolField(TEXT("ready"), Seat->IsReady());
 		Row->SetBoolField(TEXT("host"), Seat->IsHost());
 		Row->SetStringField(TEXT("team"), TeamName(Seat->GetTeam()));
@@ -764,7 +760,7 @@ void UCLLobbySubsystem::FillStateJson(const TSharedRef<FJsonObject>& Root) const
 			const UEnum* Enum = StaticEnum<ECLPossessionMode>();
 			Row->SetStringField(TEXT("possession"), Enum ? Enum->GetNameStringByValue(static_cast<int64>(Possession->GetMode())) : TEXT("Headless"));
 		}
-		if (const UCLRemoteAgentPlaybook* Remote = Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook()))
+		if (const UCLRemoteAgentSeatMotor* Remote = Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()))
 		{
 			Row->SetBoolField(TEXT("needsReplan"), Remote->NeedsReplan());
 			Row->SetNumberField(TEXT("planLeft"), Remote->RemainingSeconds());
@@ -776,6 +772,10 @@ void UCLLobbySubsystem::FillStateJson(const TSharedRef<FJsonObject>& Root) const
 				Row->SetNumberField(TEXT("gotoY"), Goal.Y);
 				Row->SetNumberField(TEXT("gotoZ"), Goal.Z);
 			}
+		}
+		if (const UCLBotBookManager* Books = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLBotBookManager>() : nullptr)
+		{
+			Row->SetObjectField(TEXT("botBook"), Books->MakeSeatBotJson(Seat->GetSeatId()));
 		}
 		SeatArr.Add(MakeShared<FJsonValueObject>(Row));
 	}
@@ -792,14 +792,14 @@ UCLParticipantSeat* UCLLobbySubsystem::FindOrCreateLoopbackSeat()
 {
 	if (UCLParticipantSeat* Existing = FindSeat(LastJoinedSeatId))
 	{
-		if (Existing->GetPlaybook() && Existing->GetPlaybook()->IsA<UCLRemoteAgentPlaybook>())
+		if (Existing->GetSeatMotor() && Existing->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 		{
 			return Existing;
 		}
 	}
 	for (UCLParticipantSeat* Seat : SeatReg->GetAll())
 	{
-		if (Seat && Seat->GetPlaybook() && Seat->GetPlaybook()->IsA<UCLRemoteAgentPlaybook>())
+		if (Seat && Seat->GetSeatMotor() && Seat->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 		{
 			LastJoinedSeatId = Seat->GetSeatId();
 			return Seat;

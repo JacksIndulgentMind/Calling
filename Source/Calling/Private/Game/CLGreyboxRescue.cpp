@@ -1,7 +1,11 @@
 #include "Game/CLGreyboxRescue.h"
 #include "Game/CLGreyboxFloors.h"
 #include "Game/CLGameModeBase.h"
+#include "Player/CLPlayerCharacter.h"
+#include "Player/CLCombatMovementComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 
@@ -14,27 +18,87 @@ void UCLGreyboxRescue::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	RescueFallenPawns();
+	RecallEdgePad(DeltaTime);
 	RespawnMissingPawns(DeltaTime);
+}
+
+void UCLGreyboxRescue::TeleportToLip(ACLPlayerCharacter* Char, const FVector& LipStand)
+{
+	if (!Char)
+	{
+		return;
+	}
+	Char->TeleportTo(LipStand, Char->GetActorRotation(), false, true);
+	if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+	}
+	Char->ClearAgentIntent();
 }
 
 void UCLGreyboxRescue::RescueFallenPawns() const
 {
 	UWorld* World = GetWorld();
-	ACLGameModeBase* GM = World ? World->GetAuthGameMode<ACLGameModeBase>() : nullptr;
 	const ACLGreyboxFloors* Floors = Cast<ACLGreyboxFloors>(GetOwner());
-	if (!GM || !Floors)
+	if (!World || !Floors)
 	{
 		return;
 	}
 
 	const float MinZ = Floors->GetRescueMinZ();
-	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	const FVector Lip = Floors->GetEdgeRecallLocation();
+	for (TActorIterator<ACLPlayerCharacter> It(World); It; ++It)
 	{
-		APlayerController* PC = It->Get();
-		APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-		if (Pawn && Pawn->GetActorLocation().Z < MinZ)
+		ACLPlayerCharacter* Char = *It;
+		if (Char && Char->GetActorLocation().Z < MinZ)
 		{
-			GM->RequestRespawn(PC);
+			TeleportToLip(Char, Lip);
+		}
+	}
+}
+
+void UCLGreyboxRescue::RecallEdgePad(float DeltaSeconds)
+{
+	UWorld* World = GetWorld();
+	ACLGreyboxFloors* Floors = Cast<ACLGreyboxFloors>(GetOwner());
+	if (!World || !Floors || !Floors->HasEdgePad())
+	{
+		return;
+	}
+
+	const FVector Lip = Floors->GetEdgeRecallLocation();
+	TSet<uint32> Seen;
+	for (TActorIterator<ACLPlayerCharacter> It(World); It; ++It)
+	{
+		ACLPlayerCharacter* Char = *It;
+		if (!Char)
+		{
+			continue;
+		}
+		const uint32 Id = Char->GetUniqueID();
+		Seen.Add(Id);
+		const UCLCombatMovementComponent* Move = Char->GetCombatMovement();
+		const bool bOnFloor = Move && Move->IsMovingOnGround() && !Move->IsDiving();
+		if (bOnFloor && Floors->IsOnEdgePad(Char->GetActorLocation()))
+		{
+			float& Stand = PadStandSeconds.FindOrAdd(Id);
+			Stand += DeltaSeconds;
+			if (Stand >= 0.45f)
+			{
+				TeleportToLip(Char, Lip);
+				PadStandSeconds.Remove(Id);
+			}
+		}
+		else
+		{
+			PadStandSeconds.Remove(Id);
+		}
+	}
+	for (auto It = PadStandSeconds.CreateIterator(); It; ++It)
+	{
+		if (!Seen.Contains(It->Key))
+		{
+			It.RemoveCurrent();
 		}
 	}
 }

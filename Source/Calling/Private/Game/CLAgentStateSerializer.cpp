@@ -2,7 +2,8 @@
 #include "Combat/CLHitscanService.h"
 #include "Combat/CLDamageableComponent.h"
 #include "Core/CLTypes.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
+#include "AI/CLBotBookManager.h"
 #include "Game/CLGameModeBase.h"
 #include "Game/CLGameStateBase.h"
 #include "Game/CLLobbySubsystem.h"
@@ -142,7 +143,7 @@ TSharedRef<FJsonObject> FCLAgentStateSerializer::Build(
 	UGameInstance* GI,
 	ACLPlayerCharacter* Char,
 	APlayerController* LocalPC,
-	const UCLRemoteAgentPlaybook* Remote,
+	const UCLRemoteAgentSeatMotor* Remote,
 	const FGuid& AgentSeatId,
 	const FGuid& ProbeSeat)
 {
@@ -173,6 +174,15 @@ TSharedRef<FJsonObject> FCLAgentStateSerializer::Build(
 		TArray<FCLRadarContact> ViewRadar;
 		CLHitscanService::QueryRadarContacts(Viewed, ViewRadar);
 		Root->SetNumberField(TEXT("viewRadarBlips"), ViewRadar.Num());
+	}
+
+	if (GI)
+	{
+		if (const UCLBotBookManager* Books = GI->GetSubsystem<UCLBotBookManager>())
+		{
+			const FGuid BookSeat = ProbeSeat.IsValid() ? ProbeSeat : AgentSeatId;
+			Books->FillStateJson(Root, BookSeat);
+		}
 	}
 
 	if (Remote)

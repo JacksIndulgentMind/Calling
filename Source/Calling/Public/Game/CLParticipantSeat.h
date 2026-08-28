@@ -3,9 +3,8 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "Game/CLLobbyTypes.h"
+#include "Game/CLSeatMotor.h"
 #include "CLParticipantSeat.generated.h"
-
-class UCLControllerPlaybook;
 class UCLPossessionComponent;
 class APawn;
 class AActor;
@@ -16,7 +15,7 @@ class CALLING_API UCLParticipantSeat : public UObject
 	GENERATED_BODY()
 
 public:
-	void Configure(const FGuid& InSeatId, const FString& InDisplayName, UCLControllerPlaybook* InPlaybook);
+	void Configure(const FGuid& InSeatId, const FString& InDisplayName, UCLSeatMotor* InMotor);
 
 	UFUNCTION(BlueprintPure, Category = "Calling|Lobby")
 	FGuid GetSeatId() const { return SeatId; }
@@ -38,7 +37,7 @@ public:
 
 	FGuid GetDriveSeatId() const { return DriveSeatId; }
 
-	UCLControllerPlaybook* GetPlaybook() const { return Playbook; }
+	UCLSeatMotor* GetSeatMotor() const { return Motor; }
 	UCLPossessionComponent* GetPossession() const { return Possession; }
 	AActor* GetAnchor() const { return Anchor.Get(); }
 	APawn* GetDrivenPawn() const;
@@ -74,7 +73,7 @@ protected:
 	FGuid DriveSeatId;
 
 	UPROPERTY()
-	TObjectPtr<UCLControllerPlaybook> Playbook;
+	TObjectPtr<UCLSeatMotor> Motor;
 
 	UPROPERTY()
 	TObjectPtr<UCLPossessionComponent> Possession;

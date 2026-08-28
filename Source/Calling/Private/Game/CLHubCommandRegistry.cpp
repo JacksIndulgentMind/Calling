@@ -1,9 +1,11 @@
-#include "Game/CLLobbyTypes.h"
 #include "Game/CLHubCommandRegistry.h"
+#include "Game/CLLobbyTypes.h"
 #include "Game/CLAgentCodec.h"
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
+#include "AI/CLBotBookManager.h"
+#include "Engine/GameInstance.h"
 
 using namespace CLAgentCodec;
 
@@ -73,7 +75,7 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 		{
 			Out->SetStringField(TEXT("seatId"), GuidStr(Seat->GetSeatId()));
 			Out->SetBoolField(TEXT("headless"), JsonBool(Root, TEXT("headless")));
-			Out->SetStringField(TEXT("kind"), Seat->GetPlaybook() ? Seat->GetPlaybook()->GetKindId() : TEXT("none"));
+			Out->SetStringField(TEXT("kind"), Seat->GetSeatMotor() ? Seat->GetSeatMotor()->GetKindId() : TEXT("none"));
 			if (FallbackSeat)
 			{
 				*FallbackSeat = Seat->GetSeatId();
@@ -195,7 +197,7 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 		if (bOk)
 		{
 			UCLParticipantSeat* Seat = Lobby->FindSeat(SeatId.IsValid() ? SeatId : Lobby->GetLastJoinedSeatId());
-			if (const UCLRemoteAgentPlaybook* Remote = Seat ? Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook()) : nullptr)
+			if (const UCLRemoteAgentSeatMotor* Remote = Seat ? Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()) : nullptr)
 			{
 				const FVector Goal = Remote->GetGotoGoal();
 				Out->SetNumberField(TEXT("x"), Goal.X);
@@ -224,6 +226,86 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 			Out->SetStringField(TEXT("seatId"), GuidStr(SeatId));
 		}
 		else
+		{
+			Out->SetStringField(TEXT("error"), Error);
+		}
+		return Out;
+	}
+
+	if (Type == TEXT("appendbotbook"))
+	{
+		const FGuid SeatId = ResolveSeat(Lobby, Root, FallbackSeat);
+		UCLParticipantSeat* Seat = Lobby->FindSeat(SeatId);
+		if (!Seat)
+		{
+			return Fail(TEXT("no_seat"));
+		}
+		UGameInstance* GI = Lobby->GetGameInstance();
+		UCLBotBookManager* Mgr = GI ? GI->GetSubsystem<UCLBotBookManager>() : nullptr;
+		if (!Mgr)
+		{
+			return Fail(TEXT("no_botbook_manager"));
+		}
+		FString Error;
+		bool bOk = false;
+		const FString Puml = JsonStr(Root, TEXT("puml"));
+		const FString Name = JsonStr(Root, TEXT("botBook"));
+		if (!Puml.IsEmpty())
+		{
+			bOk = Mgr->AppendJit(Seat, Puml, Error);
+		}
+		else if (!Name.IsEmpty())
+		{
+			bOk = Mgr->AppendCatalog(Seat, Name, Error);
+		}
+		else
+		{
+			return Fail(TEXT("missing_botbook"));
+		}
+		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+		Out->SetBoolField(TEXT("ok"), bOk);
+		if (!bOk)
+		{
+			Out->SetStringField(TEXT("error"), Error);
+		}
+		return Out;
+	}
+
+	if (Type == TEXT("branchbotbook"))
+	{
+		const FGuid SeatId = ResolveSeat(Lobby, Root, FallbackSeat);
+		UCLParticipantSeat* Seat = Lobby->FindSeat(SeatId);
+		if (!Seat)
+		{
+			return Fail(TEXT("no_seat"));
+		}
+		UGameInstance* GI = Lobby->GetGameInstance();
+		UCLBotBookManager* Mgr = GI ? GI->GetSubsystem<UCLBotBookManager>() : nullptr;
+		if (!Mgr)
+		{
+			return Fail(TEXT("no_botbook_manager"));
+		}
+		const FString AfterId = JsonStr(Root, TEXT("afterId"));
+		const int32 Offset = static_cast<int32>(JsonNum(Root, TEXT("offset"), -1));
+		FString Error;
+		bool bOk = false;
+		const FString Puml = JsonStr(Root, TEXT("puml"));
+		const FString Name = JsonStr(Root, TEXT("botBook"));
+		if (!Puml.IsEmpty())
+		{
+			bOk = Mgr->BranchJit(Seat, AfterId, Offset, Puml, Error);
+		}
+		else if (!Name.IsEmpty())
+		{
+			bOk = Mgr->BranchCatalog(Seat, AfterId, Offset, Name, Error);
+		}
+		else
+		{
+			return Fail(TEXT("missing_botbook"));
+		}
+		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+		Out->SetBoolField(TEXT("ok"), bOk);
+		if (!bOk)
 		{
 			Out->SetStringField(TEXT("error"), Error);
 		}

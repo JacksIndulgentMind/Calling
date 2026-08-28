@@ -24,6 +24,10 @@ void FCLMovementTune::LoadFromIni()
 	GConfig->GetBool(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("bAllowSlideDodgeCancel"), bAllowSlideDodgeCancel, GGameIni);
 	GConfig->GetBool(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("bAllowSlideDashCancel"), bAllowSlideDashCancel, GGameIni);
 	GConfig->GetInt(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("MaxJumps"), MaxJumps, GGameIni);
+	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("JumpZVelocity"), JumpZVelocity, GGameIni);
+	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("DoubleJumpZVelocity"), DoubleJumpZVelocity, GGameIni);
+	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("AirControl"), AirControl, GGameIni);
+	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("GravityZ"), GravityZ, GGameIni);
 	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("DashCooldownSeconds"), DashCooldownSeconds, GGameIni);
 	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("DashDistance"), DashDistance, GGameIni);
 	GConfig->GetFloat(TEXT("/Script/Calling.CLMovementFeelSettings"), TEXT("DashDuration"), DashDuration, GGameIni);

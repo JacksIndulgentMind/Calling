@@ -10,7 +10,7 @@
 struct FHttpServerRequest;
 class IHttpRouter;
 class ACLPlayerCharacter;
-class UCLRemoteAgentPlaybook;
+class UCLRemoteAgentSeatMotor;
 class UCLLobbySubsystem;
 
 /**
@@ -39,7 +39,7 @@ private:
 	APlayerController* FindLocalController() const;
 	UWorld* GetWorldSafe() const;
 	UCLLobbySubsystem* GetLobby() const;
-	UCLRemoteAgentPlaybook* ResolveMotor(FGuid& InOutSeatId) const;
+	UCLRemoteAgentSeatMotor* ResolveMotor(FGuid& InOutSeatId) const;
 
 	bool HandleState(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleIntent(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
