@@ -564,7 +564,13 @@ ECLBotOutcome UCLBotBookManager::TickLeaf(FRuntime& Rt, float DeltaSeconds, UCLP
 		{
 			if (Stmt->Leaf.Verb == FName(TEXT("goto")) && Char)
 			{
-				return DistXY(Char->GetActorLocation(), Ctx.Goal) <= 150.f;
+				if (DistXY(Char->GetActorLocation(), Ctx.Goal) > 150.f)
+				{
+					return false;
+				}
+				const UCLCombatMovementComponent* Move = Char->GetCombatMovement();
+				return Move && Move->IsMovingOnGround() && !Move->IsDiving()
+					&& CLNavAbility::StandingOnGoalFloor(Char->GetActorLocation(), Ctx.Goal);
 			}
 			if (Stmt->Leaf.Verb == FName(TEXT("setfocus")) || Stmt->Leaf.Verb == FName(TEXT("trackfocus")))
 			{
@@ -592,7 +598,8 @@ ECLBotOutcome UCLBotBookManager::TickLeaf(FRuntime& Rt, float DeltaSeconds, UCLP
 					|| Verb.Equals(TEXT("dash"), ESearchCase::IgnoreCase)
 					|| Verb.Equals(TEXT("dodge"), ESearchCase::IgnoreCase))
 				&& (Stmt->Leaf.Params.Contains(TEXT("marker")) || Stmt->Leaf.Params.Contains(TEXT("x")));
-			if (bToLeaf && bDistOk)
+			const bool bGoto = Verb.Equals(TEXT("goto"), ESearchCase::IgnoreCase);
+			if ((bToLeaf || bGoto) && bDistOk)
 			{
 				const UCLCombatMovementComponent* Move = Char->GetCombatMovement();
 				return Move && Move->IsMovingOnGround() && !Move->IsDiving()

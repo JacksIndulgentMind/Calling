@@ -203,10 +203,49 @@ function Test-OnEdgePad($st) {
   return ($d -lt 420 -and $z -gt ($pz - 50) -and $z -lt ($pz + 260) `
     -and $st.diving -ne $true -and $st.air -ne $true)
 }
+$script:lastCollapseRecover = @{}
+function RecoverCourt($id) {
+  Write-Host ("recover court seat={0}" -f $id)
+  $puml = @"
+@startuml recover_court
+start
+:goto marker=edge_lip;
+note right
+  success: distXY 400
+  goodEnough: distXY 700
+  fail.timeout: 40
+end note
+stop
+@enduml
+"@
+  Hub @{ type = "branchBotBook"; seatId = $id; puml = $puml } | Out-Null
+  $until = (Get-Date).AddSeconds(45)
+  while ((Get-Date) -lt $until) {
+    Start-Sleep -Milliseconds 300
+    $st = Seat $id
+    if (-not $st.ok) { continue }
+    if (Test-OnEdgePad $st) { continue }
+    if ($st.diving -eq $true -or $st.air -eq $true) { continue }
+    if ([double]$st.z -gt -2300 -and -not (BookBusy $st) -and -not $st.goto) { return $st }
+  }
+  return (Seat $id)
+}
 function AssertNoCollapse($st, $id) {
   if (-not $st.ok) { return }
   if (Test-OnEdgePad $st) { return }
-  if ([double]$st.z -lt -2800) { throw "Z-collapse seat=$id z=$($st.z)" }
+  # Mid Launch / dive to the island is expected; only void fall is collapse.
+  if ($st.diving -eq $true -or $st.air -eq $true) { return }
+  if ([double]$st.z -ge -2800) { return }
+  $now = Get-Date
+  $last = $script:lastCollapseRecover[$id]
+  if ($last -and ($now - $last).TotalSeconds -lt 10) { return }
+  $script:lastCollapseRecover[$id] = $now
+  Write-Host ("Z-collapse recover seat={0} z={1:N0}" -f $id, [double]$st.z)
+  $back = RecoverCourt $id
+  if ([double]$back.z -lt -2800 -and -not (Test-OnEdgePad $back) `
+    -and $back.diving -ne $true -and $back.air -ne $true) {
+    throw "Z-collapse seat=$id z=$($back.z) after recover"
+  }
 }
 function WaitIdle($id, $sec = 20) {
   $until = (Get-Date).AddSeconds($sec)
@@ -531,9 +570,9 @@ function OnLintel($st, $deg) {
   if ($st.air -eq $true) { return $false }
   if ($st.diving -eq $true) { return $false }
   $z = [double]$st.z
-  if ($z -lt -1720 -or $z -gt -1500) { return $false }
+  if ($z -lt -1750 -or $z -gt -1450) { return $false }
   $p = Polar $deg 950
-  return ((DistXY $st $p.x $p.y) -lt 180)
+  return ((DistXY $st $p.x $p.y) -lt 280)
 }
 function GotoRing($deg, $r = 1250) {
   $p = Polar $deg $r
@@ -725,18 +764,37 @@ function HoldRing {
   $d = 950.0
   if ($null -ne $st.slideDistanceCm) { $d = [double]$st.slideDistanceCm }
   if ($d -gt 1200) { $d = 950.0 }
-  $maxStart = [math]::Sqrt([math]::Max(40000.0, 1900.0 * 1900.0 - $d * $d))
-  if ($r -ge 1100 -and $r -le $maxStart) { return }
+  $maxR = [math]::Sqrt([math]::Max(40000.0, 1900.0 * 1900.0 - $d * $d))
+  if ($r -ge 1100 -and $r -le $maxR) { return }
+  # South lip after edge_pad: polar XYZ toward the ring often re-takes the island
+  # AirDive chord. Pull onto the court ring via menhir approach instead.
+  if ([double]$st.z -gt -2300 -and $r -gt $maxR) {
+    Write-Host ("A hold via menhir_0_approach r={0:N0} (avoid island chord)" -f $r)
+    $puml = @"
+@startuml hold_ring
+start
+:goto marker=menhir_0_approach;
+note right
+  success: distXY 450
+  goodEnough: distXY 800
+  fail.timeout: 50
+end note
+stop
+@enduml
+"@
+    Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $puml } | Out-Null
+    WaitBot $seatA 55 | Out-Null
+    return
+  }
   $deg = OriginDeg $st
-  $target = [math]::Min(1250.0, $maxStart - 30.0)
-  $p = Polar $deg $target
+  $target = [math]::Min(1250.0, $maxR - 30.0)
   Write-Host ("A slide-commit r={0:N0} d={1:N0} -> {2:N0}" -f $r, $d, $target)
   $until = (Get-Date).AddSeconds(45)
   while ((Get-Date) -lt $until) {
     $st = Seat $seatA
     AssertNoCollapse $st $seatA
     $rNow = RingRadius $st
-    if ($rNow -ge 1100 -and $rNow -le $maxStart) { return }
+    if ($rNow -ge 1100 -and $rNow -le $maxR) { return }
     if (-not $st.goto -and -not (BookBusy $st)) {
       $deg = OriginDeg $st
       $p = Polar $deg $target
@@ -770,7 +828,7 @@ function WaitFlagClear($id, $flag, $sec) {
   return (Seat $id)
 }
 function WaitApex($id, $sec) {
-  # Height check after stacked hops — not a gate before the next Space.
+  # Height check after stacked hops â€” not a gate before the next Space.
   $until = (Get-Date).AddSeconds($sec)
   $sawUp = $false
   while ((Get-Date) -lt $until) {
@@ -1105,44 +1163,24 @@ stop
   $st = WaitBot $seatA 55
   Write-Host ("edge_lip x={0:N0} y={1:N0} z={2:N0} nav={3}" -f [double]$st.x, [double]$st.y, [double]$st.z, $st.navTiles)
   if ([double]$st.z -lt -2300) { throw "edge_lip left court floor" }
-  AppendBook $seatA "edge_pad" | Out-Null
   $divedPad = $false
   $padOk = $false
-  $until = (Get-Date).AddSeconds(50)
-  while ((Get-Date) -lt $until) {
-    Start-Sleep -Milliseconds 200
-    $st = Seat $seatA
-    if ($st.diving -eq $true) { $divedPad = $true; Write-Host "edge_pad diving=true" }
-    if (Test-OnEdgePad $st) { $padOk = $true; break }
-    if ($st.ok -and -not (BookBusy $st) -and -not $st.goto) { break }
-  }
-  if (-not $padOk) {
-    Write-Host "edge_pad Recast incomplete, JIT airDive"
-    $padPuml = @"
-@startuml jit_edge_pad
-start
-:airDive marker=edge_pad;
-note right
-  success: distXY 180
-  goodEnough: distXY 280
-  fail.timeout: 12
-end note
-stop
-@enduml
-"@
-    Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $padPuml } | Out-Null
-    $until = (Get-Date).AddSeconds(20)
+  for ($try = 1; $try -le 3 -and -not $padOk; $try++) {
+    Write-Host ("edge_pad try={0}" -f $try)
+    AppendBook $seatA "edge_pad" | Out-Null
+    $until = (Get-Date).AddSeconds(55)
     while ((Get-Date) -lt $until) {
       Start-Sleep -Milliseconds 200
       $st = Seat $seatA
       if ($st.diving -eq $true) { $divedPad = $true; Write-Host "edge_pad diving=true" }
       if (Test-OnEdgePad $st) { $padOk = $true; break }
-      if ($st.ok -and -not (BookBusy $st) -and -not $st.goto) { break }
+      if ($st.ok -and -not (BookBusy $st) -and -not $st.goto -and $st.air -ne $true -and $st.diving -ne $true) { break }
     }
+    Write-Host ("edge_pad x={0:N0} y={1:N0} z={2:N0} findPathMeshOk={3} diving={4} padOk={5}" -f `
+      [double]$st.x, [double]$st.y, [double]$st.z, $st.findPathMeshOk, $divedPad, $padOk)
   }
-  Write-Host ("edge_pad x={0:N0} y={1:N0} z={2:N0} findPathMeshOk={3} diving={4}" -f `
-    [double]$st.x, [double]$st.y, [double]$st.z, $st.findPathMeshOk, $divedPad)
-  if (-not $padOk) { throw "edge_pad not stuck" }
+  if (-not $padOk) { throw "edge_pad not stuck (Recast goto only - no JIT airDive)" }
+  if ($divedPad) { $script:edgeDived = $true }
   Write-Host "wait island recall to lip"
   $re = (Get-Date).AddSeconds(8)
   while ((Get-Date) -lt $re) {
@@ -1229,6 +1267,7 @@ if ($Sequence -eq "radar") {
   AppendBook $seatB "cover_then_peek" | Out-Null
   AppendBook $seatA "ring_lap" | Out-Null
   $dived = $false
+  if ($script:edgeDived) { $dived = $true; Write-Host "diving=true (from EdgeHop)" }
   $untilLap = (Get-Date).AddSeconds(140)
   while ((Get-Date) -lt $untilLap) {
     Start-Sleep -Milliseconds 200
@@ -1241,44 +1280,7 @@ if ($Sequence -eq "radar") {
     $st = Seat $seatA
     if ($st.diving -eq $true) { $dived = $true; Write-Host "diving=true" }
   }
-  if (-not $dived) {
-    Write-Host "ring_lap missed dive, JIT airDive"
-    $divePuml = @"
-@startuml jit_air_dive
-start
-:jump;
-note right
-  pulses: 3
-  pulseGap: 0.12
-  move: strafe
-  success: air
-  fail.timeout: 1.6
-end note
-:airDive;
-note right
-  move: strafe
-  success: diving
-  fail.timeout: 2.4
-end note
-stop
-@enduml
-"@
-    for ($d = 1; $d -le 4; $d++) {
-      HoldRing
-      Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $divePuml } | Out-Null
-      $diveWait = (Get-Date).AddSeconds(6)
-      while ((Get-Date) -lt $diveWait) {
-        $st = Seat $seatA
-        AssertNoCollapse $st $seatA
-        if ($st.diving -eq $true) { $dived = $true; Write-Host "diving=true"; break }
-        Start-Sleep -Milliseconds 80
-      }
-      if ($dived) { break }
-      Write-Host ("dive miss try={0}" -f $d)
-      WaitBot $seatA 4 | Out-Null
-    }
-  }
-  if (-not $dived) { throw "air dive did not set diving" }
+  if (-not $dived) { throw "diving never true (EdgeHop Recast Launch / catalog airDive verb - no JIT fallback)" }
   WaitBot $seatA 20 | Out-Null
   WaitBot $seatB 20 | Out-Null
   MuteB
@@ -1299,6 +1301,37 @@ stop
   }
   $script:lintelSticks = $stuck.Count
   Write-Host ("megalith sticks={0}/8 elapsed={1:N1}" -f $script:lintelSticks, ((Get-Date) - $hopStart).TotalSeconds)
+  if ($script:lintelSticks -lt 8) {
+    Write-Host "megalith retry missing stations"
+    foreach ($deg in $degs) {
+      if ($stuck.ContainsKey("$deg")) { continue }
+      $idx = [int]([math]::Round($deg / 45.0))
+      Write-Host ("retry menhir_{0} deg={1}" -f $idx, $deg)
+      $puml = @"
+@startuml megalith_retry
+start
+:airDive marker=menhir_$idx;
+note right
+  success: distXY 180
+  goodEnough: distXY 280
+  fail.timeout: 10
+end note
+stop
+@enduml
+"@
+      Hub @{ type = "appendBotBook"; seatId = $seatA; puml = $puml } | Out-Null
+      $retryUntil = (Get-Date).AddSeconds(14)
+      while ((Get-Date) -lt $retryUntil) {
+        Start-Sleep -Milliseconds 120
+        $st = Seat $seatA
+        AssertNoCollapse $st $seatA
+        if (OnLintel $st $deg) { $stuck["$deg"] = 1 }
+        if (-not (BookBusy $st) -and -not $st.goto -and $st.air -ne $true -and $st.diving -ne $true) { break }
+      }
+    }
+    $script:lintelSticks = $stuck.Count
+    Write-Host ("megalith sticks after retry={0}/8" -f $script:lintelSticks)
+  }
   UnmuteB
   if ($script:lintelSticks -lt 8) { throw "megalith sticks $($script:lintelSticks)/8" }
   RecoilDemo

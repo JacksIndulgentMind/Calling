@@ -4,6 +4,8 @@
 
 UCLNavArea_AirDive::UCLNavArea_AirDive()
 {
-	DefaultCost = 1.f;
+	// FindPath otherwise treats AirDive links like walk (cost 1) and prefers short
+	// AirDive chords off spawn/terrace over the DropDown+ramp corridor. LongJump is 25.
+	DefaultCost = 50.f;
 	DrawColor = FColor(80, 180, 255);
 }

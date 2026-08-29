@@ -8,6 +8,7 @@
 #include "AI/CLBotBookTrace.h"
 #include "Input/CLAgentIntent.h"
 #include "Core/CLLog.h"
+#include "Core/CLTunes.h"
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
 #include "NavMesh/NavMeshPath.h"
@@ -16,30 +17,14 @@
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogCallingGoto, Log, All);
+
 namespace
 {
 	constexpr float GotoWaypointRadius = 120.f;
 	constexpr float GotoArriveRadius = 150.f;
 	constexpr float HeadshotPitch = 0.f;
 	constexpr int32 MaxGotoRepaths = 6;
-
-	TArray<FVector> CourtPathForDest(const TArray<FVector>& Pts, const TArray<uint8>& Dive, const FVector& Dest,
-		TArray<uint8>& OutDive)
-	{
-		TArray<FVector> Out;
-		Out.Reserve(Pts.Num());
-		OutDive.Reset();
-		OutDive.Reserve(Pts.Num());
-		for (int32 i = 0; i < Pts.Num(); ++i)
-		{
-			if (Pts[i].Z >= Dest.Z - 800.f)
-			{
-				Out.Add(Pts[i]);
-				OutDive.Add(Dive.IsValidIndex(i) ? Dive[i] : 0);
-			}
-		}
-		return Out;
-	}
 
 	bool PointIsAirDive(ARecastNavMesh* Recast, const FNavPathPoint& Pt)
 	{
@@ -60,7 +45,78 @@ namespace
 		return false;
 	}
 
-	void FillRecastPath(UNavigationPath* NavPath, ARecastNavMesh* Recast, TArray<FVector>& OutPts, TArray<uint8>& OutDive)
+	FString AreaClassName(ARecastNavMesh* Recast, const FNavPathPoint& Pt)
+	{
+		if (!Recast)
+		{
+			return TEXT("none");
+		}
+		const FNavMeshNodeFlags Flags(Pt.Flags);
+		if (const UClass* C = Recast->GetAreaClass(Flags.Area))
+		{
+			return C->GetName();
+		}
+		if (Pt.NodeRef != INVALID_NAVNODEREF)
+		{
+			const uint32 AreaId = Recast->GetPolyAreaID(Pt.NodeRef);
+			if (const UClass* C = Recast->GetAreaClass(static_cast<int32>(AreaId)))
+			{
+				return C->GetName();
+			}
+		}
+		return TEXT("unknown");
+	}
+
+	void LogDiveSegment(ARecastNavMesh* Recast, int32 i, const FNavPathPoint& A, const FNavPathPoint& B,
+		const FVector& GotoGoal, bool bPartial, int32 PathPts)
+	{
+		const float SegXY = FVector::Dist2D(A.Location, B.Location);
+		const float SegDZ = B.Location.Z - A.Location.Z;
+		const float Seg3D = FVector::Dist(A.Location, B.Location);
+		const float GoalXY = FVector::Dist2D(B.Location, GotoGoal);
+		const float GoalDZ = GotoGoal.Z - B.Location.Z;
+		const float FromGoalXY = FVector::Dist2D(A.Location, GotoGoal);
+		float AirLen = 0.f;
+		FString AirDepth = TEXT("?");
+		FString AirH = TEXT("?");
+		for (const FCLNavLinkTune& L : CLNavTune::Get().Links)
+		{
+			if (CLNavTune::IsAirDiveLink(L.Name))
+			{
+				AirLen = L.JumpLength;
+				AirDepth = L.JumpMaxDepth;
+				AirH = L.JumpHeight;
+				break;
+			}
+		}
+		FCLMovementTune MoveTune;
+		MoveTune.LoadFromIni();
+		FString LaunchWhy;
+		const bool bLaunch = CLNavAbility::ExplainLaunchInEnvelope(MoveTune, CLNavTune::Get(), A.Location, B.Location, LaunchWhy);
+		const FNavMeshNodeFlags FA(A.Flags);
+		const FNavMeshNodeFlags FB(B.Flags);
+		UE_LOG(LogCallingGoto, Display,
+			TEXT("goto WHY_DIVE i=%d | Recast off-mesh AirDive area on FindPath (not BotBook :airDive) | linkA=%d linkB=%d areaA=%s areaB=%s"),
+			i, FA.IsNavLink() ? 1 : 0, FB.IsNavLink() ? 1 : 0, *AreaClassName(Recast, A), *AreaClassName(Recast, B));
+		UE_LOG(LogCallingGoto, Display,
+			TEXT("goto WHY_DIVE i=%d | TO landing=(%.0f,%.0f,%.0f) FROM lip=(%.0f,%.0f,%.0f) | hop distXY=%.0f dZ=%.0f dist3D=%.0f"),
+			i, B.Location.X, B.Location.Y, B.Location.Z, A.Location.X, A.Location.Y, A.Location.Z, SegXY, SegDZ, Seg3D);
+		UE_LOG(LogCallingGoto, Display,
+			TEXT("goto WHY_DIVE i=%d | vs gotoGoal=(%.0f,%.0f,%.0f) | landing→goal distXY=%.0f dZ=%.0f | lip→goal distXY=%.0f | pathPts=%d partial=%d"),
+			i, GotoGoal.X, GotoGoal.Y, GotoGoal.Z, GoalXY, GoalDZ, FromGoalXY, PathPts, bPartial ? 1 : 0);
+		UE_LOG(LogCallingGoto, Display,
+			TEXT("goto WHY_DIVE i=%d | bake AirDive* JumpLength=%.0f JumpMaxDepth=%s JumpHeight=%s (look radius can invent this hop anywhere in bounds)"),
+			i, AirLen, *AirDepth, *AirH);
+		UE_LOG(LogCallingGoto, Display,
+			TEXT("goto WHY_DIVE i=%d | play LaunchInEnvelope %s | %s"),
+			i, bLaunch ? TEXT("thinks_possible") : TEXT("thinks_impossible"), *LaunchWhy);
+		UE_LOG(LogCallingGoto, Display,
+			TEXT("goto WHY_DIVE i=%d | necessary? FindPath picked this AirDive link (area DefaultCost=50; was 1=walk so short chords won) | desirable? only if that hop is the intended traverse"),
+			i);
+	}
+
+	void FillRecastPath(UNavigationPath* NavPath, ARecastNavMesh* Recast, TArray<FVector>& OutPts, TArray<uint8>& OutDive,
+		const FVector& GotoGoal, bool bPartial)
 	{
 		OutPts.Reset();
 		OutDive.Reset();
@@ -80,12 +136,12 @@ namespace
 					const FNavPathPoint& B = (*MeshPts)[i];
 					const FNavMeshNodeFlags FA(A.Flags);
 					const FNavMeshNodeFlags FB(B.Flags);
-					const float DistXY = FVector::Dist2D(A.Location, B.Location);
 					const bool bLink = FA.IsNavLink() || FB.IsNavLink();
 					const bool bArea = PointIsAirDive(Recast, A) || PointIsAirDive(Recast, B);
-					if (bArea && (bLink || DistXY > 400.f))
+					if (bArea && bLink)
 					{
 						Dive = 1;
+						LogDiveSegment(Recast, i, A, B, GotoGoal, bPartial, MeshPts->Num());
 					}
 				}
 				OutDive.Add(Dive);
@@ -97,6 +153,45 @@ namespace
 			OutPts = NavPath->PathPoints;
 			OutDive.SetNumZeroed(OutPts.Num());
 		}
+	}
+
+	/**
+	 * Recast PathAirDive means Launch owns the hop. Walk the lip first, then Launch
+	 * to the landing — do not refuse because envelope/recipe disagrees (that shake).
+	 */
+	FVector SteerWaypoint(FCLAgentGotoDriver& D, ACLPlayerCharacter* Char)
+	{
+		D.SteerReason = FName(TEXT("goal"));
+		D.DistLip = -1.f;
+		D.bLaunchOk = false;
+		D.DistXYToWp = -1.f;
+		D.DeltaZToWp = 0.f;
+		if (!D.Path.IsValidIndex(D.Index))
+		{
+			return D.Goal;
+		}
+		const FVector To = D.Path[D.Index];
+		D.DistWp = FVector::Dist2D(Char ? Char->GetActorLocation() : To, To);
+		if (!D.PathAirDive.IsValidIndex(D.Index) || D.PathAirDive[D.Index] == 0 || D.Index <= 0 || !Char)
+		{
+			D.SteerReason = FName(TEXT("wp"));
+			return To;
+		}
+		const UCLCombatMovementComponent* Move = Char->GetCombatMovement();
+		const FVector Loc = Char->GetActorLocation();
+		const FVector Lip = D.Path[D.Index - 1];
+		D.DistLip = FVector::Dist2D(Loc, Lip);
+		D.DistXYToWp = FVector::Dist2D(Loc, To);
+		D.DeltaZToWp = To.Z - Loc.Z;
+		// Diag only — ownership is Recast, not the envelope gate.
+		D.bLaunchOk = Move && CLNavAbility::LaunchInEnvelope(Move->GetTune(), CLNavTune::Get(), Loc, To);
+		if (D.DistLip > GotoWaypointRadius)
+		{
+			D.SteerReason = FName(TEXT("diveLip"));
+			return Lip;
+		}
+		D.SteerReason = FName(TEXT("diveLaunch"));
+		return To;
 	}
 
 	void BeginFlightIfNeeded(FCLAgentGotoDriver& D, ACLPlayerCharacter* Char)
@@ -111,6 +206,27 @@ namespace
 		}
 		const FVector From = Char->GetActorLocation();
 		const FVector To = D.Path[D.Index];
+		if (D.Index > 0)
+		{
+			const float DistLip = FVector::Dist2D(From, D.Path[D.Index - 1]);
+			if (DistLip > GotoWaypointRadius)
+			{
+				return;
+			}
+		}
+		FString LaunchWhy;
+		if (const UCLCombatMovementComponent* Move = Char->GetCombatMovement())
+		{
+			CLNavAbility::ExplainLaunchInEnvelope(Move->GetTune(), CLNavTune::Get(), From, To, LaunchWhy);
+		}
+		else
+		{
+			LaunchWhy = TEXT("noMove");
+		}
+		UE_LOG(LogCallingGoto, Display,
+			TEXT("goto ARM_LAUNCH idx=%d | TO=(%.0f,%.0f,%.0f) FROM pawn=(%.0f,%.0f,%.0f) | gotoGoal=(%.0f,%.0f,%.0f) land→goalXY=%.0f | envelope=%s"),
+			D.Index, To.X, To.Y, To.Z, From.X, From.Y, From.Z,
+			D.Goal.X, D.Goal.Y, D.Goal.Z, FVector::Dist2D(To, D.Goal), *LaunchWhy);
 		D.bFlight = true;
 		D.Flight.Mode = ECLNavAbilityExecMode::Launch;
 		D.Flight.Goal = To;
@@ -119,15 +235,6 @@ namespace
 		D.Flight.Start(Char);
 	}
 
-	void BeginFallbackExec(FCLAgentGotoDriver& D, ACLPlayerCharacter* Char, ECLNavAbilityExecMode Mode, const TCHAR* Arm)
-	{
-		D.bFlight = true;
-		D.Flight.Mode = Mode;
-		D.Flight.Goal = D.Goal;
-		D.Flight.LandRadius = 150.f;
-		CLBotBookTrace::GotoArm(Arm, Char->GetActorLocation(), D.Goal, D.bPartial, D.Path.Num());
-		D.Flight.Start(Char);
-	}
 }
 
 void FCLAgentGotoDriver::Cancel()
@@ -135,6 +242,7 @@ void FCLAgentGotoDriver::Cancel()
 	bActive = false;
 	bPartial = false;
 	bFlight = false;
+	bNavPath = false;
 	Path.Reset();
 	PathAirDive.Reset();
 	Index = 0;
@@ -143,6 +251,17 @@ void FCLAgentGotoDriver::Cancel()
 	StuckSeconds = 0.f;
 	LastWpDist = -1.f;
 	Flight.Reset();
+	SteerReason = NAME_None;
+	SteerAt = FVector::ZeroVector;
+	DistLip = -1.f;
+	DistWp = -1.f;
+	DistXYToWp = -1.f;
+	DeltaZToWp = 0.f;
+	bLaunchOk = false;
+	bMoveBlocked = false;
+	LastMoveXY = FVector2D::ZeroVector;
+	FwdKind = NAME_None;
+	FwdDist = -1.f;
 }
 
 bool FCLAgentGotoDriver::Start(UWorld* World, ACLPlayerCharacter* Char, const FVector& Dest, FString& OutError, bool bFromRepath)
@@ -154,10 +273,7 @@ bool FCLAgentGotoDriver::Start(UWorld* World, ACLPlayerCharacter* Char, const FV
 	}
 
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-	const UCLCombatMovementComponent* Move = Char->GetCombatMovement();
 	const FVector From = Char->GetActorLocation();
-	const bool bJump = Move && CLNavAbility::JumpToInEnvelope(Move->GetTune(), From, Dest);
-	const bool bLaunch = Move && CLNavAbility::LaunchInEnvelope(Move->GetTune(), CLNavTune::Get(), From, Dest);
 
 	FNavLocation ProjectedStart;
 	FNavLocation ProjectedGoal;
@@ -192,14 +308,13 @@ bool FCLAgentGotoDriver::Start(UWorld* World, ACLPlayerCharacter* Char, const FV
 	if (bRecastValid)
 	{
 		ARecastNavMesh* Recast = Cast<ARecastNavMesh>(NavSys->GetDefaultNavDataInstance());
-		TArray<FVector> RawPts;
-		TArray<uint8> RawDive;
-		FillRecastPath(NavPath, Recast, RawPts, RawDive);
-		RecastPts = CourtPathForDest(RawPts, RawDive, Dest, RecastDive);
+		FillRecastPath(NavPath, Recast, RecastPts, RecastDive, GoalLoc, NavPath->IsPartial());
 	}
-	const bool bRecastComplete = RecastPts.Num() >= 2 && !NavPath->IsPartial()
+	// Recast only — no jump-to / Launch arm. Partial polylines walk + repath (A* node budget).
+	const bool bRecastUsable = RecastPts.Num() >= 2;
+	const bool bRecastComplete = bRecastUsable && NavPath && !NavPath->IsPartial()
 		&& CLNavPathUtil::PathReachesDest(RecastPts, Dest);
-	if (!bRecastComplete && !bJump && !bLaunch)
+	if (!bRecastUsable)
 	{
 		if (!NavSys)
 		{
@@ -223,45 +338,39 @@ bool FCLAgentGotoDriver::Start(UWorld* World, ACLPlayerCharacter* Char, const FV
 	const int32 RepathBudget = bFromRepath ? RepathLeft : MaxGotoRepaths;
 	Cancel();
 	RepathLeft = RepathBudget;
-	if (bRecastComplete)
-	{
-		Path = RecastPts;
-		PathAirDive = RecastDive;
-		Goal = GoalLoc;
-		bPartial = false;
-	}
-	else
-	{
-		Path = { From, Dest };
-		PathAirDive = { 0, 0 };
-		Goal = Dest;
-		bPartial = bRecastValid && NavPath->IsPartial();
-	}
+	Path = RecastPts;
+	PathAirDive = RecastDive;
+	Goal = GoalLoc;
+	bPartial = !bRecastComplete;
+	bNavPath = true;
 	Index = 1;
 	bActive = true;
 
 	if (Path.IsValidIndex(Index))
 	{
-		const FVector ToFirst = (Path[Index] - Char->GetActorLocation()).GetSafeNormal2D();
+		const FVector Steer = SteerWaypoint(*this, Char);
+		const FVector ToFirst = (Steer - Char->GetActorLocation()).GetSafeNormal2D();
 		if (!ToFirst.IsNearlyZero())
 		{
 			Char->SetLookGoalYawPitch(true, ToFirst.Rotation().Yaw, true, HeadshotPitch);
 		}
 	}
 
-	if (bRecastComplete)
+	CLBotBookTrace::GotoArm(TEXT("recast"), From, Dest, bPartial, Path.Num());
 	{
-		CLBotBookTrace::GotoArm(TEXT("recast"), From, Dest, false, Path.Num());
-		BeginFlightIfNeeded(*this, Char);
+		const int32 N = FMath::Min(Path.Num(), 6);
+		FString Pts;
+		for (int32 i = 0; i < N; ++i)
+		{
+			Pts += FString::Printf(TEXT(" [%d](%.0f,%.0f,%.0f)dive=%d"),
+				i, Path[i].X, Path[i].Y, Path[i].Z,
+				PathAirDive.IsValidIndex(i) ? PathAirDive[i] : -1);
+		}
+		UE_LOG(LogCallingGoto, Display,
+			TEXT("goto start pts=%d partial=%d idx=%d repath=%d%s"),
+			Path.Num(), bPartial ? 1 : 0, Index, RepathLeft, *Pts);
 	}
-	else if (bJump)
-	{
-		BeginFallbackExec(*this, Char, ECLNavAbilityExecMode::JumpTo, TEXT("jumpTo"));
-	}
-	else
-	{
-		BeginFallbackExec(*this, Char, ECLNavAbilityExecMode::Launch, TEXT("launch"));
-	}
+	BeginFlightIfNeeded(*this, Char);
 	return true;
 }
 
@@ -294,14 +403,31 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 		Flight.Tick(DeltaSeconds, Char);
 		if (Flight.bFailed)
 		{
-			Cancel();
-			Char->ClearAgentIntent();
+			UE_LOG(LogCallingGoto, Display,
+				TEXT("goto flightFail idx=%d loc=(%.0f,%.0f,%.0f) goal=(%.0f,%.0f,%.0f)"),
+				Index, Loc.X, Loc.Y, Loc.Z, Flight.Goal.X, Flight.Goal.Y, Flight.Goal.Z);
+			bFlight = false;
+			Flight.Reset();
+			if (PathAirDive.IsValidIndex(Index))
+			{
+				PathAirDive[Index] = 0;
+			}
 			return;
 		}
 		if (Flight.bFinished)
 		{
-			Cancel();
-			Char->ClearAgentIntent();
+			// Intermediate Recast AirDive — keep walking the polyline (do not Cancel goto).
+			UE_LOG(LogCallingGoto, Display,
+				TEXT("goto flightLand idx=%d loc=(%.0f,%.0f,%.0f) land=(%.0f,%.0f,%.0f)"),
+				Index, Loc.X, Loc.Y, Loc.Z, Flight.Goal.X, Flight.Goal.Y, Flight.Goal.Z);
+			bFlight = false;
+			Flight.Reset();
+			if (Path.IsValidIndex(Index))
+			{
+				++Index;
+			}
+			StuckSeconds = 0.f;
+			LastWpDist = -1.f;
 			return;
 		}
 		return;
@@ -309,6 +435,11 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 
 	while (Path.IsValidIndex(Index) && FVector::Dist2D(Loc, Path[Index]) <= GotoWaypointRadius)
 	{
+		// Recast AirDive: Launch owns — do not walk-advance past the hop.
+		if (PathAirDive.IsValidIndex(Index) && PathAirDive[Index] != 0)
+		{
+			break;
+		}
 		++Index;
 		StuckSeconds = 0.f;
 		LastWpDist = -1.f;
@@ -326,14 +457,15 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 		}
 	}
 
-	const FVector SteerAt = Path.IsValidIndex(Index) ? Path[Index] : Goal;
+	const FVector Steer = SteerWaypoint(*this, Char);
+	SteerAt = Steer;
 	const FVector ToTarget = (SteerAt - Loc).GetSafeNormal2D();
 	if (ToTarget.IsNearlyZero())
 	{
 		return;
 	}
 
-	const float WpDist = FVector::Dist2D(Loc, Path.IsValidIndex(Index) ? Path[Index] : Goal);
+	const float WpDist = FVector::Dist2D(Loc, SteerAt);
 	if (LastWpDist < 0.f || WpDist < LastWpDist - 15.f)
 	{
 		StuckSeconds = 0.f;
@@ -344,12 +476,38 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 		StuckSeconds += DeltaSeconds;
 		LastWpDist = FMath::Min(LastWpDist, WpDist);
 	}
+	if (StuckSeconds > 2.5f && RepathLeft > 0)
+	{
+		--RepathLeft;
+		StuckSeconds = 0.f;
+		LastWpDist = -1.f;
+		FString Error;
+		if (Start(World, Char, Goal, Error, true) && Path.IsValidIndex(Index))
+		{
+			return;
+		}
+	}
 
-	Char->SetLookGoalYawPitch(true, ToTarget.Rotation().Yaw, true, HeadshotPitch);
-
-	FVector2D MoveXY(0.f, 1.f);
+	// CombatMovement interprets Move as control-yaw local (Y=forward, X=right). Wish toward
+	// the Recast waypoint in that basis so look slew does not walk us in circles.
+	FVector2D MoveXY = FVector2D::ZeroVector;
+	{
+		const FRotator Yaw(0.f, Char->GetControlRotation().Yaw, 0.f);
+		const FVector Forward = FRotationMatrix(Yaw).GetUnitAxis(EAxis::X);
+		const FVector Right = FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y);
+		MoveXY.X = FVector::DotProduct(ToTarget, Right);
+		MoveXY.Y = FVector::DotProduct(ToTarget, Forward);
+		const float Mag = MoveXY.Size();
+		if (Mag > KINDA_SMALL_NUMBER)
+		{
+			MoveXY /= Mag;
+		}
+	}
 
 	bool bJump = false;
+	bMoveBlocked = false;
+	FwdKind = NAME_None;
+	FwdDist = -1.f;
 	if (World)
 	{
 		const FCLNavProbeTune& Probe = CLNavTune::Get().Probe;
@@ -365,9 +523,25 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 		const bool bJumpDown = Fwd.Kind == ECLFwdKind::JumpDown && Fwd.Dist < Probe.JumpFaceCm;
 		const bool bHasLanding = Fwd.Kind == ECLFwdKind::Drop || Fwd.Kind == ECLFwdKind::JumpDown;
 		const int32 JumpsLeft = Char->GetCombatMovement() ? Char->GetCombatMovement()->GetJumpsRemaining() : 0;
-		if (Drop >= Probe.FloorProbeMaxCm && !bHasLanding && MoveXY.Y > 0.f)
+		FwdKind = FName(CLAgentNavProbe::FwdKindName(Fwd.Kind));
+		FwdDist = Fwd.Dist;
+		// Recast polyline already stays on mesh / DropDown / AirDive links. The 90 cm void
+		// probe false-stops on spawn-pad corners and terrace lips → look-only spin.
+		if (!bNavPath && Drop >= Probe.FloorProbeMaxCm && !bHasLanding)
 		{
-			MoveXY.Y = 0.f;
+			const bool bWalkOffLip = Drop > Probe.LipDropMinCm && Drop < 600.f;
+			if (!bWalkOffLip)
+			{
+				bMoveBlocked = true;
+			}
+		}
+		if (Fwd.Kind == ECLFwdKind::Wall && Fwd.Dist < 80.f)
+		{
+			bMoveBlocked = true;
+		}
+		if (bMoveBlocked)
+		{
+			MoveXY = FVector2D::ZeroVector;
 		}
 		if (JumpCooldown <= 0.f && (bJumpCover || bJumpDown || bJumpUp)
 			&& (bOnGround || (bJumpUp && JumpsLeft > 0)))
@@ -376,6 +550,33 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 			JumpCooldown = 0.45f;
 			StuckSeconds = 0.f;
 		}
+	}
+
+	LastMoveXY = MoveXY;
+
+	{
+		static float GotoDiagAcc = 0.f;
+		GotoDiagAcc += DeltaSeconds;
+		if (GotoDiagAcc >= 0.2f)
+		{
+			GotoDiagAcc = 0.f;
+			const FVector Wp = Path.IsValidIndex(Index) ? Path[Index] : Goal;
+			UE_LOG(LogCallingGoto, Display,
+				TEXT("goto tick loc=(%.0f,%.0f,%.0f) idx=%d/%d dive=%d reason=%s launch=%d distLip=%.0f distXY=%.0f dZ=%.0f wp=(%.0f,%.0f,%.0f) steer=(%.0f,%.0f,%.0f) lookYaw=%.1f ctrlYaw=%.1f move=(%.2f,%.2f) blocked=%d fwd=%s/%.0f stuck=%.1f"),
+				Loc.X, Loc.Y, Loc.Z, Index, Path.Num(),
+				PathAirDive.IsValidIndex(Index) ? PathAirDive[Index] : -1,
+				*SteerReason.ToString(), bLaunchOk ? 1 : 0, DistLip, DistXYToWp, DeltaZToWp,
+				Wp.X, Wp.Y, Wp.Z, SteerAt.X, SteerAt.Y, SteerAt.Z,
+				ToTarget.Rotation().Yaw, Char->GetControlRotation().Yaw,
+				LastMoveXY.X, LastMoveXY.Y, bMoveBlocked ? 1 : 0,
+				*FwdKind.ToString(), FwdDist, StuckSeconds);
+		}
+	}
+
+	// Face the waypoint while moving. Do not slew look while planted — that is the spawn spin.
+	if (!MoveXY.IsNearlyZero())
+	{
+		Char->SetLookGoalYawPitch(true, ToTarget.Rotation().Yaw, true, HeadshotPitch);
 	}
 
 	FCLAgentIntent Intent;

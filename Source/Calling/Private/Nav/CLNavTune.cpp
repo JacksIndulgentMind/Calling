@@ -36,7 +36,7 @@ namespace
 		};
 		Tune.Links.Reset();
 		Tune.Links.Add(Link(TEXT("CoverOver"), 200.f, 20.f, TEXT("8"), TEXT("coverHeight"), TEXT("12"), 120.f, TEXT("default"), TEXT("default")));
-		Tune.Links.Add(Link(TEXT("DropDown"), 280.f, 25.f, TEXT("strainFall"), TEXT("10"), TEXT("300"), 180.f, TEXT("default"), TEXT("null")));
+		Tune.Links.Add(Link(TEXT("DropDown"), 600.f, 15.f, TEXT("strainFall"), TEXT("10"), TEXT("500"), 120.f, TEXT("default"), TEXT("null")));
 		Tune.Links.Add(Link(TEXT("JumpUp"), 280.f, 20.f, TEXT("-jumpApex"), TEXT("jumpApex"), TEXT("jumpApex"), 120.f, TEXT("null"), TEXT("default")));
 		Tune.Links.Add(Link(TEXT("JumpDown"), 400.f, 25.f, TEXT("survivingDrop"), TEXT("coverHeight"), TEXT("survivingDrop"), 180.f, TEXT("default"), TEXT("null")));
 		Tune.Links.Add(Link(TEXT("JumpOver"), 280.f, 20.f, TEXT("12"), TEXT("jumpApex"), TEXT("20"), 160.f, TEXT("longJump"), TEXT("longJump")));

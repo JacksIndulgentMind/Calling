@@ -128,6 +128,9 @@ namespace CLNavAbility
 
 	/** Jump-to fails, slide/strafe fail, air-dive launch can still reach. */
 	bool LaunchInEnvelope(const FCLMovementTune& Tune, const FCLNavTune& NavTune, const FVector& From, const FVector& To);
+	/** Observability only — same gates as LaunchInEnvelope, with a reason string. Does not change behavior. */
+	bool ExplainLaunchInEnvelope(const FCLMovementTune& Tune, const FCLNavTune& NavTune, const FVector& From, const FVector& To,
+		FString& OutWhy);
 	bool IsAirDivePathSegment(const FCLMovementTune& Tune, const FCLNavTune& NavTune, const FVector& From, const FVector& To);
 	bool IsAirDiveArea(const UClass* AreaClass);
 	/** Height slice × DistXY ring for this landing. Invalid if outside the hull or an empty cell. */

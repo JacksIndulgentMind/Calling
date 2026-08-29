@@ -71,8 +71,8 @@ void CLNavLinkPolicy::ApplyToRecast(ARecastNavMesh& Recast, float SurvivingDropC
 	Recast.ExpectedMaxLayersPerTile = FMath::Max(Recast.ExpectedMaxLayersPerTile, 12);
 	Recast.bMinimizeLinkPoolSize = false;
 	Recast.bAllowNavLinkAsPathEnd = true;
-	Recast.DefaultMaxSearchNodes = FMath::Max(Recast.DefaultMaxSearchNodes, 4096.f);
-	Recast.DefaultMaxHierarchicalSearchNodes = FMath::Max(Recast.DefaultMaxHierarchicalSearchNodes, 4096.f);
+	Recast.DefaultMaxSearchNodes = FMath::Max(Recast.DefaultMaxSearchNodes, 16384.f);
+	Recast.DefaultMaxHierarchicalSearchNodes = FMath::Max(Recast.DefaultMaxHierarchicalSearchNodes, 16384.f);
 	Recast.SimplificationElevationRatio = FMath::Max(Recast.SimplificationElevationRatio, 1.f);
 	Recast.bPerformVoxelFiltering = true;
 	Recast.bSortNavigationAreasByCost = true;

@@ -195,6 +195,24 @@ TSharedRef<FJsonObject> FCLAgentStateSerializer::Build(
 			Root->SetNumberField(TEXT("gotoX"), Goal.X);
 			Root->SetNumberField(TEXT("gotoY"), Goal.Y);
 			Root->SetNumberField(TEXT("gotoZ"), Goal.Z);
+			const FCLAgentGotoDriver& G = Remote->GetGotoDriver();
+			Root->SetNumberField(TEXT("gotoIdx"), G.Index);
+			Root->SetNumberField(TEXT("gotoPts"), G.Path.Num());
+			Root->SetNumberField(TEXT("gotoDive"), G.PathAirDive.IsValidIndex(G.Index) ? G.PathAirDive[G.Index] : 0);
+			Root->SetStringField(TEXT("gotoSteer"), G.SteerReason.ToString());
+			Root->SetBoolField(TEXT("gotoLaunch"), G.bLaunchOk);
+			Root->SetNumberField(TEXT("gotoDistLip"), G.DistLip);
+			Root->SetNumberField(TEXT("gotoDistXY"), G.DistXYToWp);
+			Root->SetNumberField(TEXT("gotoDZ"), G.DeltaZToWp);
+			Root->SetNumberField(TEXT("gotoSteerX"), G.SteerAt.X);
+			Root->SetNumberField(TEXT("gotoSteerY"), G.SteerAt.Y);
+			Root->SetNumberField(TEXT("gotoSteerZ"), G.SteerAt.Z);
+			Root->SetBoolField(TEXT("gotoBlocked"), G.bMoveBlocked);
+			Root->SetNumberField(TEXT("gotoMoveX"), G.LastMoveXY.X);
+			Root->SetNumberField(TEXT("gotoMoveY"), G.LastMoveXY.Y);
+			Root->SetNumberField(TEXT("gotoStuck"), G.StuckSeconds);
+			Root->SetStringField(TEXT("gotoFwd"), G.FwdKind.ToString());
+			Root->SetNumberField(TEXT("gotoFwdDist"), G.FwdDist);
 		}
 	}
 	else

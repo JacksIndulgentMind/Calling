@@ -23,7 +23,7 @@ Pawn scripting is **SeatMotor + BotBook** (catalog or JIT PlantUML). Anytime an 
 Scripts/dl-rebuild.ps1
 ```
 
-Defaults: standalone `-game`, then `POST /director {"action":"pvp"}` into **composer** (not the arena). `-Activity none` skips director. `-Mode editor` opens the editor and requests PIE.
+Defaults: standalone `-game`, then Compose PvP **through** host/ready/guest/go into the **pvp** match (waits for `navTiles`). `-Activity composer` stops in the lobby. `-Activity arena` is the solo skip. `-Activity none` skips director. `-Mode editor` opens the editor and requests PIE.
 
 3. If `GET http://127.0.0.1:18765/state` `scene` is `boot`, `POST /director {"action":"enter"}` creates a default Player / Vanguard and travels to Social. Rebuild does this automatically.
 

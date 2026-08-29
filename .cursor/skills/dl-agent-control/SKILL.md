@@ -38,7 +38,7 @@ If `GET /state` `scene` is **`boot`**, there is no locked-in profile (saves are 
 Scripts/dl-rebuild.ps1
 ```
 
-Defaults: standalone `-game`, then `POST /director {"action":"pvp"}` → **composer** (SocialSquare), not the arena. `-Activity none` skips director. `-Activity arena` is the old solo courtyard skip. After a rebuild, do not leave the editor down.
+Defaults: standalone `-game`, then Compose PvP **through** host/ready/guest/go into the **pvp** match (`navTiles` ready). `-Activity composer` stops in the lobby; `-Activity arena` is the old solo courtyard skip; `-Activity none` skips director. After a rebuild, do not leave the editor down.
 
 Composer has an invoice and **no combat gate** (walk, join, pick teams). Host **Go** queues countdown only if `ready >= minPlayers` (composer default **2**). Ready toggles until Go; after Go, ready is locked. Unready before Go cancels a premature countdown. Direct `arena` / overlay Launch PvP still uses a gated min-1 skip.
 

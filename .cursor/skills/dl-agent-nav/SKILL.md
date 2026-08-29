@@ -25,7 +25,7 @@ Do **not** use MCP `plan` / `sequence` / `intent` / raw `goto` when a seat exist
 
 ## Landing (*-to leaves)
 
-`goto` is Recast (walk, drop, jump-up to full triple apex, **AirDiveDown/Over** off-mesh). It follows Recast only when the path **reaches** the marker. Disconnected slabs (lintels, the south island): **`airDive marker=`**. Catalog `edge_pad` is goto then airDive. Jump-gen JumpLength is a look radius from the edge (Epic); search limited by NavMeshBoundsVolume. Do not invent MCP `plan` for a lintel hop. Read [Docs/NavAbilities.md](../../../Docs/NavAbilities.md).
+`goto` is Recast (walk, drop, jump-up to full triple apex, **AirDiveDown/Over** off-mesh). It follows Recast when the path **reaches** the marker. Lintel climbs stay catalog/JIT **`airDive marker=`**. Catalog `edge_pad` is Recast `goto` only. Jump-gen JumpLength is a look radius from the edge (Epic); search limited by NavMeshBoundsVolume. Read [Docs/NavAbilities.md](../../../Docs/NavAbilities.md).
 
 Air dive is how you **get to a place on the ground**, not a stylish jump. `airDive marker=` jumps as high as DistXY needs, dives when the hang+slam box covers the point, then **releases** at `success distXY − coast`. Every tick: still in the envelope? If not, Fail, zero stick, fall. Bare `:airDive;` with `success: diving` is a pulse, not a landing.
 

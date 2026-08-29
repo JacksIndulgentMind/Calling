@@ -33,11 +33,11 @@ Disallowed: classes, sequence diagrams, includes except `ref`, arbitrary skinpar
 
 **Verbs:** `goto`, `setFocus`, `trackFocus`, `maintainADS`, `fire`, `useAbilitySelf`, `useAbilityFocus`, `jump`, `slide`, `airDive`, `dodge`, `dash`, `melee`, `wait`.
 
-**`goto` vs *-to:** `goto` is the Recast composer (walk, drop, jump links, **AirDiveDown** / **AirDiveOver** area edges) when the path **reaches** the marker. A partial rim-crawl does not count. Jump-gen finds landings with **JumpLength** inside the nav bounds volume, not TileSize — [RecastLinks.md](RecastLinks.md). If Recast cannot connect: **jump-to** exec when that box passes, else **Launch** (dive-to) when `LaunchInEnvelope` passes. `goto` never runs slide-to or dash-to — chain `:goto marker=…;` then `:slide marker=…;`. `airDive marker=` jumps, dives, and releases (or pins) on its own — do not wrap it in `:jump;` / `:wait;`. Bare `jump` / `airDive` / `slide` / `dash` without a marker are pulses. Range boxes: [NavAbilities.md](NavAbilities.md).
+**`goto` vs *-to:** `goto` is the Recast composer (walk, drop, jump links, **AirDiveDown** / **AirDiveOver** area edges) when the path **reaches** the marker. A partial rim-crawl does not count as Success. Jump-gen finds landings with **JumpLength** inside the nav bounds volume, not TileSize — [RecastLinks.md](RecastLinks.md). When FindPath is partial (A* node budget), `goto` walks that polyline and repaths — it does **not** arm jump-to or Launch as a substitute for Recast. `goto` never runs slide-to or dash-to — chain `:goto marker=…;` then `:slide marker=…;`. `airDive marker=` jumps, dives, and releases (or pins) on its own — do not wrap it in `:jump;` / `:wait;`. Bare `jump` / `airDive` / `slide` / `dash` without a marker are pulses. Range boxes: [NavAbilities.md](NavAbilities.md).
 
 **Qualify:** `alive`, `navTiles`, `distXY`, `hasFocus`, `air`, `hasMarker`, `z`, `sliding`, `diving`, `output is Success or GoodEnough`.
 
-**Settle:** Success immediately. GoodEnough holds `trySuccessFor` seconds then settles. Probe `successImpossible` settles now (GoodEnough if in band, else Fail). `fail.timeout` is the hard cap. A hard Fail with no fallback **advances** to the next node (so a missed hop does not abort the rest of the book). Catalog `edge_pad` uses that: `:goto marker=edge_pad` then `:airDive marker=edge_pad`.
+**Settle:** Success immediately. GoodEnough holds `trySuccessFor` seconds then settles. Probe `successImpossible` settles now (GoodEnough if in band, else Fail). `fail.timeout` is the hard cap. A hard Fail with no fallback **advances** to the next node (so a missed hop does not abort the rest of the book). Catalog `edge_pad` is Recast `goto` only; megalith books still chain `:airDive marker=` as an authored verb.
 
 `goto` on a catalog file **must** use `marker=id`. xyz on a catalog file is a load error.
 
@@ -45,7 +45,7 @@ Disallowed: classes, sequence diagrams, includes except `ref`, arbitrary skinpar
 
 Off by default. Enable any of: `DefaultCalling.ini` `[/Script/Calling.CLBotBookSettings] bTraceHandlers=true`, run arg `-BotBookTrace`, or `dl.BotBook.Trace 1`. Logs go to `LogCallingBotBook` in `Saved/Logs`.
 
-Every leaf logs start and settle (verb, node, marker, DistXY, dZ, outcome). Jump / slide / dash / dodge / airDive / Launch also log the selected box, torus `slice=` / `ring=` (Launch / airDive-to), phase pulses (jump, hang, pinnedSteer, stick hold/release, slide latch, dash/dodge flag), ~4 Hz samples, per-phase velocity min/max/mean, and settle miss (`missXY`, `missZ`, `releaseMiss`, `onPad`). `goto` logs which arm it picked (`recast`, `recastAirDive`, `jumpTo`, `launch`).
+Every leaf logs start and settle (verb, node, marker, DistXY, dZ, outcome). Jump / slide / dash / dodge / airDive / Launch also log the selected box, torus `slice=` / `ring=` (Launch / airDive-to), phase pulses (jump, hang, pinnedSteer, stick hold/release, slide latch, dash/dodge flag), ~4 Hz samples, per-phase velocity min/max/mean, and settle miss (`missXY`, `missZ`, `releaseMiss`, `onPad`). `goto` logs which arm it picked (`recast`, `recastAirDive` for Recast off-mesh AirDive links).
 
 ## Why not Unreal Behavior Trees / StateTree / Blueprints
 

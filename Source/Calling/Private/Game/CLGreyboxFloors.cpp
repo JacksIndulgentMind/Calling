@@ -691,7 +691,10 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 	};
 	for (float CrossX : CrossXs)
 	{
-		StampFillFloor(FVector(CrossX, 0.f, SlopeZAtX(CrossX)), LaneW, WidthM, SlabZ);
+		// Thin along the ramp (X): a wide terrace at SlopeZ overhangs the slope by ~1 m at the
+		// downhill lip. Keep a short X so DropDown / step can land on the ramp below.
+		const float CrossAlongM = FMath::Min(LaneW, 4.f);
+		StampFillFloor(FVector(CrossX, 0.f, SlopeZAtX(CrossX)), CrossAlongM, WidthM, SlabZ);
 	}
 
 	for (float Y : LaneY)

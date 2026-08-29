@@ -324,6 +324,51 @@ bool CLNavAbility::LaunchInEnvelope(const FCLMovementTune& Tune, const FCLNavTun
 	return DistXY > 450.f || Drop > 120.f;
 }
 
+bool CLNavAbility::ExplainLaunchInEnvelope(const FCLMovementTune& Tune, const FCLNavTune& NavTune, const FVector& From,
+	const FVector& To, FString& OutWhy)
+{
+	const float DistXY = FVector::Dist2D(From, To);
+	const float DeltaZ = To.Z - From.Z;
+	const float Drop = FMath::Max(0.f, -DeltaZ);
+	const float Hull = SearchRadiusCm(Tune, NavTune, Drop);
+	const float NeedDrop = MinDropCmForDistXY(Tune, DistXY);
+	const float Pinned = PinnedDiveXY(Tune, Drop);
+	const float Steer3 = JumpSteerXY(Tune, FMath::Max(1, Tune.MaxJumps));
+	const FCLNavAbilityBox Jump = JumpTo(Tune, Tune.MaxJumps);
+	const FCLNavAbilityBox Slide = SlideTo(Tune);
+
+	auto Fail = [&](const TCHAR* Gate)
+	{
+		OutWhy = FString::Printf(
+			TEXT("NO %s | distXY=%.0f dZ=%.0f drop=%.0f needDrop=%.0f hullXY=%.0f pinnedXY=%.0f steer3=%.0f jumpMaxXY=%.0f slideMaxXY=%.0f"),
+			Gate, DistXY, DeltaZ, Drop, NeedDrop, Hull, Pinned, Steer3, Jump.MaxDistXY, Slide.MaxDistXY);
+		return false;
+	};
+
+	if (DistXY <= Jump.MaxDistXY && DeltaZ <= Jump.MaxDeltaZ && DeltaZ >= Jump.MinDeltaZ && Drop < 120.f)
+	{
+		return Fail(TEXT("preferJump"));
+	}
+	if (DistXY <= Slide.MaxDistXY && FMath::Abs(DeltaZ) <= 40.f)
+	{
+		return Fail(TEXT("preferSlide"));
+	}
+	FCLLaunchRecipe Recipe;
+	if (!LookupLaunchRecipe(Tune, NavTune, From, To, Recipe))
+	{
+		return Fail(TEXT("noRecipe"));
+	}
+	if (!(DistXY > 450.f || Drop > 120.f))
+	{
+		return Fail(TEXT("tooShort"));
+	}
+	OutWhy = FString::Printf(
+		TEXT("YES recipe=%s/%s jumps=%d | distXY=%.0f dZ=%.0f drop=%.0f needDrop=%.0f hullXY=%.0f pinnedXY=%.0f steer3=%.0f ringXY=[%.0f,%.0f]"),
+		Recipe.SliceName, Recipe.RingName, Recipe.Jumps,
+		DistXY, DeltaZ, Drop, NeedDrop, Hull, Pinned, Steer3, Recipe.RingMinXY, Recipe.RingMaxXY);
+	return true;
+}
+
 bool CLNavAbility::IsAirDivePathSegment(const FCLMovementTune& Tune, const FCLNavTune& NavTune, const FVector& From, const FVector& To)
 {
 	const float DistXY = FVector::Dist2D(From, To);

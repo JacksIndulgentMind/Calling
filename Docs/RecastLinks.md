@@ -38,7 +38,7 @@ Epic wording ([Automatic Navigation Link Generation](https://dev.epicgames.com/d
 | **JumpHeight** | Epic: peak height relative to the starting point. Calling long recipes / JumpUp: full RocketPulse triple peak **1580** (`(640+560+560)²/(2×980)`). |
 | **JumpEndsHeightTolerance** | Epic: tolerance at both ends to find ground. Long recipes **2500**. |
 | **SamplingSeparationFactor** | Epic: × CellSize between sampling trajectories. Epic ClampMin **1**. Larger = faster, can miss. Long recipes **1**. |
-| **FilterDistanceThreshold** | Epic: when filtering similar links, distance to compare **segment endpoints**. Blends **adjacent** almost-duplicate hops (granularity). **0** turns merge off (noisier, not more reach). Recommended **120** (CoverOver / JumpUp). DropDown / JumpDown **180**. Long recipes **120**. |
+| **FilterDistanceThreshold** | Epic: when filtering similar links, distance to compare **segment endpoints**. Blends **adjacent** almost-duplicate hops (granularity). **0** turns merge off (noisier, not more reach). Recommended **120**. Long recipes **120**. DropDown **120** (terrace → ramp). JumpDown **180**. |
 | **LinkBuilderFlags** | `CreateCenterPointLink` and/or `CreateExtremityLink`. |
 | **DownDirectionAreaClass** / **UpDirectionAreaClass** | Traversal flavor only. Same class → one bidirectional link. **Null** → that direction is not generated (Epic). Long recipes: both directions the long-launch area class. JumpUp: Up = default. DropDown: Up may be null (walk-off). |
 | **LinkProxyClass** | Optional path-follow only. Not required for FindPath. |
@@ -134,7 +134,7 @@ Place from **movement + strain**, then one pull into Recast’s launch-plane vol
 | Jump-gen | JumpLength / LinkSpill search that envelope. Recast knobs do not move the pad. |
 | Link Proxy Class | Path-follow only. Not used to create the edge. |
 | Seeded polys | Island stays in the **same** bounds volume (corridor included). |
-| Play fallback | Catalog/JIT `airDive` if a map’s Recast path is still incomplete. Canary bake mesh bar passes. |
+| Play | Catalog `:airDive marker=` is an authored leaf (lintels). Island hop is Recast `goto` (AirDive area off-mesh). |
 
 ## Jump-gen sampler
 

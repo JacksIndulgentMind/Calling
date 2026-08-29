@@ -101,6 +101,65 @@ function launchUnreal(mode) {
   return { pid: child.pid, args };
 }
 
+async function waitForScene(want, ms) {
+  const until = Date.now() + ms;
+  let state = null;
+  while (Date.now() < until) {
+    state = (await probeState()) || state;
+    if (state?.scene === want) return state;
+    await sleep(400);
+  }
+  return state;
+}
+
+async function waitForNavTiles(ms) {
+  const until = Date.now() + ms;
+  let state = null;
+  while (Date.now() < until) {
+    state = (await probeState()) || state;
+    if (Number(state?.navTiles) > 0) return state;
+    await sleep(400);
+  }
+  return state;
+}
+
+/** Race Compose PvP lobby into the match (minPlayers=2). Same path as dl-rebuild.ps1. */
+async function completeComposerIntoMatch() {
+  await request("POST", "/director", { action: "host" });
+  let state = await probeState();
+  if (!state?.lobby?.localHost) {
+    throw new Error("composer localHost false after host");
+  }
+  await request("POST", "/director", { action: "ready" });
+  await sleep(200);
+  state = await probeState();
+  const hostSeat = (state?.lobby?.seatList || []).find((s) => s.host);
+  if (!hostSeat?.ready) {
+    throw new Error("composer host ready did not stick");
+  }
+  const joinB = await request("POST", "/hub", {
+    type: "join",
+    displayName: "bootB",
+    headless: true,
+    kind: "cursor",
+  });
+  const seatB = joinB.seatId;
+  if (!seatB) throw new Error("composer guest join failed");
+  await request("POST", "/hub", { type: "setTeam", seatId: seatB, team: "blue" });
+  await request("POST", "/hub", { type: "ready", seatId: seatB, ready: true });
+  await sleep(200);
+  state = await probeState();
+  if (Number(state?.lobby?.ready) < 2) {
+    throw new Error(`composer expected 2 ready, got ${state?.lobby?.ready}`);
+  }
+  await request("POST", "/director", { action: "go" });
+  state = await waitForScene("pvp", 30000);
+  if (state?.scene !== "pvp") {
+    throw new Error(`composer go did not reach pvp scene=${state?.scene}`);
+  }
+  return waitForNavTiles(45000);
+}
+
 async function boot(args) {
   const mode = (args.mode || "game").toLowerCase();
   const activity = (args.activity || "pvp").toLowerCase();
@@ -134,24 +193,46 @@ async function boot(args) {
       state = (await probeState()) || state;
     }
   }
-  if (activity && activity !== "none") {
-    try {
-      await request("POST", "/director", { action: activity });
-    } catch (err) {
-      return { ok: false, error: String(err.message || err), launched, state };
-    }
-    const until = Date.now() + 25000;
-    while (Date.now() < until) {
-      await sleep(1000);
-      state = (await probeState()) || state;
-      const scene = state?.scene;
-      if (scene === activity) break;
-      if (activity === "pvp" && (scene === "composer" || scene === "pvp")) break;
-      if (activity === "composer" && scene === "composer") break;
-      if (activity === "arena" && scene === "pvp") break;
-    }
+  if (!activity || activity === "none") {
+    return { ok: true, launched, ...spawnInfo, state };
   }
-  return { ok: true, launched, ...spawnInfo, state };
+  try {
+    if (activity === "composer") {
+      await request("POST", "/director", { action: "pvp" });
+      state = await waitForScene("composer", 45000);
+      return { ok: true, launched, ...spawnInfo, state };
+    }
+    if (activity === "arena") {
+      await request("POST", "/director", { action: "arena" });
+      state = await waitForScene("pvp", 60000);
+      if (state?.scene === "pvp") state = await waitForNavTiles(45000);
+      return { ok: true, launched, ...spawnInfo, state };
+    }
+    if (activity === "pvp") {
+      await request("POST", "/director", { action: "pvp" });
+      state = await waitForScene("composer", 45000);
+      if (state?.scene === "pvp") {
+        state = await waitForNavTiles(45000);
+        return { ok: true, launched, ...spawnInfo, state };
+      }
+      if (state?.scene !== "composer") {
+        return {
+          ok: false,
+          error: `expected composer after pvp, got ${state?.scene}`,
+          launched,
+          ...spawnInfo,
+          state,
+        };
+      }
+      state = await completeComposerIntoMatch();
+      return { ok: true, launched, ...spawnInfo, state };
+    }
+    await request("POST", "/director", { action: activity });
+    state = await waitForScene(activity, 45000);
+    return { ok: true, launched, ...spawnInfo, state };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err), launched, ...spawnInfo, state: await probeState() };
+  }
 }
 
 const tools = [
@@ -342,7 +423,7 @@ const tools = [
   {
     name: "boot",
     description:
-      "If 18765 is down, spawn UnrealEditor (standalone -game by default, or editor+PIE). Then POST /director for activity (pvp default). Does not kill an existing editor.",
+      "If 18765 is down, spawn UnrealEditor (standalone -game by default, or editor+PIE). Then director activity: pvp (default) races Compose lobby into the match; composer stops in lobby; arena is solo skip.",
     inputSchema: {
       type: "object",
       properties: {
@@ -352,7 +433,7 @@ const tools = [
         },
         activity: {
           type: "string",
-          description: "pvp/composer (Compose PvP, default), arena (solo skip), raid, practice, social, or none",
+          description: "pvp (Compose then auto Go into match, default), composer (stop in lobby), arena (solo skip), raid, practice, social, or none",
         },
         waitSeconds: { type: "number", description: "HTTP wait after spawn (default 90)" },
       },

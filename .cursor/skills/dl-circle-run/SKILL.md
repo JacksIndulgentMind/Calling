@@ -18,7 +18,7 @@ Game must already be up (`Scripts/dl-rebuild.ps1` first). Then:
 Scripts/dl-verify-dual-composer.ps1 -Sequence ring
 ```
 
-Pass when the script prints `VERIFY_OK`, `diving=true`, megalith sticks `8/8`, and the **edge hop** sticks the south island then **recalls to the court lip** (not spawn). Catalog `edge_pad` is `airDive-to` if Recast `FindPath` from/dest mesh is incomplete (`findPathMeshOk` observational); the script JIT `airDive`s if the book does not stick. Radar/sighted regression:
+Pass when the script prints `VERIFY_OK`, `diving=true`, megalith sticks `8/8`, and the **edge hop** sticks the south island then **recalls to the court lip** (not spawn). Catalog `edge_pad` is Recast `goto` only (no JIT airDive). Radar/sighted regression:
 
 ```
 Scripts/dl-verify-dual-composer.ps1 -Sequence pillar

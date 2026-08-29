@@ -35,13 +35,13 @@
     },
     {
       "name": "DropDown",
-      "jumpLength": 280,
-      "jumpDistanceFromEdge": 25,
+      "jumpLength": 600,
+      "jumpDistanceFromEdge": 15,
       "jumpMaxDepth": "strainFall",
       "jumpHeight": 10,
-      "jumpEndsHeightTolerance": 300,
-      "samplingSeparationFactor": 2,
-      "filterDistanceThreshold": 180,
+      "jumpEndsHeightTolerance": 500,
+      "samplingSeparationFactor": 1,
+      "filterDistanceThreshold": 120,
       "downArea": "default",
       "upArea": "null"
     },
