@@ -204,6 +204,8 @@ function Test-OnEdgePad($st) {
     -and $st.diving -ne $true -and $st.air -ne $true)
 }
 $script:lastCollapseRecover = @{}
+# Recover, not a Recast cheat: polar XYZ from the south lip re-takes the island
+# AirDive chord. Re-take court via edge_lip; HoldRing uses menhir when already on island.
 function RecoverCourt($id) {
   Write-Host ("recover court seat={0}" -f $id)
   $puml = @"
@@ -498,76 +500,7 @@ function Polar($deg, $r) {
   $rad = [double]$deg * [math]::PI / 180.0
   return @{ x = [math]::Cos($rad) * $r; y = [math]::Sin($rad) * $r; z = -2000 }
 }
-function TravelYaw($deg) { return [math]::Round(([double]$deg + 90.0), 1) }
 function OriginDeg($st) { return [math]::Atan2([double]$st.y, [double]$st.x) * 180.0 / [math]::PI }
-function SawSliding($id, $sec) {
-  $until = (Get-Date).AddSeconds($sec)
-  while ((Get-Date) -lt $until) {
-    $st = Seat $id
-    AssertNoCollapse $st $id
-    if ($st.sliding -eq $true) { return $true }
-    Start-Sleep -Milliseconds 80
-  }
-  return $false
-}
-function PulseB {
-  if ($script:bMuted -eq $true) { return }
-  $a = Seat $seatA
-  $b = Seat $seatB
-  if (-not $a.ok -or -not $b.ok) { return }
-  if ($b.alive -eq $false) { return }
-  $ads = (($script:bPulse % 2) -eq 0)
-  $script:bPulse++
-  if (PoolHurt $b) {
-    if ((DistBHide $b) -gt 80) {
-      $h = HideB
-      StartGoto $seatB $h.x $h.y $h.z | Out-Null
-      WaitIdle $seatB 8 | Out-Null
-    }
-    Plan $seatB @(
-      @{ seconds = 0.18; lookAtSeat = $seatA },
-      @{ seconds = 1.2; crouch = $true; lookAtSeat = $seatA }
-    ) | Out-Null
-    return
-  }
-  Plan $seatB @(
-    @{ seconds = 0.18; ads = $ads; lookAtSeat = $seatA },
-    @{ seconds = 0.55; ads = $ads; fire = $true; lookAtSeat = $seatA }
-  ) | Out-Null
-}
-function KeepBCenter {
-  $b = Seat $seatB
-  if (-not $b.ok) { return }
-  $far = (DistBHide $b) -gt 280
-  $hurt = PoolHurt $b
-  if (-not $far -and -not $hurt) { return }
-  if ($hurt) { Write-Host "B hurt, rewrite hide" }
-  else { Write-Host "B drifted, rewrite hide" }
-  $h = HideB
-  StartGoto $seatB $h.x $h.y $h.z | Out-Null
-  if ($far) { WaitIdle $seatB 12 | Out-Null }
-}
-function MuteB {
-  $script:bMuted = $true
-  $b = Seat $seatB
-  if (-not $b.ok) { return }
-  if ((DistBHide $b) -gt 80) {
-    $h = HideB
-    StartGoto $seatB $h.x $h.y $h.z | Out-Null
-    WaitIdle $seatB 12 | Out-Null
-  }
-  Plan $seatB @(
-    @{ seconds = 70; crouch = $true; lookAtSeat = $seatA }
-  ) | Out-Null
-  Write-Host "B muted"
-}
-function UnmuteB {
-  $script:bMuted = $false
-  Plan $seatB @(
-    @{ seconds = 0.2; lookAtSeat = $seatA }
-  ) | Out-Null
-  Write-Host "B unmuted"
-}
 function OnLintel($st, $deg) {
   if (-not $st.ok) { return $false }
   if ($st.air -eq $true) { return $false }
@@ -576,169 +509,6 @@ function OnLintel($st, $deg) {
   if ($z -lt -1750 -or $z -gt -1450) { return $false }
   $p = Polar $deg 950
   return ((DistXY $st $p.x $p.y) -lt 280)
-}
-function GotoRing($deg, $r = 1250) {
-  $p = Polar $deg $r
-  $st = Seat $seatA
-  if ((DistXY $st $p.x $p.y) -lt 400) { return 0.0 }
-  $t = Get-Date
-  StartGoto $seatA $p.x $p.y $p.z | Out-Null
-  $until = (Get-Date).AddSeconds(25)
-  while ((Get-Date) -lt $until) {
-    Start-Sleep -Milliseconds 400
-    $st = Seat $seatA
-    AssertNoCollapse $st $seatA
-    if (-not $st.goto -and (DistXY $st $p.x $p.y) -lt 450) { break }
-  }
-  return ((Get-Date) - $t).TotalSeconds
-}
-function YawErr($a, $b) {
-  $d = [double]$a - [double]$b
-  while ($d -gt 180.0) { $d -= 360.0 }
-  while ($d -lt -180.0) { $d += 360.0 }
-  return [math]::Abs($d)
-}
-function FaceStation($deg) {
-  $station = Polar $deg 950
-  $yaw = [math]::Round((FaceYaw (Seat $seatA) $station), 1)
-  Plan $seatA @(
-    @{ seconds = 0.55; look = @{ yawAbs = $yaw; pitchAbs = 0 } }
-  ) | Out-Null
-  $until = (Get-Date).AddSeconds(1.3)
-  while ((Get-Date) -lt $until) {
-    $st = Seat $seatA
-    if ((YawErr $st.yaw $yaw) -lt 18) { return $yaw }
-    Start-Sleep -Milliseconds 80
-  }
-  return $yaw
-}
-function StickLintel($deg, $fromLintel) {
-  WaitAlive $seatA 5 | Out-Null
-  $station = Polar $deg 950
-  $approachSec = 0.0
-  $approachR = 1280
-  if (-not $fromLintel) {
-    $approachSec = GotoRing $deg $approachR
-  } else {
-    Start-Sleep -Milliseconds 900
-  }
-  for ($try = 1; $try -le 3; $try++) {
-    if ($try -gt 1) {
-      Write-Host ("lintel retry deg={0} try={1}" -f $deg, $try)
-      $approachSec += (GotoRing $deg $approachR)
-      $fromLintel = $false
-    }
-    $yaw = FaceStation $deg
-    $look = @{ yawAbs = $yaw; pitchAbs = 0 }
-    $jumpT = Get-Date
-    # Jump UP outside the lintel. Forward here kisses the underside.
-    $upMove = if ($fromLintel) { @{ x = 0; y = 1 } } else { @{ x = 0; y = 0 } }
-    Plan $seatA @(
-      @{ seconds = 0.12; look = $look },
-      @{ seconds = 0.12; jump = $true; move = $upMove; look = $look },
-      @{ seconds = 0.12; jump = $true; move = $upMove; look = $look },
-      @{ seconds = 0.12; jump = $true; move = $upMove; look = $look }
-    ) | Out-Null
-    $cleared = $false
-    $clearUntil = (Get-Date).AddSeconds(1.6)
-    while ((Get-Date) -lt $clearUntil) {
-      $st = Seat $seatA
-      AssertNoCollapse $st $seatA
-      $z = [double]$st.z
-      $d = DistXY $st $station.x $station.y
-      # Capsule ~88: Z > -1580 means feet above lintel top (-1675).
-      if ($st.air -eq $true -and $z -gt -1580) {
-        $cleared = $true
-        Write-Host ("cleared deg={0} z={1:N0} d={2:N0}" -f $deg, $z, $d)
-        break
-      }
-      Start-Sleep -Milliseconds 50
-    }
-    if (-not $cleared) {
-      Write-Host ("lintel underside deg={0} try={1} z={2:N0}" -f $deg, $try, [double](Seat $seatA).z)
-      WaitIdle $seatA 2 | Out-Null
-      continue
-    }
-    Plan $seatA @(
-      @{ seconds = 0.70; airDive = $true; move = @{ x = 0; y = 1 }; look = $look }
-    ) | Out-Null
-    $released = $false
-    $diveOn = $null
-    $jumpDiveSec = 0.0
-    $hangSlamSec = 0.0
-    $until = (Get-Date).AddSeconds(3.2)
-    while ((Get-Date) -lt $until) {
-      $st = Seat $seatA
-      AssertNoCollapse $st $seatA
-      $d = DistXY $st $station.x $station.y
-      $z = [double]$st.z
-      if ($st.diving -eq $true -and $null -eq $diveOn) {
-        $diveOn = Get-Date
-        $jumpDiveSec = ($diveOn - $jumpT).TotalSeconds
-      }
-      $over = ($d -lt 140 -and $z -gt -1600)
-      $hangDone = ($null -ne $diveOn -and ((Get-Date) - $diveOn).TotalSeconds -gt 0.40 -and $d -lt 180 -and $z -gt -1600)
-      if (-not $released -and ($st.diving -eq $true -or $st.air -eq $true) -and ($over -or $hangDone)) {
-        Plan $seatA @(
-          @{ seconds = 0.85; move = @{ x = 0; y = 0 }; look = $look }
-        ) | Out-Null
-        $released = $true
-        Write-Host ("release deg={0} d={1:N0} z={2:N0} over={3}" -f $deg, $d, $z, $over)
-      }
-      if ($released -and $st.air -ne $true -and $st.diving -ne $true) {
-        if ($null -ne $diveOn) { $hangSlamSec = ((Get-Date) - $diveOn).TotalSeconds }
-        break
-      }
-      Start-Sleep -Milliseconds 50
-    }
-    WaitFlagClear $seatA "diving" 4 | Out-Null
-    $land = Seat $seatA
-    $ok = OnLintel $land $deg
-    Write-Host ("lintel deg={0} try={1} ok={2} z={3:N0} d={4:N0} approach={5:N2} jumpDive={6:N2} hangSlam={7:N2}" -f `
-      $deg, $try, $ok, [double]$land.z, (DistXY $land $station.x $station.y), $approachSec, $jumpDiveSec, $hangSlamSec)
-    if ($ok) {
-      Write-Host ("stick deg={0} z={1:N0}" -f $deg, [double]$land.z)
-      return $true
-    }
-  }
-  return $false
-}
-function MegalithHop {
-  Write-Host "megalith hop"
-  $script:lintelSticks = 0
-  $fromLintel = $false
-  HoldRing
-  if ((RingRadius (Seat $seatA)) -gt 4000) {
-    WaitAlive $seatA 5 | Out-Null
-    HoldRing
-  }
-  $degs = @(0, 45, 90, 135, 180, 225, 270, 315)
-  $hopStart = Get-Date
-  $prevStick = $null
-  foreach ($deg in $degs) {
-    $beatStart = Get-Date
-    $ok = StickLintel $deg $fromLintel
-    $dt = ((Get-Date) - $beatStart).TotalSeconds
-    if ($ok) {
-      $script:lintelSticks++
-      if ($null -ne $prevStick) {
-        Write-Host ("inter-station sec={0:N2}" -f $dt)
-      }
-      $prevStick = Get-Date
-      $fromLintel = $true
-    } else {
-      Write-Host ("lintel miss deg={0}" -f $deg)
-      $fromLintel = $false
-    }
-  }
-  Write-Host ("megalith sticks={0}/8 elapsed={1:N1}" -f $script:lintelSticks, ((Get-Date) - $hopStart).TotalSeconds)
-}
-function FaceAFire($ads) {
-  Plan $seatA @(
-    @{ seconds = 0.2; ads = $ads; lookAtSeat = $seatB },
-    @{ seconds = 0.14; ads = $ads; fire = $true; lookAtSeat = $seatB }
-  ) | Out-Null
-  WaitIdle $seatA 4 | Out-Null
 }
 function SetView($id) {
   if ($id) {
@@ -761,6 +531,8 @@ function WaitAlive($id, $sec) {
   }
   return (Seat $id)
 }
+# Recover onto the court ring after EdgeHop. Polar XYZ from the south lip re-takes
+# the island AirDive; menhir / edge_lip keep the pawn on court. Do not shrink JumpLength.
 function HoldRing {
   $st = Seat $seatA
   $r = RingRadius $st
@@ -807,12 +579,6 @@ stop
   }
   Write-Host ("A ring hold timeout r={0:N0}" -f (RingRadius (Seat $seatA)))
 }
-function FaceBAtA {
-  $a = Seat $seatA
-  $b = Seat $seatB
-  if (-not $a.ok -or -not $b.ok) { return }
-  Plan $seatB @(@{ seconds = 0.2; lookAtSeat = $seatA }) | Out-Null
-}
 function WaitFlagClear($id, $flag, $sec) {
   $until = (Get-Date).AddSeconds($sec)
   while ((Get-Date) -lt $until) {
@@ -829,209 +595,6 @@ function WaitFlagClear($id, $flag, $sec) {
     Start-Sleep -Milliseconds 80
   }
   return (Seat $id)
-}
-function WaitApex($id, $sec) {
-  # Height check after stacked hops â€” not a gate before the next Space.
-  $until = (Get-Date).AddSeconds($sec)
-  $sawUp = $false
-  while ((Get-Date) -lt $until) {
-    $st = Seat $id
-    AssertNoCollapse $st $id
-    $vz = 0.0
-    if ($null -ne $st.vz) { $vz = [double]$st.vz }
-    if ($st.air -eq $true -and $vz -gt 40) { $sawUp = $true }
-    if ($st.air -eq $true -and $sawUp -and $vz -le 40) { return $true }
-    Start-Sleep -Milliseconds 40
-  }
-  return $false
-}
-function HugPost($st) {
-  $deg = OriginDeg $st
-  $mod = (($deg % 45) + 45) % 45
-  return ($mod -lt 8 -or $mod -gt 37)
-}
-function PulseA {
-  $a = Seat $seatA
-  $b = Seat $seatB
-  if (-not $a.ok -or -not $b.ok) { return }
-  if (HugPost $a) { return }
-  if ($a.alive -eq $false) { return }
-  if (PoolHurt $a) {
-    Plan $seatA @(
-      @{ seconds = 0.3; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-    ) | Out-Null
-    WaitIdle $seatA 2 | Out-Null
-    return
-  }
-  Plan $seatA @(
-    @{ seconds = 0.12; lookAtSeat = $seatB },
-    @{ seconds = 0.22; fire = $true; lookAtSeat = $seatB }
-  ) | Out-Null
-  WaitIdle $seatA 3 | Out-Null
-}
-function RingLap($beats, $label) {
-  $okCount = 0
-  $verbs = @("slide", "dodge", "dash", "melee")
-  for ($i = 1; $i -le $beats; $i++) {
-    HoldRing
-    KeepBCenter
-    PulseB
-    $st = Seat $seatA
-    $verb = $verbs[($i - 1) % $verbs.Length]
-    $ok = $false
-    $fire = -not (HugPost $st)
-    if (PoolHurt $st) { $fire = $false }
-    if ($verb -eq "slide") {
-      $slideSec = 1.22
-      if ($null -ne $st.slideDuration) { $slideSec = [double]$st.slideDuration + 0.12 }
-      $sprint = @{ seconds = 0.35; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-      $slide = @{ seconds = $slideSec; sprint = $true; slide = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-      if ($fire) { $sprint.fire = $true; $slide.fire = $true }
-      Plan $seatA @($sprint, $slide) | Out-Null
-      $ok = SawSliding $seatA ($slideSec + 0.4)
-      WaitFlagClear $seatA "sliding" 3 | Out-Null
-      PulseB
-    } elseif ($verb -eq "dodge") {
-      $dodgeSec = 0.7
-      if ($null -ne $st.dodgeDuration) { $dodgeSec = [double]$st.dodgeDuration + 0.12 }
-      $sprint = @{ seconds = 0.3; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-      $dodge = @{ seconds = $dodgeSec; sprint = $true; dodge = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-      if ($fire) { $sprint.fire = $true }
-      Plan $seatA @($sprint, $dodge) | Out-Null
-      $until = (Get-Date).AddSeconds(1.6)
-      while ((Get-Date) -lt $until) {
-        if ((Seat $seatA).dodging -eq $true) { $ok = $true; break }
-        Start-Sleep -Milliseconds 70
-      }
-      WaitFlagClear $seatA "dodging" 4 | Out-Null
-      PulseB
-    } elseif ($verb -eq "dash") {
-      $dashSec = 0.42
-      if ($null -ne $st.dashDuration) { $dashSec = [double]$st.dashDuration + 0.1 }
-      $travelYaw = [math]::Round(([double]$st.yaw + 90.0), 1)
-      $lookAway = @{ seconds = 0.16; sprint = $true; move = @{ x = 1; y = 0 }; look = @{ yawAbs = $travelYaw } }
-      $dash = @{ seconds = $dashSec; sprint = $true; dash = $true; move = @{ x = 1; y = 0 }; look = @{ yawAbs = $travelYaw } }
-      $reacq = @{ seconds = 0.35; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-      if ($fire) { $reacq.fire = $true }
-      Plan $seatA @($lookAway, $dash, $reacq) | Out-Null
-      $until = (Get-Date).AddSeconds(1.6)
-      while ((Get-Date) -lt $until) {
-        if ((Seat $seatA).dashing -eq $true) { $ok = $true; break }
-        Start-Sleep -Milliseconds 60
-      }
-      WaitFlagClear $seatA "dashing" 4 | Out-Null
-      PulseB
-    } else {
-      $melee = @{ seconds = 0.35; melee = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB; sprint = $true }
-      if ($fire) { $melee.fire = $true }
-      Plan $seatA @($melee) | Out-Null
-      Start-Sleep -Milliseconds 400
-      $ok = $true
-      WaitIdle $seatA 2 | Out-Null
-      PulseB
-    }
-    PulseA
-    WaitAlive $seatA 5 | Out-Null
-    WaitAlive $seatB 5 | Out-Null
-    $r = RingRadius (Seat $seatA)
-    Write-Host ("{0} beat={1} verb={2} ok={3} r={4:N0}" -f $label, $i, $verb, $ok, $r)
-    if ($ok) { $okCount++ }
-  }
-  $need = [math]::Ceiling($beats * 0.5)
-  if ($okCount -lt $need) { throw ("{0} too few mixed verbs {1}/{2}" -f $label, $okCount, $need) }
-}
-function OrbitPeek {
-  Write-Host "orbit dodge dash dive"
-  WaitAlive $seatA 5 | Out-Null
-  WaitAlive $seatB 5 | Out-Null
-  HoldRing
-  KeepBCenter
-  PulseB
-  $dodgeSec = 0.55
-  $st = Seat $seatA
-  if ($null -ne $st.dodgeDuration) { $dodgeSec = [double]$st.dodgeDuration + 0.12 }
-  Plan $seatA @(
-    @{ seconds = 0.4; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB },
-    @{ seconds = $dodgeSec; sprint = $true; dodge = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-  ) | Out-Null
-  $sawDodge = $false
-  $until = (Get-Date).AddSeconds(1.6)
-  while ((Get-Date) -lt $until) {
-    if ((Seat $seatA).dodging -eq $true) { $sawDodge = $true; break }
-    Start-Sleep -Milliseconds 70
-  }
-  WaitFlagClear $seatA "dodging" 4 | Out-Null
-  Write-Host ("orbit dodge={0}" -f $sawDodge)
-
-  PulseB
-  $dashSec = 0.42
-  $st = Seat $seatA
-  if ($null -ne $st.dashDuration) { $dashSec = [double]$st.dashDuration + 0.1 }
-  $travelYaw = [math]::Round(([double]$st.yaw + 90.0), 1)
-  Plan $seatA @(
-    @{ seconds = 0.16; sprint = $true; move = @{ x = 1; y = 0 }; look = @{ yawAbs = $travelYaw } },
-    @{ seconds = $dashSec; sprint = $true; dash = $true; move = @{ x = 1; y = 0 }; look = @{ yawAbs = $travelYaw } },
-    @{ seconds = 0.3; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-  ) | Out-Null
-  $sawDash = $false
-  $until = (Get-Date).AddSeconds(1.6)
-  while ((Get-Date) -lt $until) {
-    if ((Seat $seatA).dashing -eq $true) { $sawDash = $true; break }
-    Start-Sleep -Milliseconds 60
-  }
-  WaitFlagClear $seatA "dashing" 4 | Out-Null
-  Write-Host ("orbit dash={0}" -f $sawDash)
-  PulseB
-
-  $dived = $false
-  for ($d = 1; $d -le 4; $d++) {
-    HoldRing
-    PulseB
-    Plan $seatA @(
-      @{ seconds = 0.12; sprint = $true; jump = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB },
-      @{ seconds = 0.12; jump = $true; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB },
-      @{ seconds = 0.12; jump = $true; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-    ) | Out-Null
-    $apex1 = WaitApex $seatA 1.6
-    Plan $seatA @(
-      @{ seconds = 0.7; airDive = $true; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-    ) | Out-Null
-    Write-Host ("dive try={0} stackedApex={1}" -f $d, $apex1)
-    $diveWait = (Get-Date).AddSeconds(2.4)
-    while ((Get-Date) -lt $diveWait) {
-      $st = Seat $seatA
-      AssertNoCollapse $st $seatA
-      if ($st.diving -eq $true) { $dived = $true; break }
-      Start-Sleep -Milliseconds 60
-    }
-    if ($dived) { Write-Host "diving=true"; break }
-    Write-Host "dive miss, retry"
-    WaitIdle $seatA 3 | Out-Null
-  }
-  if (-not $dived) { throw "air dive did not set diving" }
-  WaitFlagClear $seatA "diving" 5 | Out-Null
-  Start-Sleep -Milliseconds 400
-  $landPre = Seat $seatA
-  PulseB
-  $slideSec = 1.22
-  if ($null -ne $landPre.slideDuration) { $slideSec = [double]$landPre.slideDuration + 0.12 }
-  $landSprint = @{ seconds = 0.3; sprint = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-  $landSlide = @{ seconds = $slideSec; sprint = $true; slide = $true; move = @{ x = 1; y = 0 }; lookAtSeat = $seatB }
-  if (-not (HugPost $landPre) -and -not (PoolHurt $landPre)) {
-    $landSprint.fire = $true
-    $landSlide.fire = $true
-  }
-  Plan $seatA @($landSprint, $landSlide) | Out-Null
-  $landSlide = SawSliding $seatA ($slideSec + 0.4)
-  WaitFlagClear $seatA "sliding" 3 | Out-Null
-  PulseB
-  if (-not $landSlide) {
-    $spd = DistXY (Seat $seatA) $landPre.x $landPre.y
-    Write-Host ("land slide=false dist={0:N0}" -f $spd)
-    if ($spd -lt 80) { throw "dive land did not slide or move" }
-  }
-  WaitAlive $seatA 5 | Out-Null
-  WaitAlive $seatB 5 | Out-Null
 }
 function SightedLos {
   Write-Host "sighted readout LOS"
@@ -1254,8 +817,6 @@ if ($Sequence -ne "radar") {
   EdgeHop
 }
 HoldRing
-$script:bPulse = 0
-$script:bMuted = $false
 $script:lintelSticks = 0
 
 Write-Host "view A"

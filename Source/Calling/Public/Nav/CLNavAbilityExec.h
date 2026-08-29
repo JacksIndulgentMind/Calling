@@ -5,6 +5,7 @@
 
 class ACLPlayerCharacter;
 class UCLCombatMovementComponent;
+struct FCLMovementTune;
 
 enum class ECLNavAbilityExecMode : uint8
 {
@@ -69,4 +70,6 @@ private:
 	FCLNavAbilityBox BoxFor(ACLPlayerCharacter* Char, UCLCombatMovementComponent* Move) const;
 	void FaceGoal(ACLPlayerCharacter* Char, const FVector& Loc) const;
 	bool FacingGoal(ACLPlayerCharacter* Char, const FVector& Loc) const;
+	void ApplyLookupRecipe(UCLCombatMovementComponent* Move);
+	void ApplyRecastOwnedFallback(UCLCombatMovementComponent* Move, const FCLMovementTune& Tune, ACLPlayerCharacter* Char);
 };

@@ -52,6 +52,15 @@ void ACLPvpGameMode::InitGame(const FString& MapName, const FString& Options, FS
 	ACLGreyboxFloors::SpawnIfMissing(GetWorld(), ECLGreyboxLayout::PvpThreeLane);
 }
 
+void ACLPvpGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
+	{
+		Lobby->EnsureNetHumanSeat(NewPlayer);
+	}
+	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+}
+
 AActor* ACLPvpGameMode::ChoosePlayerStart_Implementation(AController* Player)
 {
 	ACLGreyboxFloors::SpawnIfMissing(GetWorld(), ECLGreyboxLayout::PvpThreeLane);
@@ -87,6 +96,13 @@ void ACLPvpGameMode::StartPlay()
 	if (Lobby)
 	{
 		Lobby->BeginPvpOrRestore();
+		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (APlayerController* PC = It->Get())
+			{
+				Lobby->EnsureNetHumanSeat(PC);
+			}
+		}
 	}
 	if (UCLActivityStateComponent* Activity = GetActivityState())
 	{

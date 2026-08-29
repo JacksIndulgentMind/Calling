@@ -26,6 +26,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Game/CLLoopbackJoin.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Modules/ModuleManager.h"
@@ -97,6 +98,7 @@ void UCLAgentBridgeSubsystem::StartListener()
 	if (!Router.IsValid())
 	{
 		UE_LOG(LogCalling, Warning, TEXT("Calling: agent HTTP failed to bind 127.0.0.1:%u"), Port);
+		CLLoopbackJoin::AppendLog(FString::Printf(TEXT("http bind fail %u"), Port));
 		return;
 	}
 

@@ -8,6 +8,7 @@
 #include "Game/CLSeatRegistry.h"
 #include "Game/CLGateCountdown.h"
 #include "Game/CLTravelCoordinator.h"
+#include "Game/CLGameStateBase.h"
 #include "Game/CLGameModeBase.h"
 #include "Game/CLGameInstance.h"
 #include "Game/CLProfileSubsystem.h"
@@ -271,6 +272,87 @@ UCLParticipantSeat* UCLLobbySubsystem::EnsureLocalHumanSeat()
 		}
 	}
 	return SeatReg->EnsureLocalHuman(Name, GateClock->GetGate());
+}
+
+UCLParticipantSeat* UCLLobbySubsystem::EnsureNetHumanSeat(APlayerController* PC)
+{
+	FString Name = TEXT("Player");
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLProfileSubsystem* Profiles = GI->GetSubsystem<UCLProfileSubsystem>())
+		{
+			const FString ProfileName = Profiles->GetActiveProfile().DisplayName;
+			if (!ProfileName.IsEmpty())
+			{
+				Name = ProfileName;
+			}
+		}
+	}
+	if (PC && !PC->IsLocalController())
+	{
+		Name = TEXT("Guest");
+	}
+	UCLParticipantSeat* Seat = SeatReg->EnsureNetHuman(PC, Name, GateClock->GetGate());
+	NotifyHubSnapshots(ECLHubSnapshotReason::LobbyDirty);
+	return Seat;
+}
+
+void UCLLobbySubsystem::RemoveSeatForController(AController* Controller)
+{
+	SeatReg->RemoveForController(Controller);
+	NotifyHubSnapshots(ECLHubSnapshotReason::LobbyDirty);
+}
+
+void UCLLobbySubsystem::PushLobbyToGameState()
+{
+	UWorld* World = GetWorld();
+	if (!World || !World->GetAuthGameMode())
+	{
+		return;
+	}
+	ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>();
+	if (!GS)
+	{
+		return;
+	}
+	TArray<FCLLobbySeatSnap> Snaps;
+	for (const UCLParticipantSeat* Seat : SeatReg->GetAll())
+	{
+		if (!Seat)
+		{
+			continue;
+		}
+		FCLLobbySeatSnap Row;
+		Row.SeatId = Seat->GetSeatId();
+		Row.DisplayName = Seat->GetDisplayName();
+		Row.Team = Seat->GetTeam();
+		Row.bReady = Seat->IsReady();
+		Row.bHost = Seat->IsHost();
+		Snaps.Add(Row);
+	}
+	const int32 Min = GetInvoice() ? GetInvoice()->MinPlayers : 2;
+	GS->SetLobbySnapshot(Snaps, ReadyCount(), Min, IsMatchStartQueued() || IsCountdownRunning());
+}
+
+bool UCLLobbySubsystem::SetReadyForController(APlayerController* PC, bool bReady)
+{
+	UCLParticipantSeat* Seat = EnsureNetHumanSeat(PC);
+	if (!Seat)
+	{
+		return false;
+	}
+	return SetReady(Seat->GetSeatId(), bReady);
+}
+
+bool UCLLobbySubsystem::SetTeamForController(APlayerController* PC, ECLPvpTeam Team)
+{
+	UCLParticipantSeat* Seat = EnsureNetHumanSeat(PC);
+	if (!Seat)
+	{
+		return false;
+	}
+	FString Error;
+	return SetTeam(Seat->GetSeatId(), Team, Error);
 }
 
 ACLPlayerCharacter* UCLLobbySubsystem::FindHumanPawn() const
@@ -700,6 +782,7 @@ FString UCLLobbySubsystem::TeamName(ECLPvpTeam Team)
 
 void UCLLobbySubsystem::NotifyHubSnapshots(ECLHubSnapshotReason Reason, const FGuid& OnlySeat)
 {
+	PushLobbyToGameState();
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UCLSessionHub* Hub = GI->GetSubsystem<UCLSessionHub>())

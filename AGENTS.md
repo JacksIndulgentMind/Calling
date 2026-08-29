@@ -11,6 +11,7 @@ Cursor **cloud** agents cannot build or run Unreal. The recipes below need a Win
 | [`.cursor/skills/dl-agent-control/SKILL.md`](.cursor/skills/dl-agent-control/SKILL.md) | Hub vs director, seats, SeatMotors, join / mind-control / ready / go |
 | [`.cursor/skills/dl-agent-nav/SKILL.md`](.cursor/skills/dl-agent-nav/SKILL.md) | BotBooks (`appendBotBook`), markers, probes; loopback `/goto` is debug |
 | [`.cursor/skills/dl-circle-run/SKILL.md`](.cursor/skills/dl-circle-run/SKILL.md) | Compose PvP ring verify (`VERIFY_OK`, diving, megalith 8/8) |
+| [`.cursor/skills/dl-virtual-mp/SKILL.md`](.cursor/skills/dl-virtual-mp/SKILL.md) | Two Unreal windows on one PC (listen + loopback join); two agents from host hub |
 
 Pawn scripting is **SeatMotor + BotBook** (catalog or JIT PlantUML). Anytime an agent drives a pawn — stroll, cover, ring, megalith, one test move — POST hub `appendBotBook` / `branchBotBook`. Read [Docs/BotBooks.md](Docs/BotBooks.md). Landing a point with jump / air-dive / slide / dash (vs Recast `goto`): [Docs/NavAbilities.md](Docs/NavAbilities.md). Recast knobs: [Docs/RecastLinks.md](Docs/RecastLinks.md). Recast policy (TileSize, no Engine patches, no cheat) lives in the parent design repo `.cursor/rules/recast-*.mdc` if this nested git is opened alone. Do not invent MCP `plan` / `sequence` / `intent` / `goto`.
 
@@ -35,7 +36,7 @@ Stdio MCP: `Scripts/dl-agent-mcp/index.mjs` (tools `hub`, `state`, `director`, `
 
 | Plane | Where | Use for |
 |-------|--------|---------|
-| Overlay | `POST /director` | I-menu: `open`, `pvp` / `composer`, `host`, `guest`, `ready`, `go`, `social`, `raid`, `practice`, `arena` |
+| Overlay | `POST /director` | I-menu: `open`, `pvp` / `composer`, `host`, `guest`, `ready`, `go`, `virtualhost` / `virtualjoin`, `social`, `raid`, `practice`, `arena` |
 | Hub | `POST /hub` and WS 18766 | `join`, `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, `appendBotBook`, `branchBotBook`, `view`. Loopback: `plan`, `goto` |
 
 Director is not the pawn motor. Drive seats through the hub. See the control skill.

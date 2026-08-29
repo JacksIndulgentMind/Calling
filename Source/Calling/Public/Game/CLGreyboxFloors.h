@@ -43,7 +43,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Greybox")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Layout, Category = "Calling|Greybox")
 	ECLGreyboxLayout Layout = ECLGreyboxLayout::SocialSquare;
 
 	/** World-space spawn (cm). PvP returns Red (west). */
@@ -105,6 +105,9 @@ public:
 	bool bHasEdgePad = false;
 
 protected:
+	UFUNCTION()
+	void OnRep_Layout();
+
 	void EnsureBuilt();
 	void BuildLayout();
 	void ApplyVisibleShading();

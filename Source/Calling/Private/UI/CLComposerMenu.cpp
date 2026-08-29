@@ -2,6 +2,10 @@
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLLobbyTypes.h"
 #include "Game/CLParticipantSeat.h"
+#include "Game/CLSessionSubsystem.h"
+#include "Game/CLLoopbackJoin.h"
+#include "Game/CLGameStateBase.h"
+#include "Player/CLPlayerController.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/BorderSlot.h"
@@ -9,6 +13,7 @@
 #include "Components/ButtonSlot.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/ComboBoxString.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -132,6 +137,20 @@ void UCLComposerMenu::BuildWidgetTree()
 	GuestButton->OnClicked.AddDynamic(this, &UCLComposerMenu::HandleGuestClicked);
 	AddPadded(Col, GuestButton, 6.f);
 
+	VirtualHostButton = MakeTextButton(WidgetTree, TEXT("VirtHostBtn"), TEXT("Virtual host"), nullptr);
+	VirtualHostButton->OnClicked.AddDynamic(this, &UCLComposerMenu::HandleVirtualHostClicked);
+	AddPadded(Col, VirtualHostButton, 6.f);
+
+	JoinSourceCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("JoinSrc"));
+	JoinSourceCombo->AddOption(TEXT("Loopback (127.0.0.1)"));
+	JoinSourceCombo->AddOption(TEXT("Beacon"));
+	JoinSourceCombo->SetSelectedOption(TEXT("Loopback (127.0.0.1)"));
+	AddPadded(Col, JoinSourceCombo, 6.f);
+
+	VirtualJoinButton = MakeTextButton(WidgetTree, TEXT("VirtJoinBtn"), TEXT("Virtual join"), nullptr);
+	VirtualJoinButton->OnClicked.AddDynamic(this, &UCLComposerMenu::HandleVirtualJoinClicked);
+	AddPadded(Col, VirtualJoinButton, 6.f);
+
 	ReadyButton = MakeTextButton(WidgetTree, TEXT("ReadyBtn"), TEXT("Ready"), &ReadyButtonLabel);
 	ReadyButton->OnClicked.AddDynamic(this, &UCLComposerMenu::HandleReadyClicked);
 	AddPadded(Col, ReadyButton, 6.f);
@@ -181,14 +200,92 @@ void UCLComposerMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 
 void UCLComposerMenu::Refresh()
 {
+	UWorld* World = GetWorld();
+	const ENetMode Net = World ? World->GetNetMode() : NM_Standalone;
+	const bool bNetClient = Net == NM_Client;
+	const bool bListen = Net == NM_ListenServer;
+	const bool bShowLoop = CLLoopbackJoin::ShowUi();
+	const ESlateVisibility LoopVis = (bShowLoop && !bNetClient && !bListen) ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+	const ESlateVisibility HostLoopVis = (bShowLoop && !bNetClient && !bListen) ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+	if (VirtualHostButton)
+	{
+		VirtualHostButton->SetVisibility(HostLoopVis);
+	}
+	if (VirtualJoinButton)
+	{
+		VirtualJoinButton->SetVisibility(LoopVis);
+	}
+	if (JoinSourceCombo)
+	{
+		JoinSourceCombo->SetVisibility(LoopVis);
+	}
+
+	bool bLocalHost = false;
+	bool bLocalReady = false;
+	int32 Ready = 0;
+	int32 Min = 2;
+	int32 SeatCount = 0;
+	bool bQueued = false;
+	float CountdownLeft = 0.f;
+	bool bLocked = false;
+	FString Rows = TEXT("Seats\n");
+
 	UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr;
-	if (!Lobby)
+	if (bNetClient)
+	{
+		const ACLGameStateBase* GS = World ? World->GetGameState<ACLGameStateBase>() : nullptr;
+		if (!GS)
+		{
+			return;
+		}
+		Ready = GS->GetLobbyReady();
+		Min = GS->GetLobbyMinPlayers();
+		bQueued = GS->IsLobbyStartQueued();
+		SeatCount = GS->GetLobbySeats().Num();
+		for (const FCLLobbySeatSnap& Seat : GS->GetLobbySeats())
+		{
+			Rows += FString::Printf(
+				TEXT("• %s  %s  %s  %s\n"),
+				*Seat.DisplayName,
+				TeamName(Seat.Team),
+				Seat.bReady ? TEXT("READY") : TEXT("—"),
+				Seat.bHost ? TEXT("host") : TEXT("guest"));
+			if (!Seat.bHost)
+			{
+				bLocalReady = Seat.bReady;
+			}
+		}
+	}
+	else if (Lobby)
+	{
+		UCLParticipantSeat* Local = Lobby->FindLocalSeat();
+		bLocalHost = Local && Local->IsHost();
+		bLocalReady = Local && Local->IsReady();
+		Ready = Lobby->ReadyCount();
+		Min = Lobby->GetInvoice() ? Lobby->GetInvoice()->MinPlayers : 2;
+		SeatCount = Lobby->GetSeats().Num();
+		bQueued = Lobby->IsMatchStartQueued() || Lobby->IsCountdownRunning();
+		CountdownLeft = Lobby->GetCountdownRemaining();
+		bLocked = Lobby->IsReadyLocked();
+		for (const UCLParticipantSeat* Seat : Lobby->GetSeats())
+		{
+			if (!Seat)
+			{
+				continue;
+			}
+			Rows += FString::Printf(
+				TEXT("• %s  %s  %s  %s\n"),
+				*Seat->GetDisplayName(),
+				TeamName(Seat->GetTeam()),
+				Seat->IsReady() ? TEXT("READY") : TEXT("—"),
+				Seat->IsHost() ? TEXT("host") : TEXT("guest"));
+		}
+	}
+	else
 	{
 		return;
 	}
 
-	UCLParticipantSeat* Local = Lobby->FindLocalSeat();
-	const bool bLocalHost = Local && Local->IsHost();
 	if (RoleLabel)
 	{
 		RoleLabel->SetText(FText::FromString(bLocalHost
@@ -196,17 +293,16 @@ void UCLComposerMenu::Refresh()
 			: TEXT("You are a guest. Ready up and wait for the host to Start.")));
 	}
 
-	const int32 Ready = Lobby->ReadyCount();
-	const int32 Min = Lobby->GetInvoice() ? Lobby->GetInvoice()->MinPlayers : 2;
-	const int32 Seats = Lobby->GetSeats().Num();
 	FString Status;
-	if (Lobby->IsMatchStartQueued() || Lobby->IsCountdownRunning())
+	if (bQueued)
 	{
-		Status = FString::Printf(TEXT("Starting in %.1fs"), Lobby->GetCountdownRemaining());
+		Status = CountdownLeft > 0.f
+			? FString::Printf(TEXT("Starting in %.1fs"), CountdownLeft)
+			: TEXT("Starting…");
 	}
 	else if (Ready < Min)
 	{
-		Status = FString::Printf(TEXT("%d / %d ready  (%d in lobby, need %d)"), Ready, Min, Seats, Min);
+		Status = FString::Printf(TEXT("%d / %d ready  (%d in lobby, need %d)"), Ready, Min, SeatCount, Min);
 	}
 	else if (bLocalHost)
 	{
@@ -220,52 +316,50 @@ void UCLComposerMenu::Refresh()
 	{
 		StatusLabel->SetText(FText::FromString(Status));
 	}
-
-	FString Rows = TEXT("Seats\n");
-	for (const UCLParticipantSeat* Seat : Lobby->GetSeats())
-	{
-		if (!Seat)
-		{
-			continue;
-		}
-		Rows += FString::Printf(
-			TEXT("• %s  %s  %s  %s\n"),
-			*Seat->GetDisplayName(),
-			TeamName(Seat->GetTeam()),
-			Seat->IsReady() ? TEXT("READY") : TEXT("—"),
-			Seat->IsHost() ? TEXT("host") : TEXT("guest"));
-	}
 	if (SeatListLabel)
 	{
 		SeatListLabel->SetText(FText::FromString(Rows));
 	}
 
-	const bool bLocked = Lobby->IsReadyLocked();
 	if (ReadyButton)
 	{
 		ReadyButton->SetIsEnabled(!bLocked);
 	}
-	if (ReadyButtonLabel && Local)
+	if (ReadyButtonLabel)
 	{
-		ReadyButtonLabel->SetText(FText::FromString(Local->IsReady() ? TEXT("Unready") : TEXT("Ready")));
+		ReadyButtonLabel->SetText(FText::FromString(bLocalReady ? TEXT("Unready") : TEXT("Ready")));
 	}
 	if (StartButton)
 	{
-		StartButton->SetIsEnabled(bLocalHost && Ready >= Min && !Lobby->IsMatchStartQueued());
+		StartButton->SetIsEnabled(bLocalHost && Ready >= Min && !bQueued);
 		StartButton->SetVisibility(bLocalHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 	if (HostButton)
 	{
-		HostButton->SetIsEnabled(!bLocalHost && !bLocked);
+		HostButton->SetIsEnabled(!bNetClient && !bLocalHost && !bLocked);
+		HostButton->SetVisibility(bNetClient ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	}
 	if (GuestButton)
 	{
-		GuestButton->SetIsEnabled(bLocalHost && !bLocked);
+		GuestButton->SetIsEnabled(!bNetClient && bLocalHost && !bLocked);
+		GuestButton->SetVisibility(bNetClient ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	}
 }
 
 void UCLComposerMenu::HandleReadyClicked()
 {
+	if (UWorld* World = GetWorld())
+	{
+		if (World->GetNetMode() == NM_Client)
+		{
+			if (ACLPlayerController* PC = Cast<ACLPlayerController>(GetOwningPlayer()))
+			{
+				PC->ServerComposerReadyToggle();
+			}
+			Refresh();
+			return;
+		}
+	}
 	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
 	{
 		Lobby->ToggleLocalReady();
@@ -302,6 +396,18 @@ void UCLComposerMenu::HandleGuestClicked()
 
 void UCLComposerMenu::HandleJoinRedClicked()
 {
+	if (UWorld* World = GetWorld())
+	{
+		if (World->GetNetMode() == NM_Client)
+		{
+			if (ACLPlayerController* PC = Cast<ACLPlayerController>(GetOwningPlayer()))
+			{
+				PC->ServerComposerTeam(ECLPvpTeam::Red);
+			}
+			Refresh();
+			return;
+		}
+	}
 	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
 	{
 		if (UCLParticipantSeat* Local = Lobby->FindLocalSeat())
@@ -315,6 +421,18 @@ void UCLComposerMenu::HandleJoinRedClicked()
 
 void UCLComposerMenu::HandleJoinBlueClicked()
 {
+	if (UWorld* World = GetWorld())
+	{
+		if (World->GetNetMode() == NM_Client)
+		{
+			if (ACLPlayerController* PC = Cast<ACLPlayerController>(GetOwningPlayer()))
+			{
+				PC->ServerComposerTeam(ECLPvpTeam::Blue);
+			}
+			Refresh();
+			return;
+		}
+	}
 	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
 	{
 		if (UCLParticipantSeat* Local = Lobby->FindLocalSeat())
@@ -324,4 +442,31 @@ void UCLComposerMenu::HandleJoinBlueClicked()
 		}
 	}
 	Refresh();
+}
+
+void UCLComposerMenu::HandleVirtualHostClicked()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->StartComposerLoopbackHost();
+		}
+	}
+}
+
+void UCLComposerMenu::HandleVirtualJoinClicked()
+{
+	FString Selected;
+	if (JoinSourceCombo)
+	{
+		Selected = JoinSourceCombo->GetSelectedOption();
+	}
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->JoinLoopback(Selected);
+		}
+	}
 }

@@ -49,6 +49,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Calling|Session")
 	ECLSocialPvpMode GetHostedSocialPvpMode() const { return HostedSocialPvpMode; }
 
+	UFUNCTION(BlueprintCallable, Category = "Calling|Session")
+	bool StartComposerLoopbackHost();
+
+	UFUNCTION(BlueprintCallable, Category = "Calling|Session")
+	bool JoinLoopback(const FString& Selected = TEXT(""));
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Session")
+	bool IsLoopbackJoinPending() const { return bJoinReadyPending; }
+
+	void ClearLoopbackJoinPending() { bJoinReadyPending = false; }
+
 	UPROPERTY(BlueprintAssignable, Category = "Calling|Session")
 	FCLOnLobbyListUpdated OnLobbyListUpdated;
 
@@ -63,6 +74,9 @@ private:
 	void HandleDestroySessionComplete(FName SessionName, bool bWasSuccessful);
 	void TravelToMapAsListenServer(const FString& MapName);
 	FString ResolveHostDisplayName() const;
+
+	UPROPERTY()
+	bool bJoinReadyPending = false;
 
 	FOnCreateSessionCompleteDelegate CreateCompleteDelegate;
 	FOnFindSessionsCompleteDelegate FindCompleteDelegate;

@@ -8,6 +8,7 @@
 class UCLPossessionComponent;
 class APawn;
 class AActor;
+class APlayerController;
 
 UCLASS()
 class CALLING_API UCLParticipantSeat : public UObject
@@ -40,6 +41,7 @@ public:
 	UCLSeatMotor* GetSeatMotor() const { return Motor; }
 	UCLPossessionComponent* GetPossession() const { return Possession; }
 	AActor* GetAnchor() const { return Anchor.Get(); }
+	APlayerController* GetBoundController() const { return BoundController.Get(); }
 	APawn* GetDrivenPawn() const;
 
 	void SetReady(bool bInReady) { bReady = bInReady; }
@@ -49,6 +51,7 @@ public:
 	void SetDriveSeatId(const FGuid& InDriveSeatId) { DriveSeatId = InDriveSeatId; }
 	void SetPossession(UCLPossessionComponent* InPossession) { Possession = InPossession; }
 	void SetAnchor(AActor* InAnchor) { Anchor = InAnchor; }
+	void BindController(APlayerController* PC) { BoundController = PC; }
 
 protected:
 	UPROPERTY()
@@ -80,4 +83,7 @@ protected:
 
 	UPROPERTY()
 	TWeakObjectPtr<AActor> Anchor;
+
+	UPROPERTY()
+	TWeakObjectPtr<APlayerController> BoundController;
 };

@@ -110,6 +110,11 @@ namespace
 		Tune.AgentHeightCm = JsonNum(Root, TEXT("agentHeightCm"), Tune.AgentHeightCm);
 		Tune.AgentMaxSlopeDeg = JsonNum(Root, TEXT("agentMaxSlopeDeg"), Tune.AgentMaxSlopeDeg);
 		Tune.AirDiveSearchMaxCm = JsonNum(Root, TEXT("airDiveSearchMaxCm"), Tune.AirDiveSearchMaxCm);
+		if (const TSharedPtr<FJsonObject> Costs = Root->HasField(TEXT("areaCost")) ? Root->GetObjectField(TEXT("areaCost")) : nullptr)
+		{
+			Tune.AreaCostAirDive = JsonNum(Costs, TEXT("airDive"), Tune.AreaCostAirDive);
+			Tune.AreaCostLongJump = JsonNum(Costs, TEXT("longJump"), Tune.AreaCostLongJump);
+		}
 
 		if (const TSharedPtr<FJsonObject> Probe = Root->HasField(TEXT("probe")) ? Root->GetObjectField(TEXT("probe")) : nullptr)
 		{

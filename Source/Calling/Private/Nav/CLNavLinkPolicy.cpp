@@ -125,6 +125,14 @@ void CLNavLinkPolicy::ApplyToRecast(ARecastNavMesh& Recast, float SurvivingDropC
 	}
 	Recast.OnNavAreaAdded(UCLNavArea_AirDive::StaticClass(), 0);
 	Recast.OnNavAreaAdded(UCLNavArea_LongJump::StaticClass(), 0);
+	if (UCLNavArea_AirDive* Air = GetMutableDefault<UCLNavArea_AirDive>())
+	{
+		Air->DefaultCost = Tune.AreaCostAirDive;
+	}
+	if (UCLNavArea_LongJump* Jump = GetMutableDefault<UCLNavArea_LongJump>())
+	{
+		Jump->DefaultCost = Tune.AreaCostLongJump;
+	}
 	Recast.RecreateDefaultFilter();
 	Recast.ConditionalConstructGenerator();
 }

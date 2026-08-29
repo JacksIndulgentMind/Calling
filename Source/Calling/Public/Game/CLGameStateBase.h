@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
 #include "Core/CLTypes.h"
+#include "Game/CLLobbyTypes.h"
 #include "CLGameStateBase.generated.h"
 
 class UCLActivityStateComponent;
@@ -67,6 +68,12 @@ public:
 	float GetTeamAScore() const { return TeamAScore; }
 	float GetTeamBScore() const { return TeamBScore; }
 
+	void SetLobbySnapshot(const TArray<FCLLobbySeatSnap>& Seats, int32 Ready, int32 MinPlayers, bool bQueued);
+	const TArray<FCLLobbySeatSnap>& GetLobbySeats() const { return LobbySeats; }
+	int32 GetLobbyReady() const { return LobbyReady; }
+	int32 GetLobbyMinPlayers() const { return LobbyMinPlayers; }
+	bool IsLobbyStartQueued() const { return bLobbyStartQueued; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Calling")
 	TObjectPtr<UCLActivityStateComponent> ActivityState;
@@ -88,6 +95,18 @@ protected:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
 	TArray<FCLSeatScore> SeatScores;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Lobby")
+	TArray<FCLLobbySeatSnap> LobbySeats;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Lobby")
+	int32 LobbyReady = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Lobby")
+	int32 LobbyMinPlayers = 2;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Lobby")
+	bool bLobbyStartQueued = false;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };

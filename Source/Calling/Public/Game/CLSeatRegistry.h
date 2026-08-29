@@ -10,6 +10,7 @@ class UCLRemoteAgentSeatMotor;
 class ACLPlayerCharacter;
 class APawn;
 class AController;
+class APlayerController;
 class AActor;
 
 UCLASS()
@@ -34,6 +35,8 @@ public:
 
 	UCLParticipantSeat* MakeSeat(const FString& DisplayName, UClass* MotorClass, const FGuid& ExistingId, const FCLLobbyGate* Gate);
 	UCLParticipantSeat* EnsureLocalHuman(const FString& ProfileName, const FCLLobbyGate* Gate);
+	UCLParticipantSeat* EnsureNetHuman(APlayerController* PC, const FString& ProfileName, const FCLLobbyGate* Gate);
+	void RemoveForController(AController* Controller);
 	static UClass* SeatMotorClassFromKind(const FString& Kind);
 
 	APawn* SpawnAgentPawn(ECLPvpTeam Team) const;

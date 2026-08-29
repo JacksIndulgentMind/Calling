@@ -221,6 +221,11 @@ void ACLGreyboxFloors::OnNavRebuildTimer()
 	RebuildNavigation();
 }
 
+void ACLGreyboxFloors::OnRep_Layout()
+{
+	EnsureBuilt();
+}
+
 void ACLGreyboxFloors::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);

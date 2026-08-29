@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Core/CLTypes.h"
+#include "Game/CLLobbyTypes.h"
 #include "Input/CLInputTypes.h"
 #include "CLPlayerController.generated.h"
 
@@ -9,6 +11,7 @@ class UInputMappingContext;
 class UInputAction;
 class UCLMainMenuOverlay;
 class UCLCombatHudWidget;
+class UCLComposerMenu;
 class UCLInputBindSubsystem;
 struct FInputActionValue;
 
@@ -39,6 +42,17 @@ public:
 	UCLMainMenuOverlay* GetMainMenu();
 	const UCLMainMenuOverlay* GetMainMenu() const { return MainMenuInstance; }
 
+	void EnsureComposerMenu();
+
+	UFUNCTION(Server, Reliable)
+	void ServerComposerReadyToggle();
+
+	UFUNCTION(Server, Reliable)
+	void ServerComposerTeam(ECLPvpTeam Team);
+
+	UFUNCTION(Server, Reliable)
+	void ServerComposerReady(bool bReady);
+
 protected:
 	void OnMove(const FInputActionValue& Value);
 	void OnLook(const FInputActionValue& Value);
@@ -60,6 +74,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCLCombatHudWidget> CombatHud;
+
+	UPROPERTY()
+	TObjectPtr<UCLComposerMenu> ComposerMenuInstance;
 
 	void EnsureCombatHud();
 	void EnsureMainMenu();

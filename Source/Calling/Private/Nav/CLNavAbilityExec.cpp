@@ -159,6 +159,35 @@ bool FCLNavAbilityExec::FacingGoal(ACLPlayerCharacter* Char, const FVector& Loc)
 	return FMath::Abs(FRotator::NormalizeAxis(Want - Cur)) <= 18.f;
 }
 
+void FCLNavAbilityExec::ApplyLookupRecipe(UCLCombatMovementComponent* Move)
+{
+	JumpPulses = FMath::Max(1, Recipe.Jumps);
+	bPinUntilLand = Recipe.bPinUntilLand;
+	Move->SetDivePinGravity(Recipe.bPinUntilLand || Recipe.bShortPin);
+	Move->SetDiveAirSteer(Recipe.AirSteerMul);
+	TraceSub = FString::Printf(TEXT("slice=%s ring=%s"), Recipe.SliceName, Recipe.RingName);
+}
+
+void FCLNavAbilityExec::ApplyRecastOwnedFallback(UCLCombatMovementComponent* Move, const FCLMovementTune& Tune, ACLPlayerCharacter* Char)
+{
+	// Envelope is not a veto when goto owns an AirDive poly. Recast-owned Launch always flies.
+	const float DistXY = FVector::Dist2D(Char->GetActorLocation(), Goal);
+	const bool bLong = DistXY > CLNavAbility::HangReachXY(Tune);
+	JumpPulses = FMath::Max(1, CLNavAbility::JumpsToLaunch(Tune, Char->GetActorLocation(), Goal));
+	bPinUntilLand = bLong;
+	Move->SetDivePinGravity(bLong);
+	Move->SetDiveAirSteer(bLong ? Tune.AirDiveSteer : -1.f);
+	TraceSub = Mode == ECLNavAbilityExecMode::Launch
+		? TEXT("recastLaunchFallback")
+		: ModeLabel();
+	if (Mode == ECLNavAbilityExecMode::Launch)
+	{
+		UE_LOG(LogCalling, Display,
+			TEXT("Launch Start: noRecipe → fallback jumps=%d pin=%d distXY=%.0f"),
+			JumpPulses, bPinUntilLand ? 1 : 0, DistXY);
+	}
+}
+
 void FCLNavAbilityExec::Start(ACLPlayerCharacter* Char)
 {
 	Reset();
@@ -178,31 +207,11 @@ void FCLNavAbilityExec::Start(ACLPlayerCharacter* Char)
 	{
 		if (CLNavAbility::LookupLaunchRecipe(Tune, CLNavTune::Get(), Char->GetActorLocation(), Goal, Recipe) && Recipe.bValid)
 		{
-			JumpPulses = FMath::Max(1, Recipe.Jumps);
-			bPinUntilLand = Recipe.bPinUntilLand;
-			Move->SetDivePinGravity(Recipe.bPinUntilLand || Recipe.bShortPin);
-			Move->SetDiveAirSteer(Recipe.AirSteerMul);
-			TraceSub = FString::Printf(TEXT("slice=%s ring=%s"), Recipe.SliceName, Recipe.RingName);
+			ApplyLookupRecipe(Move);
 		}
 		else
 		{
-			// Recast goto may own a Launch hop that LookupLaunchRecipe rejects (preferJump /
-			// flat chord). Still fly — refusing leaves goto stuck on a Launch-owned step.
-			const float DistXY = FVector::Dist2D(Char->GetActorLocation(), Goal);
-			const bool bLong = DistXY > CLNavAbility::HangReachXY(Tune);
-			JumpPulses = FMath::Max(1, CLNavAbility::JumpsToLaunch(Tune, Char->GetActorLocation(), Goal));
-			bPinUntilLand = bLong;
-			Move->SetDivePinGravity(bLong);
-			Move->SetDiveAirSteer(bLong ? Tune.AirDiveSteer : -1.f);
-			TraceSub = Mode == ECLNavAbilityExecMode::Launch
-				? TEXT("recastLaunchFallback")
-				: ModeLabel();
-			if (Mode == ECLNavAbilityExecMode::Launch)
-			{
-				UE_LOG(LogCalling, Display,
-					TEXT("Launch Start: noRecipe → fallback jumps=%d pin=%d distXY=%.0f"),
-					JumpPulses, bPinUntilLand ? 1 : 0, DistXY);
-			}
+			ApplyRecastOwnedFallback(Move, Tune, Char);
 		}
 		if (!Move->IsMovingOnGround()
 			&& CLNavAbility::ReadyToAirDive(Tune, Move->GetMaxAcceleration(), Char->GetVelocity().Size2D(),

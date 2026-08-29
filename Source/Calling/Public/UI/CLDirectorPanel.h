@@ -21,6 +21,8 @@ public:
 	void HostSocialLobby(ECLSocialPvpMode Mode);
 	void RefreshActivityLobbies(ECLSceneId Activity);
 	void JoinListedLobby(int32 Index);
+	void StartLoopbackHost();
+	void JoinLoopback(const FString& Selected = TEXT(""));
 	void ToggleLocalReady();
 	void JoinTeam(ECLPvpTeam Team);
 	void RequestGo();

@@ -42,6 +42,9 @@ struct FCLNavTune
 	float AgentMaxSlopeDeg = 55.f;
 	/** 0 = uncapped MaxLaunchXY. Narrows AirDive bake+runtime search; must be <= MaxLaunchXY. */
 	float AirDiveSearchMaxCm = 0.f;
+	/** FindPath area weights. AirDive > walk (1) so DropDown/ramp wins when both exist. */
+	float AreaCostAirDive = 50.f;
+	float AreaCostLongJump = 25.f;
 	FCLNavProbeTune Probe;
 	TArray<FCLNavLinkTune> Links;
 };

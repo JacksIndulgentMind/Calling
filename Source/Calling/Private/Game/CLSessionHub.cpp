@@ -8,6 +8,7 @@
 #include "Core/CLLog.h"
 #include "Game/CLErrorBoundary.h"
 #include "Core/CLError.h"
+#include "Game/CLLoopbackJoin.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 #include "IPAddress.h"
@@ -84,6 +85,7 @@ void UCLSessionHub::StartHost()
 			ECLErrorKind::NonDeterministic,
 			TEXT("session_hub_bind"),
 			FString::Printf(TEXT("WebSocket hub failed to bind 0.0.0.0:%d"), Port)));
+		CLLoopbackJoin::AppendLog(FString::Printf(TEXT("ws bind fail %d"), Port));
 		return;
 	}
 	int32 NewSize = 0;

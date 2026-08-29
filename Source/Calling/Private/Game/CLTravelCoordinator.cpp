@@ -30,15 +30,17 @@ namespace
 			return;
 		}
 		Seats->Reset();
+		bool bHostAssigned = false;
 		for (const FCLInvoiceSeat& Row : Live->Roster)
 		{
 			UCLParticipantSeat* Seat = Seats->MakeSeat(Row.DisplayName, UCLSeatRegistry::SeatMotorClassFromKind(Row.Kind), Row.SeatId, Gate);
 			Seat->SetTeam(Row.Team);
 			Seat->SetHeadlessJoin(Row.bHeadless);
 			Seat->SetDriveSeatId(Row.DriveSeatId);
-			if (Row.Kind == TEXT("human"))
+			if (Row.Kind == TEXT("human") && !bHostAssigned)
 			{
 				Seat->SetHost(true);
+				bHostAssigned = true;
 			}
 		}
 	}
@@ -96,6 +98,10 @@ void UCLTravelCoordinator::RestoreBodiesAfterTravel(UCLInvoiceService* Invoices,
 		{
 			Remote->CancelPlan();
 			Remote->CancelGoto();
+		}
+		if (Seat->GetBoundController())
+		{
+			continue;
 		}
 		Seat->SetPossession(nullptr);
 		Seat->SetAnchor(nullptr);

@@ -4,6 +4,7 @@
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLSceneRouter.h"
+#include "Game/CLSessionSubsystem.h"
 #include "Player/CLPlayerController.h"
 #include "UI/CLMainMenuOverlay.h"
 #include "Core/CLTypes.h"
@@ -130,6 +131,22 @@ TSharedRef<FJsonObject> FCLDirectorCommandRegistry::Dispatch(
 		{
 			Lobby->RequestLocalGo();
 		}
+	}
+	else if (Action == TEXT("virtualhost"))
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->StartComposerLoopbackHost();
+		}
+		Menu->HideOverlay();
+	}
+	else if (Action == TEXT("virtualjoin"))
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->JoinLoopback(TEXT(""));
+		}
+		Menu->HideOverlay();
 	}
 	else if (Action == TEXT("join"))
 	{

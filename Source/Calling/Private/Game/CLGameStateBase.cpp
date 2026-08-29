@@ -24,6 +24,10 @@ void ACLGameStateBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ACLGameStateBase, TeamAScore);
 	DOREPLIFETIME(ACLGameStateBase, TeamBScore);
 	DOREPLIFETIME(ACLGameStateBase, SeatScores);
+	DOREPLIFETIME(ACLGameStateBase, LobbySeats);
+	DOREPLIFETIME(ACLGameStateBase, LobbyReady);
+	DOREPLIFETIME(ACLGameStateBase, LobbyMinPlayers);
+	DOREPLIFETIME(ACLGameStateBase, bLobbyStartQueued);
 }
 
 void ACLGameStateBase::SetSceneId(ECLSceneId InSceneId)
@@ -48,6 +52,18 @@ void ACLGameStateBase::SetRaidChamberIndex(int32 Index)
 	{
 		RaidChamberIndex = Index;
 	}
+}
+
+void ACLGameStateBase::SetLobbySnapshot(const TArray<FCLLobbySeatSnap>& Seats, int32 Ready, int32 MinPlayers, bool bQueued)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	LobbySeats = Seats;
+	LobbyReady = Ready;
+	LobbyMinPlayers = MinPlayers;
+	bLobbyStartQueued = bQueued;
 }
 
 bool ACLGameStateBase::CanPlayersDamageEachOther() const

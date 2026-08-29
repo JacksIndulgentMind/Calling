@@ -8,7 +8,7 @@ description: >-
 
 # Control (hub + seats)
 
-Agents are seats. Anytime you drive a pawn, POST a **BotBook** (`appendBotBook` / `branchBotBook`). Do not use MCP `plan` / `sequence` / `intent` / raw `goto` when a seat exists. Director HTTP is **I-menu overlays only**. Rebuild and spin-up: [AGENTS.md](../../../AGENTS.md). Stroll nav: [dl-agent-nav](../dl-agent-nav/SKILL.md). Ring verify: [dl-circle-run](../dl-circle-run/SKILL.md).
+Agents are seats. Anytime you drive a pawn, POST a **BotBook** (`appendBotBook` / `branchBotBook`). Do not use MCP `plan` / `sequence` / `intent` / raw `goto` when a seat exists. Director HTTP is **I-menu overlays only**. Rebuild and spin-up: [AGENTS.md](../../../AGENTS.md). Stroll nav: [dl-agent-nav](../dl-agent-nav/SKILL.md). Ring verify: [dl-circle-run](../dl-circle-run/SKILL.md). Two windows: [dl-virtual-mp](../dl-virtual-mp/SKILL.md).
 
 ### Control model (do not flatten to flags)
 
@@ -24,7 +24,7 @@ Agents are seats. Anytime you drive a pawn, POST a **BotBook** (`appendBotBook` 
 
 | Plane | Where | Use for |
 |-------|--------|---------|
-| Overlay | `POST /director` on **127.0.0.1:18765** | I-menu: `open`, `composer` / `pvp` (Compose PvP), `host`, `guest`, `ready`, `go`/`start`, `social`, `raid`, `practice`, `arena` (solo PvP skip) |
+| Overlay | `POST /director` on **127.0.0.1:18765** | I-menu: `open`, `composer` / `pvp` (Compose PvP), `host`, `guest`, `ready`, `go`/`start`, `virtualhost` / `virtualjoin` (second window; [dl-virtual-mp](../dl-virtual-mp/SKILL.md)), `social`, `raid`, `practice`, `arena` (solo PvP skip) |
 | Hub | `POST /hub` on 18765 **and** `ws://127.0.0.1:18766` (same `FCLHubCommandRegistry`) | `join` (`headless: true`, `kind: cursor`), `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, **`appendBotBook`**, **`branchBotBook`**, `view`. Loopback: `plan`, `goto` |
 | Loopback codec | `POST /intent` `/sequence` `/goto` | No-lobby tests only. Not how agents drive pawns. |
 

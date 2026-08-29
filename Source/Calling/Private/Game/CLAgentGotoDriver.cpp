@@ -111,8 +111,8 @@ namespace
 			TEXT("goto WHY_DIVE i=%d | play LaunchInEnvelope %s | %s"),
 			i, bLaunch ? TEXT("thinks_possible") : TEXT("thinks_impossible"), *LaunchWhy);
 		UE_LOG(LogCallingGoto, Display,
-			TEXT("goto WHY_DIVE i=%d | necessary? FindPath picked this AirDive link (area DefaultCost=50; was 1=walk so short chords won) | desirable? only if that hop is the intended traverse"),
-			i);
+			TEXT("goto WHY_DIVE i=%d | necessary? FindPath picked this AirDive link (area DefaultCost=%.0f; walk=1 so short chords lose when cost is high) | desirable? only if that hop is the intended traverse"),
+			i, CLNavTune::Get().AreaCostAirDive);
 	}
 
 	void FillRecastPath(UNavigationPath* NavPath, ARecastNavMesh* Recast, TArray<FVector>& OutPts, TArray<uint8>& OutDive,
@@ -192,6 +192,220 @@ namespace
 		}
 		D.SteerReason = FName(TEXT("diveLaunch"));
 		return To;
+	}
+
+	/** DistXY + on-pad settle. True = Tick should return (arrived or cancelled). */
+	bool TickArrive(FCLAgentGotoDriver& D, ACLPlayerCharacter* Char, const FVector& Loc)
+	{
+		if (FVector::Dist2D(Loc, D.Goal) > GotoArriveRadius)
+		{
+			return false;
+		}
+		const UCLCombatMovementComponent* Move = Char->GetCombatMovement();
+		const bool bNeedLand = D.bFlight || (D.Goal.Z + 80.f < Loc.Z - 120.f);
+		const bool bOnPad = CLNavAbility::StandingOnGoalFloor(Loc, D.Goal);
+		if (!bNeedLand || (Move && Move->IsMovingOnGround() && !Move->IsDiving() && bOnPad))
+		{
+			D.Cancel();
+			Char->ClearAgentIntent();
+			return true;
+		}
+		return false;
+	}
+
+	/** Launch tick. True = this tick was in flight (fail, land, or still airborne). */
+	bool TickFlight(FCLAgentGotoDriver& D, ACLPlayerCharacter* Char, float DeltaSeconds, const FVector& Loc)
+	{
+		if (!D.bFlight)
+		{
+			return false;
+		}
+		D.Flight.Tick(DeltaSeconds, Char);
+		if (D.Flight.bFailed)
+		{
+			UE_LOG(LogCallingGoto, Display,
+				TEXT("goto flightFail idx=%d loc=(%.0f,%.0f,%.0f) goal=(%.0f,%.0f,%.0f)"),
+				D.Index, Loc.X, Loc.Y, Loc.Z, D.Flight.Goal.X, D.Flight.Goal.Y, D.Flight.Goal.Z);
+			D.bFlight = false;
+			D.Flight.Reset();
+			if (D.PathAirDive.IsValidIndex(D.Index))
+			{
+				D.PathAirDive[D.Index] = 0;
+			}
+			return true;
+		}
+		if (D.Flight.bFinished)
+		{
+			// Intermediate Recast AirDive — keep walking the polyline (do not Cancel goto).
+			UE_LOG(LogCallingGoto, Display,
+				TEXT("goto flightLand idx=%d loc=(%.0f,%.0f,%.0f) land=(%.0f,%.0f,%.0f)"),
+				D.Index, Loc.X, Loc.Y, Loc.Z, D.Flight.Goal.X, D.Flight.Goal.Y, D.Flight.Goal.Z);
+			D.bFlight = false;
+			D.Flight.Reset();
+			if (D.Path.IsValidIndex(D.Index))
+			{
+				++D.Index;
+			}
+			D.StuckSeconds = 0.f;
+			D.LastWpDist = -1.f;
+			return true;
+		}
+		return true;
+	}
+
+	void TickWalk(FCLAgentGotoDriver& D, float DeltaSeconds, UWorld* World, ACLPlayerCharacter* Char, const FVector& Loc)
+	{
+		while (D.Path.IsValidIndex(D.Index) && FVector::Dist2D(Loc, D.Path[D.Index]) <= GotoWaypointRadius)
+		{
+			// Recast AirDive: Launch owns — do not walk-advance past the hop.
+			if (D.PathAirDive.IsValidIndex(D.Index) && D.PathAirDive[D.Index] != 0)
+			{
+				break;
+			}
+			++D.Index;
+			D.StuckSeconds = 0.f;
+			D.LastWpDist = -1.f;
+		}
+		if (!D.Path.IsValidIndex(D.Index))
+		{
+			if (D.RepathLeft > 0)
+			{
+				--D.RepathLeft;
+				FString Error;
+				if (D.Start(World, Char, D.Goal, Error, true) && D.Path.IsValidIndex(D.Index))
+				{
+					return;
+				}
+			}
+		}
+
+		const FVector Steer = SteerWaypoint(D, Char);
+		D.SteerAt = Steer;
+		const FVector ToTarget = (D.SteerAt - Loc).GetSafeNormal2D();
+		if (ToTarget.IsNearlyZero())
+		{
+			return;
+		}
+
+		const float WpDist = FVector::Dist2D(Loc, D.SteerAt);
+		if (D.LastWpDist < 0.f || WpDist < D.LastWpDist - 15.f)
+		{
+			D.StuckSeconds = 0.f;
+			D.LastWpDist = WpDist;
+		}
+		else
+		{
+			D.StuckSeconds += DeltaSeconds;
+			D.LastWpDist = FMath::Min(D.LastWpDist, WpDist);
+		}
+		if (D.StuckSeconds > 2.5f && D.RepathLeft > 0)
+		{
+			--D.RepathLeft;
+			D.StuckSeconds = 0.f;
+			D.LastWpDist = -1.f;
+			FString Error;
+			if (D.Start(World, Char, D.Goal, Error, true) && D.Path.IsValidIndex(D.Index))
+			{
+				return;
+			}
+		}
+
+		// CombatMovement interprets Move as control-yaw local (Y=forward, X=right). Wish toward
+		// the Recast waypoint in that basis so look slew does not walk us in circles.
+		FVector2D MoveXY = FVector2D::ZeroVector;
+		{
+			const FRotator Yaw(0.f, Char->GetControlRotation().Yaw, 0.f);
+			const FVector Forward = FRotationMatrix(Yaw).GetUnitAxis(EAxis::X);
+			const FVector Right = FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y);
+			MoveXY.X = FVector::DotProduct(ToTarget, Right);
+			MoveXY.Y = FVector::DotProduct(ToTarget, Forward);
+			const float Mag = MoveXY.Size();
+			if (Mag > KINDA_SMALL_NUMBER)
+			{
+				MoveXY /= Mag;
+			}
+		}
+
+		bool bJump = false;
+		D.bMoveBlocked = false;
+		D.FwdKind = NAME_None;
+		D.FwdDist = -1.f;
+		if (World)
+		{
+			const FCLNavProbeTune& Probe = CLNavTune::Get().Probe;
+			const float HalfH = Char->GetCapsuleComponent() ? Char->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 96.f;
+			const FVector Waist = Loc - ToTarget * Probe.StartBackupCm;
+			const FVector Head = Loc + FVector(0.f, 0.f, Probe.HeadLiftCm) - ToTarget * Probe.StartBackupCm;
+			const FCLAgentBlockHit Fwd = CLAgentNavProbe::ProbeBlock(World, Char, Waist, ToTarget, Loc.Z - HalfH);
+			const FCLAgentBlockHit HeadHit = CLAgentNavProbe::ProbeBlock(World, Char, Head, ToTarget, Loc.Z - HalfH);
+			const float Drop = CLAgentNavProbe::FloorDropCm(World, Char, Loc, HalfH, ToTarget, 90.f);
+			const bool bOnGround = !Char->GetCombatMovement() || Char->GetCombatMovement()->IsMovingOnGround();
+			const bool bJumpUp = Fwd.Kind == ECLFwdKind::JumpUp && Fwd.Dist < Probe.JumpFaceCm;
+			const bool bJumpCover = Fwd.Kind == ECLFwdKind::Cover && Fwd.Dist < Probe.JumpFaceCm && HeadHit.Dist >= Probe.JumpableHeadClearCm;
+			const bool bJumpDown = Fwd.Kind == ECLFwdKind::JumpDown && Fwd.Dist < Probe.JumpFaceCm;
+			const bool bHasLanding = Fwd.Kind == ECLFwdKind::Drop || Fwd.Kind == ECLFwdKind::JumpDown;
+			const int32 JumpsLeft = Char->GetCombatMovement() ? Char->GetCombatMovement()->GetJumpsRemaining() : 0;
+			D.FwdKind = FName(CLAgentNavProbe::FwdKindName(Fwd.Kind));
+			D.FwdDist = Fwd.Dist;
+			// Recast polyline already stays on mesh / DropDown / AirDive links. The 90 cm void
+			// probe false-stops on spawn-pad corners and terrace lips → look-only spin.
+			if (!D.bNavPath && Drop >= Probe.FloorProbeMaxCm && !bHasLanding)
+			{
+				const bool bWalkOffLip = Drop > Probe.LipDropMinCm && Drop < 600.f;
+				if (!bWalkOffLip)
+				{
+					D.bMoveBlocked = true;
+				}
+			}
+			if (Fwd.Kind == ECLFwdKind::Wall && Fwd.Dist < 80.f)
+			{
+				D.bMoveBlocked = true;
+			}
+			if (D.bMoveBlocked)
+			{
+				MoveXY = FVector2D::ZeroVector;
+			}
+			if (D.JumpCooldown <= 0.f && (bJumpCover || bJumpDown || bJumpUp)
+				&& (bOnGround || (bJumpUp && JumpsLeft > 0)))
+			{
+				bJump = true;
+				D.JumpCooldown = 0.45f;
+				D.StuckSeconds = 0.f;
+			}
+		}
+
+		D.LastMoveXY = MoveXY;
+
+		{
+			static float GotoDiagAcc = 0.f;
+			GotoDiagAcc += DeltaSeconds;
+			if (GotoDiagAcc >= 0.2f)
+			{
+				GotoDiagAcc = 0.f;
+				const FVector Wp = D.Path.IsValidIndex(D.Index) ? D.Path[D.Index] : D.Goal;
+				UE_LOG(LogCallingGoto, Display,
+					TEXT("goto tick loc=(%.0f,%.0f,%.0f) idx=%d/%d dive=%d reason=%s launch=%d distLip=%.0f distXY=%.0f dZ=%.0f wp=(%.0f,%.0f,%.0f) steer=(%.0f,%.0f,%.0f) lookYaw=%.1f ctrlYaw=%.1f move=(%.2f,%.2f) blocked=%d fwd=%s/%.0f stuck=%.1f"),
+					Loc.X, Loc.Y, Loc.Z, D.Index, D.Path.Num(),
+					D.PathAirDive.IsValidIndex(D.Index) ? D.PathAirDive[D.Index] : -1,
+					*D.SteerReason.ToString(), D.bLaunchOk ? 1 : 0, D.DistLip, D.DistXYToWp, D.DeltaZToWp,
+					Wp.X, Wp.Y, Wp.Z, D.SteerAt.X, D.SteerAt.Y, D.SteerAt.Z,
+					ToTarget.Rotation().Yaw, Char->GetControlRotation().Yaw,
+					D.LastMoveXY.X, D.LastMoveXY.Y, D.bMoveBlocked ? 1 : 0,
+					*D.FwdKind.ToString(), D.FwdDist, D.StuckSeconds);
+			}
+		}
+
+		// Face the waypoint while moving. Do not slew look while planted — that is the spawn spin.
+		if (!MoveXY.IsNearlyZero())
+		{
+			Char->SetLookGoalYawPitch(true, ToTarget.Rotation().Yaw, true, HeadshotPitch);
+		}
+
+		FCLAgentIntent Intent;
+		Intent.Move = MoveXY;
+		Intent.bSprint = true;
+		Intent.bJump = bJump;
+		Char->ApplyAgentIntent(Intent);
 	}
 
 	void BeginFlightIfNeeded(FCLAgentGotoDriver& D, ACLPlayerCharacter* Char)
@@ -384,204 +598,14 @@ void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharac
 	JumpCooldown = FMath::Max(0.f, JumpCooldown - DeltaSeconds);
 
 	const FVector Loc = Char->GetActorLocation();
-	if (FVector::Dist2D(Loc, Goal) <= GotoArriveRadius)
+	if (TickArrive(*this, Char, Loc))
 	{
-		const UCLCombatMovementComponent* Move = Char->GetCombatMovement();
-		const bool bNeedLand = bFlight || (Goal.Z + 80.f < Loc.Z - 120.f);
-		const bool bOnPad = CLNavAbility::StandingOnGoalFloor(Loc, Goal);
-		if (!bNeedLand || (Move && Move->IsMovingOnGround() && !Move->IsDiving() && bOnPad))
-		{
-			Cancel();
-			Char->ClearAgentIntent();
-			return;
-		}
+		return;
 	}
-
 	BeginFlightIfNeeded(*this, Char);
-	if (bFlight)
-	{
-		Flight.Tick(DeltaSeconds, Char);
-		if (Flight.bFailed)
-		{
-			UE_LOG(LogCallingGoto, Display,
-				TEXT("goto flightFail idx=%d loc=(%.0f,%.0f,%.0f) goal=(%.0f,%.0f,%.0f)"),
-				Index, Loc.X, Loc.Y, Loc.Z, Flight.Goal.X, Flight.Goal.Y, Flight.Goal.Z);
-			bFlight = false;
-			Flight.Reset();
-			if (PathAirDive.IsValidIndex(Index))
-			{
-				PathAirDive[Index] = 0;
-			}
-			return;
-		}
-		if (Flight.bFinished)
-		{
-			// Intermediate Recast AirDive — keep walking the polyline (do not Cancel goto).
-			UE_LOG(LogCallingGoto, Display,
-				TEXT("goto flightLand idx=%d loc=(%.0f,%.0f,%.0f) land=(%.0f,%.0f,%.0f)"),
-				Index, Loc.X, Loc.Y, Loc.Z, Flight.Goal.X, Flight.Goal.Y, Flight.Goal.Z);
-			bFlight = false;
-			Flight.Reset();
-			if (Path.IsValidIndex(Index))
-			{
-				++Index;
-			}
-			StuckSeconds = 0.f;
-			LastWpDist = -1.f;
-			return;
-		}
-		return;
-	}
-
-	while (Path.IsValidIndex(Index) && FVector::Dist2D(Loc, Path[Index]) <= GotoWaypointRadius)
-	{
-		// Recast AirDive: Launch owns — do not walk-advance past the hop.
-		if (PathAirDive.IsValidIndex(Index) && PathAirDive[Index] != 0)
-		{
-			break;
-		}
-		++Index;
-		StuckSeconds = 0.f;
-		LastWpDist = -1.f;
-	}
-	if (!Path.IsValidIndex(Index))
-	{
-		if (RepathLeft > 0)
-		{
-			--RepathLeft;
-			FString Error;
-			if (Start(World, Char, Goal, Error, true) && Path.IsValidIndex(Index))
-			{
-				return;
-			}
-		}
-	}
-
-	const FVector Steer = SteerWaypoint(*this, Char);
-	SteerAt = Steer;
-	const FVector ToTarget = (SteerAt - Loc).GetSafeNormal2D();
-	if (ToTarget.IsNearlyZero())
+	if (TickFlight(*this, Char, DeltaSeconds, Loc))
 	{
 		return;
 	}
-
-	const float WpDist = FVector::Dist2D(Loc, SteerAt);
-	if (LastWpDist < 0.f || WpDist < LastWpDist - 15.f)
-	{
-		StuckSeconds = 0.f;
-		LastWpDist = WpDist;
-	}
-	else
-	{
-		StuckSeconds += DeltaSeconds;
-		LastWpDist = FMath::Min(LastWpDist, WpDist);
-	}
-	if (StuckSeconds > 2.5f && RepathLeft > 0)
-	{
-		--RepathLeft;
-		StuckSeconds = 0.f;
-		LastWpDist = -1.f;
-		FString Error;
-		if (Start(World, Char, Goal, Error, true) && Path.IsValidIndex(Index))
-		{
-			return;
-		}
-	}
-
-	// CombatMovement interprets Move as control-yaw local (Y=forward, X=right). Wish toward
-	// the Recast waypoint in that basis so look slew does not walk us in circles.
-	FVector2D MoveXY = FVector2D::ZeroVector;
-	{
-		const FRotator Yaw(0.f, Char->GetControlRotation().Yaw, 0.f);
-		const FVector Forward = FRotationMatrix(Yaw).GetUnitAxis(EAxis::X);
-		const FVector Right = FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y);
-		MoveXY.X = FVector::DotProduct(ToTarget, Right);
-		MoveXY.Y = FVector::DotProduct(ToTarget, Forward);
-		const float Mag = MoveXY.Size();
-		if (Mag > KINDA_SMALL_NUMBER)
-		{
-			MoveXY /= Mag;
-		}
-	}
-
-	bool bJump = false;
-	bMoveBlocked = false;
-	FwdKind = NAME_None;
-	FwdDist = -1.f;
-	if (World)
-	{
-		const FCLNavProbeTune& Probe = CLNavTune::Get().Probe;
-		const float HalfH = Char->GetCapsuleComponent() ? Char->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 96.f;
-		const FVector Waist = Loc - ToTarget * Probe.StartBackupCm;
-		const FVector Head = Loc + FVector(0.f, 0.f, Probe.HeadLiftCm) - ToTarget * Probe.StartBackupCm;
-		const FCLAgentBlockHit Fwd = CLAgentNavProbe::ProbeBlock(World, Char, Waist, ToTarget, Loc.Z - HalfH);
-		const FCLAgentBlockHit HeadHit = CLAgentNavProbe::ProbeBlock(World, Char, Head, ToTarget, Loc.Z - HalfH);
-		const float Drop = CLAgentNavProbe::FloorDropCm(World, Char, Loc, HalfH, ToTarget, 90.f);
-		const bool bOnGround = !Char->GetCombatMovement() || Char->GetCombatMovement()->IsMovingOnGround();
-		const bool bJumpUp = Fwd.Kind == ECLFwdKind::JumpUp && Fwd.Dist < Probe.JumpFaceCm;
-		const bool bJumpCover = Fwd.Kind == ECLFwdKind::Cover && Fwd.Dist < Probe.JumpFaceCm && HeadHit.Dist >= Probe.JumpableHeadClearCm;
-		const bool bJumpDown = Fwd.Kind == ECLFwdKind::JumpDown && Fwd.Dist < Probe.JumpFaceCm;
-		const bool bHasLanding = Fwd.Kind == ECLFwdKind::Drop || Fwd.Kind == ECLFwdKind::JumpDown;
-		const int32 JumpsLeft = Char->GetCombatMovement() ? Char->GetCombatMovement()->GetJumpsRemaining() : 0;
-		FwdKind = FName(CLAgentNavProbe::FwdKindName(Fwd.Kind));
-		FwdDist = Fwd.Dist;
-		// Recast polyline already stays on mesh / DropDown / AirDive links. The 90 cm void
-		// probe false-stops on spawn-pad corners and terrace lips → look-only spin.
-		if (!bNavPath && Drop >= Probe.FloorProbeMaxCm && !bHasLanding)
-		{
-			const bool bWalkOffLip = Drop > Probe.LipDropMinCm && Drop < 600.f;
-			if (!bWalkOffLip)
-			{
-				bMoveBlocked = true;
-			}
-		}
-		if (Fwd.Kind == ECLFwdKind::Wall && Fwd.Dist < 80.f)
-		{
-			bMoveBlocked = true;
-		}
-		if (bMoveBlocked)
-		{
-			MoveXY = FVector2D::ZeroVector;
-		}
-		if (JumpCooldown <= 0.f && (bJumpCover || bJumpDown || bJumpUp)
-			&& (bOnGround || (bJumpUp && JumpsLeft > 0)))
-		{
-			bJump = true;
-			JumpCooldown = 0.45f;
-			StuckSeconds = 0.f;
-		}
-	}
-
-	LastMoveXY = MoveXY;
-
-	{
-		static float GotoDiagAcc = 0.f;
-		GotoDiagAcc += DeltaSeconds;
-		if (GotoDiagAcc >= 0.2f)
-		{
-			GotoDiagAcc = 0.f;
-			const FVector Wp = Path.IsValidIndex(Index) ? Path[Index] : Goal;
-			UE_LOG(LogCallingGoto, Display,
-				TEXT("goto tick loc=(%.0f,%.0f,%.0f) idx=%d/%d dive=%d reason=%s launch=%d distLip=%.0f distXY=%.0f dZ=%.0f wp=(%.0f,%.0f,%.0f) steer=(%.0f,%.0f,%.0f) lookYaw=%.1f ctrlYaw=%.1f move=(%.2f,%.2f) blocked=%d fwd=%s/%.0f stuck=%.1f"),
-				Loc.X, Loc.Y, Loc.Z, Index, Path.Num(),
-				PathAirDive.IsValidIndex(Index) ? PathAirDive[Index] : -1,
-				*SteerReason.ToString(), bLaunchOk ? 1 : 0, DistLip, DistXYToWp, DeltaZToWp,
-				Wp.X, Wp.Y, Wp.Z, SteerAt.X, SteerAt.Y, SteerAt.Z,
-				ToTarget.Rotation().Yaw, Char->GetControlRotation().Yaw,
-				LastMoveXY.X, LastMoveXY.Y, bMoveBlocked ? 1 : 0,
-				*FwdKind.ToString(), FwdDist, StuckSeconds);
-		}
-	}
-
-	// Face the waypoint while moving. Do not slew look while planted — that is the spawn spin.
-	if (!MoveXY.IsNearlyZero())
-	{
-		Char->SetLookGoalYawPitch(true, ToTarget.Rotation().Yaw, true, HeadshotPitch);
-	}
-
-	FCLAgentIntent Intent;
-	Intent.Move = MoveXY;
-	Intent.bSprint = true;
-	Intent.bJump = bJump;
-	Char->ApplyAgentIntent(Intent);
+	TickWalk(*this, DeltaSeconds, World, Char, Loc);
 }

@@ -89,9 +89,22 @@ UCLParticipantSeat* UCLSeatRegistry::FindLocal() const
 {
 	for (UCLParticipantSeat* Seat : Seats)
 	{
-		if (Seat && Seat->GetSeatMotor() && Seat->GetSeatMotor()->IsA<UCLHumanSeatMotor>())
+		if (Seat && Seat->GetBoundController() && Seat->GetBoundController()->IsLocalController())
 		{
 			return Seat;
+		}
+	}
+	for (UCLParticipantSeat* Seat : Seats)
+	{
+		if (Seat && Seat->GetSeatMotor() && Seat->GetSeatMotor()->IsA<UCLHumanSeatMotor>())
+		{
+			if (const APawn* Pawn = Seat->GetDrivenPawn())
+			{
+				if (Pawn->IsLocallyControlled())
+				{
+					return Seat;
+				}
+			}
 		}
 	}
 	return FindHost();
@@ -103,13 +116,22 @@ UCLParticipantSeat* UCLSeatRegistry::FindForController(const AController* Contro
 	{
 		return nullptr;
 	}
-	if (Cast<APlayerController>(Controller))
+	for (UCLParticipantSeat* Seat : Seats)
 	{
-		if (UCLParticipantSeat* Local = FindLocal())
+		if (Seat && Seat->GetBoundController() == Controller)
 		{
-			return Local;
+			return Seat;
 		}
-		return FindHost();
+	}
+	if (const APlayerController* PC = Cast<APlayerController>(Controller))
+	{
+		if (PC->IsLocalController())
+		{
+			if (UCLParticipantSeat* Local = FindLocal())
+			{
+				return Local;
+			}
+		}
 	}
 	const APawn* Pawn = Controller->GetPawn();
 	for (UCLParticipantSeat* Seat : Seats)
@@ -220,6 +242,7 @@ UCLParticipantSeat* UCLSeatRegistry::EnsureLocalHuman(const FString& ProfileName
 	const FString Name = ProfileName.IsEmpty() ? TEXT("Host") : ProfileName;
 	UCLParticipantSeat* Seat = MakeSeat(Name, UCLHumanSeatMotor::StaticClass(), FGuid(), Gate);
 	Seat->SetHost(true);
+	Seat->SetTeam(ECLPvpTeam::Red);
 	if (ACLPlayerCharacter* Pawn = FindHumanPawn())
 	{
 		if (UCLPossessionComponent* Possession = Pawn->GetPossession())
@@ -230,6 +253,85 @@ UCLParticipantSeat* UCLSeatRegistry::EnsureLocalHuman(const FString& ProfileName
 		}
 	}
 	return Seat;
+}
+
+UCLParticipantSeat* UCLSeatRegistry::EnsureNetHuman(APlayerController* PC, const FString& ProfileName, const FCLLobbyGate* Gate)
+{
+	if (!PC)
+	{
+		return nullptr;
+	}
+	if (UCLParticipantSeat* Existing = FindForController(PC))
+	{
+		Existing->BindController(PC);
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			Existing->SetAnchor(Pawn);
+			if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(Pawn))
+			{
+				if (UCLPossessionComponent* Possession = Char->GetPossession())
+				{
+					Possession->PossessOwn(Char);
+					Existing->SetPossession(Possession);
+				}
+			}
+		}
+		return Existing;
+	}
+
+	if (PC->IsLocalController())
+	{
+		UCLParticipantSeat* Host = FindHost();
+		if (Host && Host->GetBoundController() == nullptr)
+		{
+			Host->BindController(PC);
+			return EnsureNetHuman(PC, ProfileName, Gate);
+		}
+		if (!Host)
+		{
+			UCLParticipantSeat* Seat = EnsureLocalHuman(ProfileName, Gate);
+			if (Seat)
+			{
+				Seat->BindController(PC);
+			}
+			return Seat;
+		}
+	}
+
+	const FString Name = ProfileName.IsEmpty() ? TEXT("Guest") : ProfileName;
+	UCLParticipantSeat* Seat = MakeSeat(Name, UCLHumanSeatMotor::StaticClass(), FGuid(), Gate);
+	Seat->SetHost(false);
+	Seat->SetTeam(ECLPvpTeam::Blue);
+	Seat->BindController(PC);
+	if (APawn* Pawn = PC->GetPawn())
+	{
+		Seat->SetAnchor(Pawn);
+		if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(Pawn))
+		{
+			if (UCLPossessionComponent* Possession = Char->GetPossession())
+			{
+				Possession->PossessOwn(Char);
+				Seat->SetPossession(Possession);
+			}
+		}
+	}
+	return Seat;
+}
+
+void UCLSeatRegistry::RemoveForController(AController* Controller)
+{
+	if (!Controller)
+	{
+		return;
+	}
+	for (int32 i = Seats.Num() - 1; i >= 0; --i)
+	{
+		UCLParticipantSeat* Seat = Seats[i];
+		if (Seat && Seat->GetBoundController() == Controller && !Seat->IsHost())
+		{
+			Seats.RemoveAt(i);
+		}
+	}
 }
 
 UClass* UCLSeatRegistry::SeatMotorClassFromKind(const FString& Kind)

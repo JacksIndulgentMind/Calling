@@ -7,8 +7,12 @@
 #include "Player/CLAbilityLoadoutComponent.h"
 #include "UI/CLMainMenuOverlay.h"
 #include "UI/CLCombatHudWidget.h"
+#include "UI/CLComposerMenu.h"
 #include "Game/CLGameModeBase.h"
+#include "Game/CLGameStateBase.h"
 #include "Game/CLLobbySubsystem.h"
+#include "Game/CLParticipantSeat.h"
+#include "Game/CLSessionSubsystem.h"
 #include "Game/CLInputBindSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -48,6 +52,7 @@ void ACLPlayerController::BeginPlay()
 
 	EnsureCombatHud();
 	EnsureMainMenu();
+	EnsureComposerMenu();
 	RestoreLitView();
 }
 
@@ -283,9 +288,120 @@ void ACLPlayerController::NativeLookPitch(float Value)
 	CurrentLook.Y -= Value;
 }
 
+void ACLPlayerController::EnsureComposerMenu()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	ECLSceneId Scene = ECLSceneId::Social;
+	if (UWorld* World = GetWorld())
+	{
+		if (const ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>())
+		{
+			Scene = GS->GetSceneId();
+		}
+		else if (const ACLGameModeBase* GM = Cast<ACLGameModeBase>(World->GetAuthGameMode()))
+		{
+			Scene = GM->GetSceneId();
+		}
+	}
+
+	if (Scene != ECLSceneId::Composer)
+	{
+		if (ComposerMenuInstance)
+		{
+			ComposerMenuInstance->RemoveFromParent();
+			ComposerMenuInstance = nullptr;
+		}
+		return;
+	}
+
+	if (ComposerMenuInstance)
+	{
+		return;
+	}
+
+	ComposerMenuInstance = CreateWidget<UCLComposerMenu>(this, UCLComposerMenu::StaticClass());
+	if (!ComposerMenuInstance)
+	{
+		return;
+	}
+	ComposerMenuInstance->AddToViewport(25);
+	bShowMouseCursor = true;
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
+	FInputModeGameAndUI Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	Mode.SetHideCursorDuringCapture(false);
+	Mode.SetWidgetToFocus(ComposerMenuInstance->TakeWidget());
+	SetInputMode(Mode);
+}
+
+void ACLPlayerController::ServerComposerReadyToggle_Implementation()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			if (UCLParticipantSeat* Seat = Lobby->FindSeatForController(this))
+			{
+				Lobby->SetReady(Seat->GetSeatId(), !Seat->IsReady());
+			}
+			else
+			{
+				Lobby->SetReadyForController(this, true);
+			}
+		}
+	}
+}
+
+void ACLPlayerController::ServerComposerTeam_Implementation(ECLPvpTeam Team)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->SetTeamForController(this, Team);
+		}
+	}
+}
+
+void ACLPlayerController::ServerComposerReady_Implementation(bool bReady)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->SetReadyForController(this, bReady);
+		}
+	}
+}
+
 void ACLPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+
+	if (IsLocalController())
+	{
+		EnsureComposerMenu();
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+			{
+				if (Sessions->IsLoopbackJoinPending())
+				{
+					UWorld* World = GetWorld();
+					if (World && World->GetNetMode() == NM_Client)
+					{
+						ServerComposerReady(true);
+						Sessions->ClearLoopbackJoinPending();
+					}
+				}
+			}
+		}
+	}
 
 	PollMenuKeys();
 

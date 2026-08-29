@@ -6,6 +6,7 @@
   "agentHeightCm": 192,
   "agentMaxSlopeDeg": 55,
   "airDiveSearchMaxCm": 0,
+  "areaCost": { "airDive": 50, "longJump": 25 },
   "probe": {
     "maxCm": 1800,
     "jumpableHeadClearCm": 500,

@@ -15,6 +15,7 @@ class UCLTravelCoordinator;
 class ACLPlayerCharacter;
 class APawn;
 class AController;
+class APlayerController;
 class AActor;
 
 /**
@@ -69,6 +70,11 @@ public:
 	TArray<UCLParticipantSeat*> GetSeats() const;
 
 	UCLParticipantSeat* EnsureLocalHumanSeat();
+	UCLParticipantSeat* EnsureNetHumanSeat(APlayerController* PC);
+	void RemoveSeatForController(AController* Controller);
+	void PushLobbyToGameState();
+	bool SetReadyForController(APlayerController* PC, bool bReady);
+	bool SetTeamForController(APlayerController* PC, ECLPvpTeam Team);
 	UCLParticipantSeat* JoinRemoteAgent(const FString& DisplayName, bool bHeadless, FString& OutError, const FString& Kind = TEXT("remoteAgent"));
 	bool SetReady(const FGuid& SeatId, bool bReady);
 	bool ToggleLocalReady();

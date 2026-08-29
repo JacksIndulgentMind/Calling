@@ -96,9 +96,10 @@ void UCLSceneRouter::SoftTravel(const FString& MapName, ECLSceneId Scene)
 	}
 
 	const FString Options = FString::Printf(
-		TEXT("game=%s?cl=%d?NoSeamlessTravel"),
+		TEXT("game=%s?cl=%d?NoSeamlessTravel%s"),
 		*GameModePathForScene(Scene),
-		static_cast<int32>(Scene));
+		static_cast<int32>(Scene),
+		(World->GetNetMode() == NM_ListenServer) ? TEXT("?listen") : TEXT(""));
 	const FString URL = FString::Printf(TEXT("%s?%s"), *MapName, *Options);
 
 	FString CurrentShort;

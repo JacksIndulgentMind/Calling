@@ -40,6 +40,27 @@ enum class ECLHubSnapshotReason : uint8
 };
 
 USTRUCT(BlueprintType)
+struct CALLING_API FCLLobbySeatSnap
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FGuid SeatId;
+
+	UPROPERTY()
+	FString DisplayName;
+
+	UPROPERTY()
+	ECLPvpTeam Team = ECLPvpTeam::Unassigned;
+
+	UPROPERTY()
+	bool bReady = false;
+
+	UPROPERTY()
+	bool bHost = false;
+};
+
+USTRUCT(BlueprintType)
 struct CALLING_API FCLInvoiceSeat
 {
 	GENERATED_BODY()
