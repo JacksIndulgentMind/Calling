@@ -38,6 +38,7 @@ protected:
 	void SendText(int32 Index, const FString& Text);
 	void CloseClient(int32 Index);
 	static bool ReadHttpHeader(const TArray<uint8>& Buffer, FString& OutKey);
+	static bool ReadUpgrade(const TArray<uint8>& Buffer, FString& OutKey, FString& OutMode, FString& OutTarget, FString& OutQuery);
 	static FString MakeAcceptKey(const FString& ClientKey);
 	static bool DecodeFrame(TArray<uint8>& Buffer, FString& OutText);
 
@@ -47,6 +48,9 @@ protected:
 		TArray<uint8> Buffer;
 		bool bUpgraded = false;
 		FGuid SeatId;
+		FGuid AgentId;
+		bool bProxy = false;
+		FGuid TargetInstance;
 	};
 
 	FSocket* ListenSocket = nullptr;

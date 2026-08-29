@@ -97,8 +97,12 @@ public:
 	/** Net client: local human + cursor driving this process's pawn. */
 	void PrepareGuestLocalHub(FGuid* FallbackSeat);
 
-	/** If hub JSON has via=remote PC, Client-RPC it and invoke OnDone with the reply JSON. */
-	bool TryRouteHubVia(const TSharedPtr<FJsonObject>& Root, TFunction<void(FString)> OnDone);
+	/** Shared guest/host MCP front: instance gate + Dispatch + stamp. HTTP 18767 and via land here. */
+	void IngressLocalHub(const TSharedPtr<FJsonObject>& Root, FGuid* FallbackSeat, TFunction<void(FString)> OnDone);
+
+	/** Host connectMode=proxy (or legacy via seat): Client-RPC into guest IngressLocalHub. */
+	bool TryRouteHubProxy(const TSharedPtr<FJsonObject>& Root, const FGuid& TargetInstance, const FGuid& ViaSeat, TFunction<void(FString)> OnDone);
+	ACLPlayerController* FindHubProxyTarget(const FGuid& TargetInstance, const FGuid& ViaSeat, FString& OutError) const;
 	void HandleIncomingViaHub(const FString& Json, int32 CorrelationId, ACLPlayerController* ReplyTo);
 	void CompleteHubVia(int32 CorrelationId, const FString& Json);
 

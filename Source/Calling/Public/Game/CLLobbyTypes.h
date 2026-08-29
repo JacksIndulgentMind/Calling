@@ -101,6 +101,10 @@ struct CALLING_API FCLLobbyInvoice
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Lobby")
 	ECLSceneId Activity = ECLSceneId::Social;
 
+	/** JSON game mode id (e.g. shrine_clash). Not an Unreal AGameMode class. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Lobby")
+	FName GameModeId;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Lobby")
 	int32 MinPlayers = 1;
 

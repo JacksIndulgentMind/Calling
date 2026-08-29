@@ -19,7 +19,7 @@ Prefer Recast `goto` (as a BotBook leaf) when `navTiles > 0` on **that seat’s*
 5. **Stay on the floor you are on.** Void is the drop. If Z drops well below the standing surface, stop that seat’s book.
 6. Never dodge unless the book names `dodge`. Do not leave a strafe latched — the book unpresses when the leaf settles.
 7. Sample `/state?seat=` at most ~10 Hz. Log a short x/y/z trail **per seat**. After a failed stroll, add a **general** lesson to [lessons.md](lessons.md).
-8. **Recover instead of throw:** `branchBotBook` or append a new JIT tree if stalled; rewrite from `/state`. Z-collapse still stops that seat.
+8. **Recover instead of throw:** `branchBotBook` with **`cause`**. Use `execution` when the bot failed the book (nav/`goto`/timeout) independent of outside factors — that is an error state (`executionError`, fix it). Use `situation` for combat, personality, or world change. Or append a new JIT tree if stalled; rewrite from `/state`. Z-collapse still stops that seat.
 
 Do **not** use MCP `plan` / `sequence` / `intent` / raw `goto` when a seat exists. Those are loopback debug.
 
@@ -44,7 +44,7 @@ Pawn spawn often leaves pitch at **−12** (looking at the floor). That is not a
 
 ## 3-lane PvP (locked dimensions, not a route)
 
-cm. Red west / Blue east. Spawn pads Z = 0 (pawn ~98). Courtyard Z = **−2000**. Stonehenge π trilithons ~9.5 m radius (8 stations, long axis tangential). Mid strip is 12 m wide (void beyond). Crossing cover is ~8 m across the lane with a gap on one side. Map bug: west ramps can drop you **through** the floor near mid (~x −85 to −122 m); stop if Z collapses, do not treat that as a nav lesson.
+cm. Red west / Blue east. Spawn pads Z = 0 (pawn ~98), `x ≈ ±6380`. Courtyard Z = **−600**. Stonehenge π trilithons ~9.5 m radius (8 stations, long axis tangential). Mid strip is 12 m wide (void beyond). Crossing cover is ~8 m across the lane with a gap on one side. Corner shrines: `shrine_well` / `_tree` / `_heel` / `_cairn` (tag `space.shrine`). Spawns are `spawn.player.red` / `.blue`. Mode **shrine_clash**: `/state.liveShrine`, `teamAKills` / `teamBKills`, `modeResult`. Catalog book `shrine_clash_fight`. The old west through-floor band (~x −85 to −122 m) is **off this compressed layout**. If Z still collapses on a lane, stop; do not treat it as a nav lesson.
 
 ## Verb tests (Social pad is fine)
 

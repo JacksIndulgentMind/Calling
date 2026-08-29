@@ -1,4 +1,5 @@
 #include "Game/CLAgentStateSerializer.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Combat/CLHitscanService.h"
 #include "Combat/CLDamageableComponent.h"
 #include "Core/CLTypes.h"
@@ -104,7 +105,15 @@ namespace
 			{
 				Root->SetNumberField(TEXT("teamAScore"), GS->GetTeamAScore());
 				Root->SetNumberField(TEXT("teamBScore"), GS->GetTeamBScore());
+				Root->SetNumberField(TEXT("teamAKills"), GS->GetTeamAKills());
+				Root->SetNumberField(TEXT("teamBKills"), GS->GetTeamBKills());
 				Root->SetStringField(TEXT("scoreLine"), GS->GetScoreLine());
+				Root->SetStringField(TEXT("liveShrine"), GS->GetLiveShrine().ToString());
+				Root->SetBoolField(TEXT("shrineHeldRed"), GS->GetShrineHeldRed());
+				Root->SetBoolField(TEXT("shrineHeldBlue"), GS->GetShrineHeldBlue());
+				Root->SetStringField(TEXT("modeResult"), GS->GetModeResult());
+				Root->SetStringField(TEXT("winningTeam"), GS->GetWinningTeam());
+				Root->SetStringField(TEXT("modeFailReason"), GS->GetModeFailReason());
 			}
 		}
 	}
@@ -228,6 +237,10 @@ TSharedRef<FJsonObject> FCLAgentStateSerializer::Build(
 	FCLAgentStateSerializer::FillSceneMenu(Root, GI, LocalPC);
 	if (GI)
 	{
+		if (const UCLInstanceIdentitySubsystem* Id = GI->GetSubsystem<UCLInstanceIdentitySubsystem>())
+		{
+			Id->StampJson(Root);
+		}
 		if (const UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
 		{
 			Lobby->FillStateJson(Root);

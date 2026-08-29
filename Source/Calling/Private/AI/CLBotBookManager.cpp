@@ -7,6 +7,7 @@
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLErrorBoundary.h"
+#include "Core/CLError.h"
 #include "Nav/CLAgentNavProbe.h"
 #include "Nav/CLNavAbilityEnvelope.h"
 #include "Player/CLPlayerCharacter.h"
@@ -17,6 +18,7 @@
 #include "HAL/FileManager.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
+#include "HAL/PlatformTime.h"
 
 namespace
 {
@@ -148,10 +150,182 @@ const FCLBotBook* UCLBotBookManager::FindBook(FName Name) const
 	return nullptr;
 }
 
+TSharedPtr<UCLBotBookManager::FRuntime> UCLBotBookManager::EnsureRuntime(const FGuid& SeatId)
+{
+	TSharedPtr<FRuntime>& Rt = Runtimes.FindOrAdd(SeatId);
+	if (!Rt.IsValid())
+	{
+		Rt = MakeShared<FRuntime>();
+	}
+	return Rt;
+}
+
+bool UCLBotBookManager::IsExecuting(const FRuntime& Rt) const
+{
+	return CurrentStmt(Rt) != nullptr;
+}
+
+bool UCLBotBookManager::CatalogAlreadyLiveOrQueued(const FRuntime& Rt, FName Name) const
+{
+	if (Name.IsNone())
+	{
+		return false;
+	}
+	if (IsExecuting(Rt) && Rt.ActiveName == Name)
+	{
+		return true;
+	}
+	for (const FQueuedBook& Q : Rt.Queue)
+	{
+		if (!Q.Jit.IsValid() && Q.CatalogName == Name)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UCLBotBookManager::NoteCancelStorm(FRuntime& Rt, bool bStrategic, FString& OutError)
+{
+	const double Now = FPlatformTime::Seconds();
+	const float Window = bStrategic ? 4.f : 8.f;
+	const int32 Limit = bStrategic ? 8 : 3;
+	TArray<double>& Times = bStrategic ? Rt.StrategicCancelAt : Rt.PreemptCancelAt;
+	Times.RemoveAll([Now, Window](double T) { return (Now - T) > Window; });
+	Times.Add(Now);
+	if (Times.Num() < Limit)
+	{
+		return true;
+	}
+	OutError = bStrategic ? TEXT("botbook_cancel_storm") : TEXT("botbook_preempt_storm");
+	UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+		ECLErrorKind::User,
+		OutError,
+		bStrategic
+			? TEXT("situation branchBotBook faster than replan (8 in 4s)")
+			: TEXT("append cancelled a live book (3 in 8s)")));
+	return false;
+}
+
+bool UCLBotBookManager::ParseBranchCause(const FString& Cause, ECLBotBookBranchCause& OutCause, FString& OutError) const
+{
+	const FString C = Cause.TrimStartAndEnd().ToLower();
+	if (C.IsEmpty())
+	{
+		OutCause = ECLBotBookBranchCause::Invalid;
+		OutError = TEXT("missing_branch_cause");
+		return false;
+	}
+	if (C == TEXT("execution") || C == TEXT("failure") || C == TEXT("fail"))
+	{
+		OutCause = ECLBotBookBranchCause::Execution;
+		return true;
+	}
+	if (C == TEXT("situation") || C == TEXT("combat") || C == TEXT("personality") || C == TEXT("strategic"))
+	{
+		OutCause = ECLBotBookBranchCause::Situation;
+		return true;
+	}
+	OutCause = ECLBotBookBranchCause::Invalid;
+	OutError = TEXT("invalid_branch_cause");
+	return false;
+}
+
+bool UCLBotBookManager::NoteBranchCause(UCLParticipantSeat* Seat, FRuntime& Rt, ECLBotBookBranchCause Cause, FString& OutError)
+{
+	const TCHAR* CauseName = Cause == ECLBotBookBranchCause::Execution ? TEXT("execution") : TEXT("situation");
+	FString Node;
+	if (const FCLBotStmt* Stmt = CurrentStmt(Rt))
+	{
+		Node = Stmt->Id;
+	}
+	Rt.LastBranchCause = CauseName;
+	Rt.LastBranchNode = Node;
+	FBranchObs& Obs = BranchObs.FindOrAdd(Seat ? Seat->GetSeatId() : FGuid());
+	Obs.LastCause = CauseName;
+	Obs.LastNode = Node;
+	Obs.LastBook = Rt.ActiveName.ToString();
+	if (Cause == ECLBotBookBranchCause::Execution)
+	{
+		Rt.ExecutionFails++;
+		Obs.ExecutionFails++;
+		if (!Obs.bReportedExecution)
+		{
+			Obs.bReportedExecution = true;
+			Rt.bReportedExecution = true;
+			UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+				ECLErrorKind::NonDeterministic,
+				TEXT("botbook_execution"),
+				FString::Printf(TEXT("branch cause=execution book=%s node=%s — bot failed the book (not outside factors)"),
+					*Obs.LastBook, *Node)));
+		}
+		return true;
+	}
+	return NoteCancelStorm(Rt, true, OutError);
+}
+
+bool UCLBotBookManager::EnqueueBook(FRuntime& Rt, FName CatalogName, TSharedPtr<FCLBotBook> Jit, FString& OutError)
+{
+	if (Rt.Queue.Num() >= MaxQueuedBooks)
+	{
+		OutError = TEXT("botbook_queue");
+		UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+			ECLErrorKind::User, TEXT("botbook_queue"), TEXT("too many queued BotBooks behind the live one")));
+		return false;
+	}
+	FQueuedBook Q;
+	Q.CatalogName = CatalogName;
+	Q.Jit = MoveTemp(Jit);
+	Rt.Queue.Add(MoveTemp(Q));
+	return true;
+}
+
+bool UCLBotBookManager::BeginNow(UCLParticipantSeat* Seat, FRuntime& Rt, const FCLBotBook& Book, FString& OutError)
+{
+	if (!IsExecuting(Rt))
+	{
+		if (UCLSeatMotor* Motor = Seat ? Seat->GetSeatMotor() : nullptr)
+		{
+			Motor->CancelGoto();
+		}
+		if (UCLRemoteAgentSeatMotor* Remote = Seat ? Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()) : nullptr)
+		{
+			Remote->MarkReply();
+		}
+	}
+	Rt.FallbackIndex = 0;
+	return PushBook(Rt, Book, OutError);
+}
+
+bool UCLBotBookManager::StartQueued(UCLParticipantSeat* Seat, FRuntime& Rt, FString& OutError)
+{
+	if (Rt.Queue.Num() == 0)
+	{
+		return false;
+	}
+	const FQueuedBook Q = Rt.Queue[0];
+	Rt.Queue.RemoveAt(0);
+	if (Q.Jit.IsValid())
+	{
+		Rt.JitBook = Q.Jit;
+		Rt.JitHold.Add(Q.Jit);
+		Rt.bJit = true;
+		return BeginNow(Seat, Rt, *Rt.JitBook, OutError);
+	}
+	const FCLBotBook* Book = FindBook(Q.CatalogName);
+	if (!Book)
+	{
+		OutError = TEXT("unknown_botbook");
+		return false;
+	}
+	Rt.bJit = false;
+	return BeginNow(Seat, Rt, *Book, OutError);
+}
+
 bool UCLBotBookManager::HasRuntime(const FGuid& SeatId) const
 {
 	const TSharedPtr<FRuntime>* Found = Runtimes.Find(SeatId);
-	return Found && (*Found)->Stack.Num() > 0;
+	return Found && Found->IsValid() && ((*Found)->Stack.Num() > 0 || (*Found)->Queue.Num() > 0);
 }
 
 void UCLBotBookManager::ClearSeat(const FGuid& SeatId)
@@ -168,7 +342,20 @@ void UCLBotBookManager::ClearSeat(const FGuid& SeatId)
 
 bool UCLBotBookManager::PushBook(FRuntime& Rt, const FCLBotBook& Book, FString& OutError)
 {
-	(void)OutError;
+	if (Rt.Stack.Num() >= MaxBookStack)
+	{
+		OutError = TEXT("botbook_stack");
+		if (!Rt.bReportedStack)
+		{
+			Rt.bReportedStack = true;
+			UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+				ECLErrorKind::NonDeterministic,
+				TEXT("botbook_stack"),
+				FString::Printf(TEXT("BotBook stack %d (max %d); append must not preempt the live book"),
+					Rt.Stack.Num(), MaxBookStack)));
+		}
+		return false;
+	}
 	FFrame Fr;
 	Fr.BookName = Book.Name;
 	Fr.Seq = &Book.Body;
@@ -199,24 +386,20 @@ bool UCLBotBookManager::AppendCatalog(UCLParticipantSeat* Seat, const FString& B
 		OutError = TEXT("unknown_botbook");
 		return false;
 	}
+	TSharedPtr<FRuntime> Rt = EnsureRuntime(Seat->GetSeatId());
 	if (UCLRemoteAgentSeatMotor* Remote = Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()))
 	{
-		Remote->CancelMotor();
 		Remote->MarkReply();
 	}
-	else if (UCLSeatMotor* Motor = Seat->GetSeatMotor())
+	if (IsExecuting(*Rt))
 	{
-		Motor->CancelGoto();
+		if (CatalogAlreadyLiveOrQueued(*Rt, Book->Name))
+		{
+			return true;
+		}
+		return EnqueueBook(*Rt, Book->Name, nullptr, OutError);
 	}
-	TSharedPtr<FRuntime>& Rt = Runtimes.FindOrAdd(Seat->GetSeatId());
-	if (!Rt.IsValid())
-	{
-		Rt = MakeShared<FRuntime>();
-	}
-	Rt->bJit = false;
-	Rt->JitBook.Reset();
-	Rt->FallbackIndex = 0;
-	return PushBook(*Rt, *Book, OutError);
+	return BeginNow(Seat, *Rt, *Book, OutError);
 }
 
 bool UCLBotBookManager::AppendJit(UCLParticipantSeat* Seat, const FString& Puml, FString& OutError)
@@ -234,34 +417,45 @@ bool UCLBotBookManager::AppendJit(UCLParticipantSeat* Seat, const FString& Puml,
 		return false;
 	}
 	Book.bJit = true;
+	TSharedPtr<FRuntime> Rt = EnsureRuntime(Seat->GetSeatId());
 	if (UCLRemoteAgentSeatMotor* Remote = Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()))
 	{
-		Remote->CancelMotor();
 		Remote->MarkReply();
 	}
-	TSharedPtr<FRuntime>& Rt = Runtimes.FindOrAdd(Seat->GetSeatId());
-	if (!Rt.IsValid())
+	TSharedPtr<FCLBotBook> Held = MakeShared<FCLBotBook>(MoveTemp(Book));
+	if (IsExecuting(*Rt))
 	{
-		Rt = MakeShared<FRuntime>();
+		return EnqueueBook(*Rt, NAME_None, Held, OutError);
 	}
-	Rt->JitBook = MakeShared<FCLBotBook>(MoveTemp(Book));
+	Rt->JitBook = Held;
+	Rt->JitHold.Add(Held);
 	Rt->bJit = true;
-	Rt->FallbackIndex = 0;
-	return PushBook(*Rt, *Rt->JitBook, OutError);
+	return BeginNow(Seat, *Rt, *Rt->JitBook, OutError);
 }
 
-bool UCLBotBookManager::BranchCatalog(UCLParticipantSeat* Seat, const FString& AfterId, int32 Offset, const FString& BookName, FString& OutError)
+bool UCLBotBookManager::BranchCatalog(UCLParticipantSeat* Seat, const FString& AfterId, int32 Offset, const FString& BookName, const FString& Cause, FString& OutError)
 {
 	if (!Seat)
 	{
 		OutError = TEXT("no_seat");
 		return false;
 	}
-	TSharedPtr<FRuntime>* Found = Runtimes.Find(Seat->GetSeatId());
-	bool bPast = true;
-	if (Found && (*Found)->Stack.Num() > 0)
+	ECLBotBookBranchCause Parsed = ECLBotBookBranchCause::Invalid;
+	if (!ParseBranchCause(Cause, Parsed, OutError))
 	{
-		const FFrame& Top = (*Found)->Stack.Last();
+		return false;
+	}
+	const FCLBotBook* Book = FindBook(FName(*BookName));
+	if (!Book)
+	{
+		OutError = TEXT("unknown_botbook");
+		return false;
+	}
+	TSharedPtr<FRuntime> Rt = EnsureRuntime(Seat->GetSeatId());
+	bool bPast = true;
+	if (Rt->Stack.Num() > 0)
+	{
+		const FFrame& Top = Rt->Stack.Last();
 		if (Top.Seq)
 		{
 			for (int32 i = Top.Index; i < Top.Seq->Num(); ++i)
@@ -282,22 +476,48 @@ bool UCLBotBookManager::BranchCatalog(UCLParticipantSeat* Seat, const FString& A
 	{
 		return AppendCatalog(Seat, BookName, OutError);
 	}
-	StopLeaf(*Found->Get(), Seat);
-	Found->Get()->Stack.Last().Index = Found->Get()->Stack.Last().Seq->Num();
-	return AppendCatalog(Seat, BookName, OutError);
+	if (!NoteBranchCause(Seat, *Rt, Parsed, OutError))
+	{
+		return false;
+	}
+	StopLeaf(*Rt, Seat);
+	Rt->Stack.Last().Index = Rt->Stack.Last().Seq->Num();
+	return BeginNow(Seat, *Rt, *Book, OutError);
 }
 
-bool UCLBotBookManager::BranchJit(UCLParticipantSeat* Seat, const FString& AfterId, int32 Offset, const FString& Puml, FString& OutError)
+bool UCLBotBookManager::BranchJit(UCLParticipantSeat* Seat, const FString& AfterId, int32 Offset, const FString& Puml, const FString& Cause, FString& OutError)
 {
+	ECLBotBookBranchCause Parsed = ECLBotBookBranchCause::Invalid;
+	if (!ParseBranchCause(Cause, Parsed, OutError))
+	{
+		return false;
+	}
 	TSharedPtr<FRuntime>* Found = Runtimes.Find(Seat ? Seat->GetSeatId() : FGuid());
-	const bool bPast = !Found || !Found->IsValid() || Found->Get()->Stack.Num() == 0;
+	const bool bPast = !Found || !Found->IsValid() || !IsExecuting(**Found);
 	(void)AfterId;
 	(void)Offset;
 	if (bPast)
 	{
 		return AppendJit(Seat, Puml, OutError);
 	}
-	return AppendJit(Seat, Puml, OutError);
+	if (!NoteBranchCause(Seat, **Found, Parsed, OutError))
+	{
+		return false;
+	}
+	StopLeaf(**Found, Seat);
+	(*Found)->Stack.Last().Index = (*Found)->Stack.Last().Seq->Num();
+	FCLBotBook Book;
+	const FCLStatus St = FCLBotBookParser::Parse(Puml, true, Book, OutError);
+	if (!St.IsOk())
+	{
+		UCLErrorBoundary::ReportStatic(this, FCLError::Make(ECLErrorKind::User, TEXT("botbook_jit"), OutError));
+		return false;
+	}
+	Book.bJit = true;
+	(*Found)->JitBook = MakeShared<FCLBotBook>(MoveTemp(Book));
+	(*Found)->JitHold.Add((*Found)->JitBook);
+	(*Found)->bJit = true;
+	return BeginNow(Seat, **Found, *(*Found)->JitBook, OutError);
 }
 
 void UCLBotBookManager::NotifyRespawn(UCLParticipantSeat* Seat)
@@ -716,19 +936,43 @@ bool UCLBotBookManager::TickSeat(float DeltaSeconds, UCLParticipantSeat* Seat)
 	{
 		return false;
 	}
+	if (APawn* Driven = Seat->GetDrivenPawn())
+	{
+		if (!Driven->IsLocallyControlled())
+		{
+			return false;
+		}
+	}
 	TSharedPtr<FRuntime>* Found = Runtimes.Find(Seat->GetSeatId());
-	if (!Found || !Found->IsValid() || Found->Get()->Stack.Num() == 0)
+	if (!Found || !Found->IsValid())
 	{
 		return false;
 	}
 	FRuntime& Rt = *Found->Get();
+	if (Rt.Stack.Num() == 0)
+	{
+		FString QueueErr;
+		if (!StartQueued(Seat, Rt, QueueErr))
+		{
+			ClearSeat(Seat->GetSeatId());
+			return false;
+		}
+	}
+	if (Rt.Stack.Num() > MaxBookStack && !Rt.bReportedStack)
+	{
+		Rt.bReportedStack = true;
+		UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+			ECLErrorKind::NonDeterministic,
+			TEXT("botbook_stack"),
+			FString::Printf(TEXT("BotBook stack %d exceeds tick guard %d"), Rt.Stack.Num(), MaxBookStack)));
+	}
 	UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr;
 	if (!Rt.FocusSeat.IsValid())
 	{
 		Rt.FocusSeat = EnemySeat(Seat, Lobby);
 	}
 
-	const int32 Guard = 32;
+	const int32 Guard = MaxBookStack;
 	for (int32 Step = 0; Step < Guard && Rt.Stack.Num() > 0; ++Step)
 	{
 		FFrame& Top = Rt.Stack.Last();
@@ -850,6 +1094,11 @@ bool UCLBotBookManager::TickSeat(float DeltaSeconds, UCLParticipantSeat* Seat)
 	}
 	if (Rt.Stack.Num() == 0)
 	{
+		FString QueueErr;
+		if (StartQueued(Seat, Rt, QueueErr))
+		{
+			return true;
+		}
 		ClearSeat(Seat->GetSeatId());
 		return false;
 	}
@@ -875,10 +1124,22 @@ void UCLBotBookManager::CollectRemaining(const FRuntime& Rt, TArray<FString>& Ou
 TSharedRef<FJsonObject> UCLBotBookManager::MakeSeatBotJson(const FGuid& SeatId) const
 {
 	TSharedRef<FJsonObject> Obj = MakeShared<FJsonObject>();
+	auto WriteObs = [&]()
+	{
+		if (const FBranchObs* O = BranchObs.Find(SeatId))
+		{
+			Obj->SetStringField(TEXT("lastBranchCause"), O->LastCause);
+			Obj->SetStringField(TEXT("lastBranchNodeId"), O->LastNode);
+			Obj->SetStringField(TEXT("lastBranchBook"), O->LastBook);
+			Obj->SetNumberField(TEXT("executionFails"), O->ExecutionFails);
+			Obj->SetBoolField(TEXT("executionError"), O->ExecutionFails >= 1);
+		}
+	};
 	const TSharedPtr<FRuntime>* Found = Runtimes.Find(SeatId);
-	if (!Found || !Found->IsValid() || Found->Get()->Stack.Num() == 0)
+	if (!Found || !Found->IsValid() || ((*Found)->Stack.Num() == 0 && (*Found)->Queue.Num() == 0))
 	{
 		Obj->SetBoolField(TEXT("jit"), false);
+		WriteObs();
 		return Obj;
 	}
 	const FRuntime& Rt = *Found->Get();
@@ -889,19 +1150,32 @@ TSharedRef<FJsonObject> UCLBotBookManager::MakeSeatBotJson(const FGuid& SeatId) 
 		Obj->SetStringField(TEXT("nodeId"), Stmt->Id);
 	}
 	TArray<TSharedPtr<FJsonValue>> StackArr;
-	for (const FFrame& Fr : Rt.Stack)
+	const int32 StackN = Rt.Stack.Num();
+	const int32 StackShow = FMath::Min(StackN, 8);
+	for (int32 i = StackN - StackShow; i < StackN; ++i)
 	{
-		StackArr.Add(MakeShared<FJsonValueString>(Fr.BookName.ToString()));
+		StackArr.Add(MakeShared<FJsonValueString>(Rt.Stack[i].BookName.ToString()));
 	}
 	Obj->SetArrayField(TEXT("stack"), StackArr);
+	Obj->SetNumberField(TEXT("stackLen"), StackN);
 	TArray<FString> Remain;
 	CollectRemaining(Rt, Remain);
 	TArray<TSharedPtr<FJsonValue>> RemArr;
-	for (const FString& Id : Remain)
+	const int32 RemShow = FMath::Min(Remain.Num(), 12);
+	for (int32 i = 0; i < RemShow; ++i)
 	{
-		RemArr.Add(MakeShared<FJsonValueString>(Id));
+		RemArr.Add(MakeShared<FJsonValueString>(Remain[i]));
 	}
 	Obj->SetArrayField(TEXT("remaining"), RemArr);
+	Obj->SetNumberField(TEXT("remainingLen"), Remain.Num());
+	Obj->SetNumberField(TEXT("queueLen"), Rt.Queue.Num());
+	TArray<TSharedPtr<FJsonValue>> QArr;
+	for (const FQueuedBook& Q : Rt.Queue)
+	{
+		QArr.Add(MakeShared<FJsonValueString>(Q.Jit.IsValid() ? TEXT("jit") : Q.CatalogName.ToString()));
+	}
+	Obj->SetArrayField(TEXT("queued"), QArr);
+	WriteObs();
 	return Obj;
 }
 

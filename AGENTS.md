@@ -11,7 +11,7 @@ Cursor **cloud** agents cannot build or run Unreal. The recipes below need a Win
 | [`.cursor/skills/dl-agent-control/SKILL.md`](.cursor/skills/dl-agent-control/SKILL.md) | Hub vs director, seats, SeatMotors, join / mind-control / ready / go |
 | [`.cursor/skills/dl-agent-nav/SKILL.md`](.cursor/skills/dl-agent-nav/SKILL.md) | BotBooks (`appendBotBook`), markers, probes; loopback `/goto` is debug |
 | [`.cursor/skills/dl-circle-run/SKILL.md`](.cursor/skills/dl-circle-run/SKILL.md) | Compose PvP ring verify (`VERIFY_OK`, diving, megalith 8/8) |
-| [`.cursor/skills/dl-virtual-mp/SKILL.md`](.cursor/skills/dl-virtual-mp/SKILL.md) | Two Unreal windows on one PC (listen + loopback join); guest MCP on 18767 or host hub `via` |
+| [`.cursor/skills/dl-virtual-mp/SKILL.md`](.cursor/skills/dl-virtual-mp/SKILL.md) | Two Unreal windows on one PC (listen + loopback join); guest MCP on 18767 or host hub `connectMode=proxy` |
 
 Pawn scripting is **SeatMotor + BotBook** (catalog or JIT PlantUML). Anytime an agent drives a pawn — stroll, cover, ring, megalith, one test move — POST hub `appendBotBook` / `branchBotBook`. Read [Docs/BotBooks.md](Docs/BotBooks.md). Landing a point with jump / air-dive / slide / dash (vs Recast `goto`): [Docs/NavAbilities.md](Docs/NavAbilities.md). Recast knobs: [Docs/RecastLinks.md](Docs/RecastLinks.md). Recast policy (TileSize, no Engine patches, no cheat) lives in the parent design repo `.cursor/rules/recast-*.mdc` if this nested git is opened alone. Do not invent MCP `plan` / `sequence` / `intent` / `goto`.
 
@@ -28,7 +28,7 @@ Defaults: standalone `-game`, then Compose PvP **through** host/ready/guest/go i
 
 3. If `GET http://127.0.0.1:18765/state` `scene` is `boot`, `POST /director {"action":"enter"}` creates a default Player / Vanguard and travels to Social. Rebuild does this automatically.
 
-Agent HTTP is **localhost only** (`127.0.0.1:18765`; two-box guest **18767**). WebSocket hub is `ws://127.0.0.1:18766` (guest **18768**). Same JSON codec as `POST /hub`. Drive pawns with `appendBotBook` / `branchBotBook`. Loopback `type: plan` / `/intent` / `/sequence` / `/goto` are debug only.
+Agent HTTP is **localhost only** (`127.0.0.1:18765`; two-box guest **18767**). WebSocket hub is `ws://127.0.0.1:18766` (guest **18768**). Same JSON codec as `POST /hub`. Each Unreal process mints **`instanceId`**; send **`agentId`** on hub/director/state. Drive pawns with `appendBotBook` / `branchBotBook`. Loopback `type: plan` / `/intent` / `/sequence` / `/goto` are debug only.
 
 Stdio MCP: `Scripts/dl-agent-mcp/index.mjs` (tools `hub`, `state`, `director`, `boot`; loopback `intent` / `sequence` / `goto` are no-lobby only).
 

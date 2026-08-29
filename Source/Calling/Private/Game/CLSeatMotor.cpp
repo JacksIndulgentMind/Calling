@@ -1,10 +1,29 @@
 #include "Game/CLSeatMotor.h"
 #include "Game/CLParticipantSeat.h"
+#include "Game/CLInstanceIdentity.h"
 #include "AI/CLBotBookManager.h"
 #include "Player/CLPlayerCharacter.h"
 #include "HAL/PlatformTime.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
+
+void UCLSeatMotor::StampRequestIds(UCLParticipantSeat* Seat)
+{
+	UGameInstance* GI = Seat ? Seat->GetTypedOuter<UGameInstance>() : nullptr;
+	if (!GI && Seat)
+	{
+		if (UWorld* World = Seat->GetWorld())
+		{
+			GI = World->GetGameInstance();
+		}
+	}
+	if (const UCLInstanceIdentitySubsystem* Id = GI ? GI->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr)
+	{
+		Id->StampGoto(Goto, Seat);
+		return;
+	}
+	Goto.RequestAgentId = Seat ? Seat->GetRequestingAgentId() : FGuid();
+}
 
 void UCLSeatMotor::TickNet(float DeltaSeconds, UCLParticipantSeat* Seat)
 {
@@ -43,6 +62,7 @@ bool UCLRemoteAgentSeatMotor::TickBotBook(float DeltaSeconds, UCLParticipantSeat
 
 void UCLAlgorithmicSeatMotor::TickNet(float DeltaSeconds, UCLParticipantSeat* Seat)
 {
+	StampRequestIds(Seat);
 	ACLPlayerCharacter* Char = Seat ? Cast<ACLPlayerCharacter>(Seat->GetDrivenPawn()) : nullptr;
 	UWorld* World = Char ? Char->GetWorld() : nullptr;
 	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
@@ -63,8 +83,13 @@ void UCLRemoteAgentSeatMotor::ApplyLookStep(ACLPlayerCharacter* Char, const FCLA
 
 void UCLRemoteAgentSeatMotor::TickNet(float DeltaSeconds, UCLParticipantSeat* Seat)
 {
+	StampRequestIds(Seat);
 	ACLPlayerCharacter* Char = Seat ? Cast<ACLPlayerCharacter>(Seat->GetDrivenPawn()) : nullptr;
 	if (!Char)
+	{
+		return;
+	}
+	if (!Char->IsLocallyControlled())
 	{
 		return;
 	}

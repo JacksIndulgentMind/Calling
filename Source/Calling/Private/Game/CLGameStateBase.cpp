@@ -23,6 +23,14 @@ void ACLGameStateBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ACLGameStateBase, RaidChamberIndex);
 	DOREPLIFETIME(ACLGameStateBase, TeamAScore);
 	DOREPLIFETIME(ACLGameStateBase, TeamBScore);
+	DOREPLIFETIME(ACLGameStateBase, TeamAKills);
+	DOREPLIFETIME(ACLGameStateBase, TeamBKills);
+	DOREPLIFETIME(ACLGameStateBase, LiveShrine);
+	DOREPLIFETIME(ACLGameStateBase, bShrineHeldRed);
+	DOREPLIFETIME(ACLGameStateBase, bShrineHeldBlue);
+	DOREPLIFETIME(ACLGameStateBase, ModeResult);
+	DOREPLIFETIME(ACLGameStateBase, WinningTeam);
+	DOREPLIFETIME(ACLGameStateBase, ModeFailReason);
 	DOREPLIFETIME(ACLGameStateBase, SeatScores);
 	DOREPLIFETIME(ACLGameStateBase, LobbySeats);
 	DOREPLIFETIME(ACLGameStateBase, LobbyReady);
@@ -156,6 +164,18 @@ void ACLGameStateBase::RegisterTakeOut(AController* Killer, APawn* Victim, const
 		TeamAScore += 1.f;
 	}
 
+	if (HasAuthority())
+	{
+		if (KillTeam == ECLPvpTeam::Red)
+		{
+			++TeamAKills;
+		}
+		else if (KillTeam == ECLPvpTeam::Blue)
+		{
+			++TeamBKills;
+		}
+	}
+
 	for (AController* Assist : Assists)
 	{
 		if (!Assist || Assist == Killer)
@@ -207,6 +227,57 @@ void ACLGameStateBase::RegisterTakeOut(AController* Killer, APawn* Victim, const
 		}
 	}
 	(void)Victim;
+}
+
+void ACLGameStateBase::AddTeamFinalBlow(ECLPvpTeam Team)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (Team == ECLPvpTeam::Red)
+	{
+		++TeamAKills;
+	}
+	else if (Team == ECLPvpTeam::Blue)
+	{
+		++TeamBKills;
+	}
+}
+
+void ACLGameStateBase::SetLiveShrine(FName Id)
+{
+	if (HasAuthority())
+	{
+		LiveShrine = Id;
+	}
+}
+
+void ACLGameStateBase::SetShrineHeld(ECLPvpTeam Team, bool bHeld)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (Team == ECLPvpTeam::Red)
+	{
+		bShrineHeldRed = bHeld;
+	}
+	else if (Team == ECLPvpTeam::Blue)
+	{
+		bShrineHeldBlue = bHeld;
+	}
+}
+
+void ACLGameStateBase::SetModeOutcome(const FString& Result, const FString& Winner, const FString& FailReason)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	ModeResult = Result;
+	WinningTeam = Winner;
+	ModeFailReason = FailReason;
 }
 
 FString ACLGameStateBase::GetScoreLine() const

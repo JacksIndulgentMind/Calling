@@ -46,6 +46,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Calling")
 	UCLLobbySubsystem* GetLobbySubsystem() const;
 
+	/** UUID for this Unreal process. Host and two-box guest each mint their own. */
+	UFUNCTION(BlueprintPure, Category = "Calling")
+	FGuid GetInstanceId() const;
+
 	UFUNCTION(BlueprintCallable, Category = "Calling")
 	void SetLastSocialMap(const FString& MapName);
 

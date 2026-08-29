@@ -19,6 +19,16 @@ enum class ECLBotStmtKind : uint8
 	Stop
 };
 
+/** Why remaining walk was replaced. Hub `branchBotBook.cause` is required. */
+enum class ECLBotBookBranchCause : uint8
+{
+	Invalid,
+	/** Bot failed the book independent of outside factors. Reports `botbook_execution`. */
+	Execution,
+	/** Combat, personality, or other world change. Not an execution defect. */
+	Situation
+};
+
 struct FCLBotPredicate
 {
 	FString Name;

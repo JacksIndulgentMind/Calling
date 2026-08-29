@@ -1,0 +1,53 @@
+@startuml shrine_clash_fight
+floating note
+trySuccessFor: 0.5
+end note
+start
+if (qualify navTiles > 0) then (yes)
+  :setFocus focus=enemy;
+  :goto marker=court_center;
+  note right
+    while: trackFocus, fire
+    success: distXY 350
+    goodEnough: distXY 700
+    fail.timeout: 35
+  end note
+  :goto marker=shrine_well;
+  note right
+    while: trackFocus, fire
+    success: distXY 180
+    goodEnough: distXY 320
+    fail.timeout: 25
+  end note
+  :goto marker=court_center;
+  note right
+    while: trackFocus, fire
+    success: distXY 350
+    goodEnough: distXY 700
+    fail.timeout: 35
+  end note
+  :goto marker=shrine_tree;
+  note right
+    while: trackFocus, fire
+    success: distXY 180
+    goodEnough: distXY 320
+    fail.timeout: 25
+  end note
+  :goto marker=shrine_heel;
+  note right
+    while: trackFocus, fire
+    success: distXY 180
+    goodEnough: distXY 320
+    fail.timeout: 25
+  end note
+  :goto marker=shrine_cairn;
+  note right
+    while: trackFocus, fire
+    success: distXY 180
+    goodEnough: distXY 320
+    fail.timeout: 25
+  end note
+else (skip)
+endif
+stop
+@enduml

@@ -29,6 +29,7 @@ public:
 
 	TSharedRef<FJsonObject> BuildStateJson(const FGuid& SeatId = FGuid()) const;
 	FString BuildStateJsonString(const FGuid& SeatId = FGuid()) const;
+	uint32 GetListenPort() const { return Port; }
 
 private:
 	void StartListener();

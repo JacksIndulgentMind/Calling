@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "Core/CLTypes.h"
+#include "Game/CLLobbyTypes.h"
 #include "Game/CLGreyboxFloors.h"
 #include "TimerManager.h"
 #include "CLGameModeBase.generated.h"
@@ -120,6 +121,7 @@ public:
 	ACLPvpGameMode();
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void StartPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
@@ -130,6 +132,30 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Pvp")
 	void EndMatchAndAward();
+
+protected:
+	void BindShrineClash();
+	void TickMode(float DeltaSeconds);
+	void SampleShrineOccupancy();
+	void RotateLiveShrine();
+	void TryResolveMatch();
+	void FinishMode(const FString& Result, const FString& Winner, const FString& FailReason);
+	ECLPvpTeam OccupantOfLiveShrine() const;
+	void PlaceSpawnsFromMarkers();
+
+	FName CatalogMapId = FName(TEXT("pvp_three_lane"));
+	int32 TeamFinalBlows = 10;
+	FName OccupyTag = FName(TEXT("space.shrine"));
+	float RotateSeconds = 45.f;
+	bool bStealIfTenWithoutShrine = true;
+	bool bFailIfEitherTeamKillsZero = true;
+	float FailTimeoutSeconds = 480.f;
+	TArray<FName> ShrineMarkerIds;
+	int32 ShrineIndex = 0;
+	double MatchStartSeconds = 0.0;
+	double NextRotateSeconds = 0.0;
+	bool bModeBound = false;
+	bool bModeFinished = false;
 };
 
 UCLASS()

@@ -35,6 +35,9 @@ struct CALLING_API FCLAgentGotoDriver
 	FVector2D LastMoveXY = FVector2D::ZeroVector;
 	FName FwdKind = NAME_None;
 	float FwdDist = -1.f;
+	FGuid RequestInstanceId;
+	FGuid RequestAgentId;
+	FGuid RequestorId;
 
 	void Cancel();
 	bool Start(UWorld* World, ACLPlayerCharacter* Char, const FVector& Dest, FString& OutError, bool bFromRepath = false);

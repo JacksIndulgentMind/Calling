@@ -1,4 +1,5 @@
 #include "Game/CLLoopbackJoin.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Core/CLLog.h"
 #include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
@@ -8,6 +9,7 @@
 #include "HAL/FileManager.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
 #include "Engine/NetDriver.h"
 #include "IPAddress.h"
 #include "Dom/JsonObject.h"
@@ -106,6 +108,13 @@ namespace CLLoopbackJoin
 			Root->SetStringField(TEXT("map"), World->GetMapName());
 			Root->SetStringField(TEXT("net"), World->GetNetMode() == NM_ListenServer
 				? TEXT("listen") : World->GetNetMode() == NM_DedicatedServer ? TEXT("dedicated") : TEXT("other"));
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				if (const UCLInstanceIdentitySubsystem* Id = GI->GetSubsystem<UCLInstanceIdentitySubsystem>())
+				{
+					Root->SetStringField(TEXT("instanceId"), Id->GetInstanceId().ToString(EGuidFormats::DigitsWithHyphens));
+				}
+			}
 		}
 		FString Json;
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);

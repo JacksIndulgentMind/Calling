@@ -37,6 +37,9 @@ public:
 	bool IsHeadlessJoin() const { return bHeadlessJoin; }
 
 	FGuid GetDriveSeatId() const { return DriveSeatId; }
+	FGuid GetRequestingAgentId() const { return RequestingAgentId; }
+	FGuid GetRequestorId() const { return RequestorId; }
+	FGuid GetOwnerInstanceId() const { return OwnerInstanceId; }
 
 	UCLSeatMotor* GetSeatMotor() const { return Motor; }
 	UCLPossessionComponent* GetPossession() const { return Possession; }
@@ -49,6 +52,9 @@ public:
 	void SetTeam(ECLPvpTeam InTeam) { Team = InTeam; }
 	void SetHeadlessJoin(bool bInHeadless) { bHeadlessJoin = bInHeadless; }
 	void SetDriveSeatId(const FGuid& InDriveSeatId) { DriveSeatId = InDriveSeatId; }
+	void SetRequestingAgentId(const FGuid& InAgentId) { RequestingAgentId = InAgentId; }
+	void SetRequestorId(const FGuid& InRequestorId) { RequestorId = InRequestorId; }
+	void SetOwnerInstanceId(const FGuid& InInstanceId) { OwnerInstanceId = InInstanceId; }
 	void SetPossession(UCLPossessionComponent* InPossession) { Possession = InPossession; }
 	void SetAnchor(AActor* InAnchor) { Anchor = InAnchor; }
 	void BindController(APlayerController* PC) { BoundController = PC; }
@@ -74,6 +80,18 @@ protected:
 
 	UPROPERTY()
 	FGuid DriveSeatId;
+
+	/** Cursor/MCP agent that last requested an action on this seat. */
+	UPROPERTY()
+	FGuid RequestingAgentId;
+
+	/** Input owner: local device UUID or connecting agentId. */
+	UPROPERTY()
+	FGuid RequestorId;
+
+	/** Unreal process that owns this seat's body (host vs guest instance). */
+	UPROPERTY()
+	FGuid OwnerInstanceId;
 
 	UPROPERTY()
 	TObjectPtr<UCLSeatMotor> Motor;

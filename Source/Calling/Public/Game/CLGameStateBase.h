@@ -67,6 +67,35 @@ public:
 	FString GetScoreLine() const;
 	float GetTeamAScore() const { return TeamAScore; }
 	float GetTeamBScore() const { return TeamBScore; }
+	UFUNCTION(BlueprintPure, Category = "Calling|Score")
+	int32 GetTeamAKills() const { return TeamAKills; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Score")
+	int32 GetTeamBKills() const { return TeamBKills; }
+
+	void AddTeamFinalBlow(ECLPvpTeam Team);
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	FName GetLiveShrine() const { return LiveShrine; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	FString GetModeResult() const { return ModeResult; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	FString GetWinningTeam() const { return WinningTeam; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	FString GetModeFailReason() const { return ModeFailReason; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	bool GetShrineHeldRed() const { return bShrineHeldRed; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	bool GetShrineHeldBlue() const { return bShrineHeldBlue; }
+
+	void SetLiveShrine(FName Id);
+	void SetShrineHeld(ECLPvpTeam Team, bool bHeld);
+	void SetModeOutcome(const FString& Result, const FString& Winner, const FString& FailReason);
 
 	void SetLobbySnapshot(const TArray<FCLLobbySeatSnap>& Seats, int32 Ready, int32 MinPlayers, bool bQueued);
 	const TArray<FCLLobbySeatSnap>& GetLobbySeats() const { return LobbySeats; }
@@ -92,6 +121,30 @@ protected:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
 	float TeamBScore = 0.f;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
+	int32 TeamAKills = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
+	int32 TeamBKills = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FName LiveShrine;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	bool bShrineHeldRed = false;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	bool bShrineHeldBlue = false;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FString ModeResult = TEXT("in_progress");
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FString WinningTeam;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FString ModeFailReason;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
 	TArray<FCLSeatScore> SeatScores;

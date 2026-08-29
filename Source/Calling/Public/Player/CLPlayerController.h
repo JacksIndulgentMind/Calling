@@ -32,6 +32,7 @@ public:
 	virtual void PlayerTick(float DeltaTime) override;
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void AcknowledgePossession(APawn* P) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|UI")
 	void ToggleMainMenu();
@@ -55,6 +56,19 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void ClientHubDispatch(const FString& Json, int32 CorrelationId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerReportInstanceId(FGuid Id);
+
+	FGuid GetInstanceId() const { return ReplicatedInstanceId; }
+	FGuid GetDeviceRequestorId() const { return DeviceRequestorId; }
+	void StampLocalDeviceRequestor();
+
+	/** Last hub command this PC executed (HTTP port of the listener, or viaRpc fromPort). */
+	void NoteHubReceive(int32 ListenPort, const FString& Recv, const FString& IntendedTarget);
+	int32 GetLastHubListenPort() const { return LastHubListenPort; }
+	const FString& GetLastHubRecv() const { return LastHubRecv; }
+	const FString& GetLastHubIntendedTarget() const { return LastHubIntendedTarget; }
 
 	UFUNCTION(Server, Reliable)
 	void ServerHubDispatchResult(int32 CorrelationId, const FString& Json);
@@ -99,6 +113,17 @@ protected:
 	bool bNativeLeft = false;
 	bool bNativeRight = false;
 	bool bMenuKeyLatched = false;
+
+	int32 LastHubListenPort = 0;
+	FString LastHubRecv;
+	FString LastHubIntendedTarget;
+
+	UPROPERTY(Replicated)
+	FGuid ReplicatedInstanceId;
+
+	FGuid DeviceRequestorId;
+
+	void BindInstanceIdentity();
 
 	void PushInputToPawn();
 	void BindMoveLookKeys();

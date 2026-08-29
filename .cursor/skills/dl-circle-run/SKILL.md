@@ -46,9 +46,9 @@ If you drive it by hand instead of the script:
 
 Do **not** auto-Go when `ready >= min`. Host Start is required.
 
-After PvP: `navTiles > 0`. Red ~`(-14500,0,98)`, Blue ~`(14500,0,98)`. **Cover first** via BotBooks (`cover_then_peek`, markers `hide_center_lee` / `menhir_0_approach`). Ring script runs **EdgeHop** (`edge_lip` then catalog `edge_pad`) before `ring_lap` / `megalith_hop`. B `hold_lee` until megalith 8/8, then `court_gunfight` vs A `track_fire`. Megalith hops are `airDive marker=menhir_N`. Agents drive pawns with BotBooks only — do not use MCP `plan` / `goto` for this path. Pass: `VERIFY_OK`, island stick + lip recall, `diving=true`, megalith sticks `8/8`.
+After PvP: `navTiles > 0`. Red ~`(-6380,0,98)`, Blue ~`(6380,0,98)`. **Cover first** via BotBooks (`cover_then_peek`, markers `hide_center_lee` / `menhir_0_approach`). Ring script runs **EdgeHop** (`edge_lip` then catalog `edge_pad`) before `ring_lap` / `megalith_hop`. B `hold_lee` until megalith 8/8, then `court_gunfight` vs A `track_fire`. Megalith hops are `airDive marker=menhir_N`. Agents drive pawns with BotBooks only — do not use MCP `plan` / `goto` for this path. Pass: `VERIFY_OK`, island stick + lip recall, `diving=true`, megalith sticks `8/8`.
 
-**Recover, do not fail-fast.** `branchBotBook` or append a new JIT tree on stall; rewrite from live `/state`. Z-collapse (west through-floor) still stops that seat. Fail only after retries.
+**Recover, do not fail-fast.** `branchBotBook` with `cause` (`execution` if the bot failed the book; `situation` for combat/world) or append a new JIT tree on stall; rewrite from live `/state`. Z-collapse still stops that seat. Fail only after retries.
 
 Recording check: A 1P tracers from the barrel + casings; B 3P gun + body flinch; A hip screen punch vs ADS reticle walk.
 

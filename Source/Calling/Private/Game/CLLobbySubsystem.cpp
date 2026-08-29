@@ -3,8 +3,12 @@
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLSeatMotor.h"
 #include "AI/CLBotBookManager.h"
+#include "Game/CLHubIngress.h"
 #include "Game/CLHubCommandRegistry.h"
+#include "Game/CLHubDriveTrace.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Game/CLAgentCodec.h"
+#include "Game/CLLoopbackJoin.h"
 #include "Game/CLInvoiceService.h"
 #include "Game/CLSeatRegistry.h"
 #include "Game/CLGateCountdown.h"
@@ -436,6 +440,10 @@ UCLParticipantSeat* UCLLobbySubsystem::JoinRemoteAgent(const FString& DisplayNam
 	}
 
 	LastJoinedSeatId = Seat->GetSeatId();
+	if (UCLInstanceIdentitySubsystem* Id = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr)
+	{
+		Id->BindSeat(Seat);
+	}
 	OutError.Reset();
 	NotifyHubSnapshots(ECLHubSnapshotReason::LobbyDirty);
 	UE_LOG(LogCalling, Display, TEXT("Calling: agent seat %s kind=%s headless=%d"),
@@ -726,6 +734,11 @@ bool UCLLobbySubsystem::StartGoto(const FGuid& SeatId, const FVector& Dest, FStr
 		OutError = TEXT("no_driven_pawn");
 		return false;
 	}
+	if (!Char->IsLocallyControlled())
+	{
+		OutError = TEXT("remote_player_pawn");
+		return false;
+	}
 	return Remote->StartGoto(GetWorld(), Char, Dest, OutError);
 }
 
@@ -767,8 +780,15 @@ void UCLLobbySubsystem::PrepareGuestLocalHub(FGuid* FallbackSeat)
 	{
 		if (Seat && Seat->GetSeatMotor() && Seat->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 		{
-			Cursor = Seat;
-			break;
+			if (!Cursor)
+			{
+				Cursor = Seat;
+			}
+			if (Human && Seat->GetDrivenPawn() != Human->GetDrivenPawn())
+			{
+				FString Error;
+				MindControl(Seat->GetSeatId(), Human->GetSeatId(), Error);
+			}
 		}
 	}
 	if (!Cursor)
@@ -791,46 +811,47 @@ void UCLLobbySubsystem::PrepareGuestLocalHub(FGuid* FallbackSeat)
 	}
 }
 
-bool UCLLobbySubsystem::TryRouteHubVia(const TSharedPtr<FJsonObject>& Root, TFunction<void(FString)> OnDone)
+bool UCLLobbySubsystem::TryRouteHubProxy(const TSharedPtr<FJsonObject>& Root, const FGuid& TargetInstance, const FGuid& ViaSeat, TFunction<void(FString)> OnDone)
 {
 	if (!Root.IsValid() || !OnDone)
 	{
 		return false;
 	}
-	const FString Via = CLAgentCodec::JsonStr(Root, TEXT("via"));
-	if (Via.IsEmpty())
-	{
-		return false;
-	}
-	const FGuid ViaId = CLAgentCodec::ParseGuid(Via);
-	UCLParticipantSeat* Seat = FindSeat(ViaId);
 	auto Fail = [&OnDone](const TCHAR* Error)
 	{
 		OnDone(FString::Printf(TEXT("{\"ok\":false,\"error\":\"%s\"}"), Error));
 	};
-	if (!Seat)
+	if (UWorld* World = GetWorld())
 	{
-		Fail(TEXT("no_via_seat"));
-		return true;
+		if (World->GetNetMode() == NM_Client)
+		{
+			Fail(TEXT("cannot_proxy_here"));
+			return true;
+		}
 	}
-	APlayerController* PC = Seat->GetBoundController();
-	if (!PC)
-	{
-		Fail(TEXT("no_via_controller"));
-		return true;
-	}
-	if (PC->IsLocalController())
-	{
-		return false;
-	}
-	ACLPlayerController* CLPC = Cast<ACLPlayerController>(PC);
+	FString Error;
+	ACLPlayerController* CLPC = FindHubProxyTarget(TargetInstance, ViaSeat, Error);
 	if (!CLPC)
 	{
-		Fail(TEXT("no_via_pc"));
+		if (Error.IsEmpty())
+		{
+			return false;
+		}
+		Fail(*Error);
 		return true;
 	}
 
-	Root->RemoveField(TEXT("via"));
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (const UCLInstanceIdentitySubsystem* Id = GI->GetSubsystem<UCLInstanceIdentitySubsystem>())
+		{
+			if (!JsonStr(Root, TEXT("originInstanceId")).Len())
+			{
+				Root->SetStringField(TEXT("originInstanceId"), GuidStr(Id->GetInstanceId()));
+			}
+		}
+	}
+	CLHubIngress::StripProxyFields(Root);
 	const FString Payload = CLAgentCodec::JsonToString(Root.ToSharedRef());
 	const int32 Id = NextHubViaId++;
 	FHubViaPending Pending;
@@ -847,8 +868,115 @@ bool UCLLobbySubsystem::TryRouteHubVia(const TSharedPtr<FJsonObject>& Root, TFun
 		}, 8.f, false);
 	}
 	HubViaPending.Add(Id, MoveTemp(Pending));
+	UE_LOG(LogCallingHub, Display,
+		TEXT("HubProxy targetInst=%s viaSeat=%s pc=%s"),
+		*GuidStr(TargetInstance), *GuidStr(ViaSeat), *CLPC->GetName());
 	CLPC->ClientHubDispatch(Payload, Id);
 	return true;
+}
+
+ACLPlayerController* UCLLobbySubsystem::FindHubProxyTarget(const FGuid& TargetInstance, const FGuid& ViaSeat, FString& OutError) const
+{
+	OutError.Reset();
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		OutError = TEXT("no_proxy_target");
+		return nullptr;
+	}
+
+	if (ViaSeat.IsValid())
+	{
+		if (const UCLParticipantSeat* Seat = FindSeat(ViaSeat))
+		{
+			if (APlayerController* PC = Seat->GetBoundController())
+			{
+				if (PC->IsLocalController())
+				{
+					return nullptr;
+				}
+				if (ACLPlayerController* CLPC = Cast<ACLPlayerController>(PC))
+				{
+					return CLPC;
+				}
+				OutError = TEXT("no_via_pc");
+				return nullptr;
+			}
+			OutError = TEXT("no_via_controller");
+			return nullptr;
+		}
+		OutError = TEXT("no_via_seat");
+		return nullptr;
+	}
+
+	TArray<ACLPlayerController*> Remote;
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		ACLPlayerController* CLPC = Cast<ACLPlayerController>(It->Get());
+		if (!CLPC || CLPC->IsLocalController())
+		{
+			continue;
+		}
+		if (TargetInstance.IsValid())
+		{
+			if (CLPC->GetInstanceId() == TargetInstance)
+			{
+				return CLPC;
+			}
+			continue;
+		}
+		Remote.Add(CLPC);
+	}
+	if (TargetInstance.IsValid())
+	{
+		OutError = TEXT("no_proxy_target");
+		return nullptr;
+	}
+	if (Remote.Num() == 1)
+	{
+		return Remote[0];
+	}
+	OutError = Remote.Num() == 0 ? TEXT("no_proxy_target") : TEXT("ambiguous_proxy_target");
+	return nullptr;
+}
+
+void UCLLobbySubsystem::IngressLocalHub(const TSharedPtr<FJsonObject>& Root, FGuid* FallbackSeat, TFunction<void(FString)> OnDone)
+{
+	if (!OnDone)
+	{
+		return;
+	}
+	auto FailNow = [&OnDone](const FString& Error, UCLInstanceIdentitySubsystem* Id)
+	{
+		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+		Out->SetBoolField(TEXT("ok"), false);
+		Out->SetStringField(TEXT("error"), Error);
+		if (Id)
+		{
+			Id->StampJson(Out);
+		}
+		OnDone(CLAgentCodec::JsonToString(Out));
+	};
+	if (!Root.IsValid())
+	{
+		FailNow(TEXT("invalid_json"), nullptr);
+		return;
+	}
+	UCLInstanceIdentitySubsystem* Id = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr;
+	FString Error;
+	if (Id && !Id->CheckInstance(Root, Error))
+	{
+		FailNow(Error, Id);
+		return;
+	}
+
+	const TSharedRef<FJsonObject> Out = FCLHubCommandRegistry::Dispatch(this, Root, FallbackSeat);
+	CLHubDriveTrace::ApplyToJson(Out);
+	if (Id)
+	{
+		Id->StampJson(Out);
+	}
+	OnDone(CLAgentCodec::JsonToString(Out));
 }
 
 void UCLLobbySubsystem::HandleIncomingViaHub(const FString& Json, int32 CorrelationId, ACLPlayerController* ReplyTo)
@@ -859,9 +987,16 @@ void UCLLobbySubsystem::HandleIncomingViaHub(const FString& Json, int32 Correlat
 	FString Reply = TEXT("{\"ok\":false,\"error\":\"invalid_json\"}");
 	if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
 	{
-		Root->RemoveField(TEXT("via"));
-		const TSharedRef<FJsonObject> Out = FCLHubCommandRegistry::Dispatch(this, Root, &LastJoinedSeatId);
-		Reply = CLAgentCodec::JsonToString(Out);
+		CLHubIngress::StripProxyFields(Root);
+		CLHubDriveTrace::StampListen(Root, CLLoopbackJoin::AgentHttpPort(), TEXT("http"));
+		if (UCLInstanceIdentitySubsystem* Id = GetGameInstance()->GetSubsystem<UCLInstanceIdentitySubsystem>())
+		{
+			Id->NoteJson(Root);
+		}
+		IngressLocalHub(Root, &LastJoinedSeatId, [&Reply](FString JsonOut)
+		{
+			Reply = MoveTemp(JsonOut);
+		});
 	}
 	if (ReplyTo)
 	{
@@ -972,6 +1107,10 @@ void UCLLobbySubsystem::FillStateJson(const TSharedRef<FJsonObject>& Root) const
 		Lobby->SetNumberField(TEXT("minPlayers"), Live->MinPlayers);
 		Lobby->SetNumberField(TEXT("maxPlayers"), Live->MaxPlayers);
 		Lobby->SetStringField(TEXT("access"), AccessName(Live->Access));
+		if (!Live->GameModeId.IsNone())
+		{
+			Lobby->SetStringField(TEXT("gameMode"), Live->GameModeId.ToString());
+		}
 	}
 	if (LastJoinedSeatId.IsValid())
 	{
@@ -996,6 +1135,43 @@ void UCLLobbySubsystem::FillStateJson(const TSharedRef<FJsonObject>& Root) const
 		{
 			Row->SetStringField(TEXT("driveSeat"), GuidStr(Seat->GetDriveSeatId()));
 		}
+		if (Seat->GetRequestingAgentId().IsValid())
+		{
+			Row->SetStringField(TEXT("agentId"), GuidStr(Seat->GetRequestingAgentId()));
+		}
+		if (Seat->GetRequestorId().IsValid())
+		{
+			Row->SetStringField(TEXT("requestorId"), GuidStr(Seat->GetRequestorId()));
+		}
+		FGuid OwnerInst = Seat->GetOwnerInstanceId();
+		bool bBoundLocal = false;
+		if (APlayerController* Bound = Seat->GetBoundController())
+		{
+			bBoundLocal = Bound->IsLocalController();
+			if (const ACLPlayerController* CLPC = Cast<ACLPlayerController>(Bound))
+			{
+				if (CLPC->GetInstanceId().IsValid())
+				{
+					OwnerInst = CLPC->GetInstanceId();
+				}
+			}
+		}
+		else if (const APawn* Driven = Seat->GetDrivenPawn())
+		{
+			bBoundLocal = Driven->IsLocallyControlled();
+		}
+		if (!OwnerInst.IsValid())
+		{
+			if (const UCLInstanceIdentitySubsystem* Id = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr)
+			{
+				OwnerInst = Id->GetInstanceId();
+			}
+		}
+		if (OwnerInst.IsValid())
+		{
+			Row->SetStringField(TEXT("instanceId"), GuidStr(OwnerInst));
+		}
+		Row->SetBoolField(TEXT("boundLocal"), bBoundLocal);
 		if (const UCLPossessionComponent* Possession = Seat->GetPossession())
 		{
 			const UEnum* Enum = StaticEnum<ECLPossessionMode>();
@@ -1026,7 +1202,21 @@ void UCLLobbySubsystem::FillStateJson(const TSharedRef<FJsonObject>& Root) const
 
 TSharedRef<FJsonObject> UCLLobbySubsystem::HandleMessage(const TSharedPtr<FJsonObject>& Root)
 {
-	return FCLHubCommandRegistry::Dispatch(this, Root, nullptr);
+	if (UCLInstanceIdentitySubsystem* Id = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr)
+	{
+		FString Error;
+		if (!Id->CheckInstance(Root, Error))
+		{
+			TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+			Out->SetBoolField(TEXT("ok"), false);
+			Out->SetStringField(TEXT("error"), Error);
+			Id->StampJson(Out);
+			return Out;
+		}
+	}
+	const TSharedRef<FJsonObject> Out = FCLHubCommandRegistry::Dispatch(this, Root, nullptr);
+	CLHubDriveTrace::ApplyToJson(Out);
+	return Out;
 }
 
 UCLParticipantSeat* UCLLobbySubsystem::FindOrCreateLoopbackSeat()

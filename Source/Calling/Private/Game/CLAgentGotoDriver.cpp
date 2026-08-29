@@ -383,15 +383,24 @@ namespace
 			{
 				GotoDiagAcc = 0.f;
 				const FVector Wp = D.Path.IsValidIndex(D.Index) ? D.Path[D.Index] : D.Goal;
+				const FString InstStr = D.RequestInstanceId.IsValid()
+					? D.RequestInstanceId.ToString(EGuidFormats::DigitsWithHyphens) : FString(TEXT("-"));
+				const FString AgentStr = D.RequestAgentId.IsValid()
+					? D.RequestAgentId.ToString(EGuidFormats::DigitsWithHyphens) : FString(TEXT("-"));
+				const FString RequestorStr = D.RequestorId.IsValid()
+					? D.RequestorId.ToString(EGuidFormats::DigitsWithHyphens) : FString(TEXT("-"));
 				UE_LOG(LogCallingGoto, Display,
-					TEXT("goto tick loc=(%.0f,%.0f,%.0f) idx=%d/%d dive=%d reason=%s launch=%d distLip=%.0f distXY=%.0f dZ=%.0f wp=(%.0f,%.0f,%.0f) steer=(%.0f,%.0f,%.0f) lookYaw=%.1f ctrlYaw=%.1f move=(%.2f,%.2f) blocked=%d fwd=%s/%.0f stuck=%.1f"),
+					TEXT("goto tick inst=%s agent=%s requestor=%s loc=(%.0f,%.0f,%.0f) idx=%d/%d dive=%d reason=%s launch=%d distLip=%.0f distXY=%.0f dZ=%.0f wp=(%.0f,%.0f,%.0f) steer=(%.0f,%.0f,%.0f) lookYaw=%.1f ctrlYaw=%.1f move=(%.2f,%.2f) blocked=%d fwd=%s/%.0f stuck=%.1f local=%d hasCtrl=%d role=%d remote=%d"),
+					*InstStr, *AgentStr, *RequestorStr,
 					Loc.X, Loc.Y, Loc.Z, D.Index, D.Path.Num(),
 					D.PathAirDive.IsValidIndex(D.Index) ? D.PathAirDive[D.Index] : -1,
 					*D.SteerReason.ToString(), D.bLaunchOk ? 1 : 0, D.DistLip, D.DistXYToWp, D.DeltaZToWp,
 					Wp.X, Wp.Y, Wp.Z, D.SteerAt.X, D.SteerAt.Y, D.SteerAt.Z,
 					ToTarget.Rotation().Yaw, Char->GetControlRotation().Yaw,
 					D.LastMoveXY.X, D.LastMoveXY.Y, D.bMoveBlocked ? 1 : 0,
-					*D.FwdKind.ToString(), D.FwdDist, D.StuckSeconds);
+					*D.FwdKind.ToString(), D.FwdDist, D.StuckSeconds,
+					Char->IsLocallyControlled() ? 1 : 0, Char->GetController() ? 1 : 0,
+					static_cast<int32>(Char->GetLocalRole()), static_cast<int32>(Char->GetRemoteRole()));
 			}
 		}
 
@@ -591,6 +600,10 @@ bool FCLAgentGotoDriver::Start(UWorld* World, ACLPlayerCharacter* Char, const FV
 void FCLAgentGotoDriver::Tick(float DeltaSeconds, UWorld* World, ACLPlayerCharacter* Char)
 {
 	if (!bActive || Path.Num() == 0 || !Char)
+	{
+		return;
+	}
+	if (!Char->IsLocallyControlled())
 	{
 		return;
 	}

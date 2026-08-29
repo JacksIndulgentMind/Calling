@@ -7,6 +7,7 @@
 import http from "node:http";
 import readline from "node:readline";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -25,6 +26,9 @@ function resolveAgentPort() {
   return Number(process.env.DL_AGENT_PORT || 18765);
 }
 const PORT = resolveAgentPort();
+const CONNECT_MODE = (process.env.CALLING_CONNECT_MODE || "local").toLowerCase();
+const TARGET_INSTANCE = process.env.CALLING_TARGET_INSTANCE || "";
+let instanceId = "";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = process.env.DL_REPO || path.resolve(HERE, "../..");
 const EDITOR =
@@ -34,19 +38,48 @@ const UPROJECT =
   process.env.DL_UPROJECT || path.join(REPO, "Calling.uproject");
 const PLAY_PY = path.join(REPO, "Scripts", "dl-editor-play.py");
 
+function rememberInstance(data) {
+  if (data && typeof data === "object" && data.instanceId) {
+    instanceId = data.instanceId;
+  }
+}
+
 function request(method, pathname, body, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
-    const payload = body ? Buffer.from(JSON.stringify(body)) : null;
+    const payloadObj =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? { ...body, agentId: body.agentId || AGENT_ID }
+        : body;
+    let pathWithAgent = pathname;
+    if (!/[?&]agentId=/.test(pathWithAgent)) {
+      pathWithAgent += (pathWithAgent.includes("?") ? "&" : "?") + `agentId=${encodeURIComponent(AGENT_ID)}`;
+    }
+    const payload = payloadObj ? Buffer.from(JSON.stringify(payloadObj)) : null;
+    const isHub = pathname === "/hub" || pathname.startsWith("/hub?");
+    const connectMode = isHub
+      ? String(payloadObj?.connectMode || CONNECT_MODE || "local").toLowerCase()
+      : "local";
+    const targetInstance = isHub
+      ? String(payloadObj?.targetInstance || payloadObj?.targetInstanceId || TARGET_INSTANCE || "")
+      : "";
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Calling-Agent-Id": AGENT_ID,
+      ...(payload ? { "Content-Length": payload.length } : {}),
+    };
+    if (isHub) {
+      headers["Calling-Connect-Mode"] = connectMode;
+      if (connectMode === "proxy" || connectMode === "via") {
+        if (targetInstance) headers["Calling-Target-Instance"] = targetInstance;
+      }
+    }
     const req = http.request(
       {
         host: HOST,
         port: PORT,
-        path: pathname,
+        path: pathWithAgent,
         method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(payload ? { "Content-Length": payload.length } : {}),
-        },
+        headers,
       },
       (res) => {
         const chunks = [];
@@ -54,7 +87,9 @@ function request(method, pathname, body, timeoutMs = 8000) {
         res.on("end", () => {
           const text = Buffer.concat(chunks).toString("utf8");
           try {
-            resolve(JSON.parse(text));
+            const parsed = JSON.parse(text);
+            rememberInstance(parsed);
+            resolve(parsed);
           } catch {
             resolve({ raw: text, status: res.statusCode });
           }
@@ -407,20 +442,25 @@ const tools = [
   {
     name: "hub",
     description:
-      "Session hub (same codec as ws://127.0.0.1:18766). Anytime you drive a pawn, use appendBotBook / branchBotBook (catalog name or JIT puml). join headless is an anchor only (kind cursor by default); then mindControl. setTeam, ready, go, subscribe, view. Loopback plan/goto only when no seat exists. POST /hub.",
+      "Session hub (same codec as ws://127.0.0.1:18766). This MCP sends agentId on every call. Anytime you drive a pawn, use appendBotBook / branchBotBook. join headless is an anchor only (kind cursor by default); then mindControl. connectMode=proxy on host 18765 forwards into the guest hub (same as POST 18767). GET /state stays local (replication probe). POST /hub.",
     inputSchema: {
       type: "object",
       properties: {
         type: { type: "string", description: "join | subscribe | ready | go | mindControl | setTeam | appendBotBook | branchBotBook | view | plan | goto" },
+        agentId: { type: "string", description: "Connecting agent UUID (this MCP fills it). Game instanceId is in every reply." },
         displayName: { type: "string" },
         headless: { type: "boolean" },
         kind: { type: "string", description: "cursor (default on this MCP) | remoteAgent | algorithmic" },
         seatId: { type: "string" },
+        connectMode: { type: "string", description: "local (this instance) or proxy (host 18765 forwards to guest ingress). Env CALLING_CONNECT_MODE." },
+        targetInstance: { type: "string", description: "Guest instanceId when connectMode=proxy. Optional two-box shortcut: omit if only one guest. Env CALLING_TARGET_INSTANCE." },
+        requestorId: { type: "string", description: "Input owner UUID (this MCP fills agentId as requestor if omitted)." },
         targetSeatId: { type: "string" },
         team: { type: "string", description: "red | blue | unassigned" },
         ready: { type: "boolean" },
         botBook: { type: "string", description: "Catalog BotBook name (appendBotBook / branchBotBook)" },
         puml: { type: "string", description: "JIT PlantUML body (restricted subset). xyz goto allowed only here." },
+        cause: { type: "string", description: "branchBotBook required: execution (bot failed the book) or situation (combat/personality/world). Aliases: failure/fail; combat/personality/strategic." },
         afterId: { type: "string", description: "branchBotBook: node id to replace from" },
         offset: { type: "number", description: "branchBotBook: remaining-walk offset" },
         x: { type: "number" },
@@ -484,6 +524,16 @@ async function callTool(name, args) {
     const body = { ...a };
     if (String(body.type || "").toLowerCase() === "join" && !body.kind) {
       body.kind = "cursor";
+    }
+    if (!body.requestorId) {
+      body.requestorId = AGENT_ID;
+    }
+    if (!body.connectMode && CONNECT_MODE) {
+      body.connectMode = CONNECT_MODE;
+    }
+    if ((String(body.connectMode || "").toLowerCase() === "proxy" || String(body.connectMode || "").toLowerCase() === "via")
+      && !body.targetInstance && !body.targetInstanceId && TARGET_INSTANCE) {
+      body.targetInstance = TARGET_INSTANCE;
     }
     return request("POST", "/hub", body);
   }

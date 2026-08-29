@@ -413,7 +413,11 @@ FVector ACLGreyboxFloors::GetPlayerStartLocation() const
 	case ECLGreyboxLayout::PvpExtracted:
 		return FVector(-5000.f, 0.f, 130.f);
 	case ECLGreyboxLayout::PvpThreeLane:
-		return FVector(-14500.f, 0.f, 130.f);
+	{
+		FCLPvpThreeLaneRecipe R;
+		R.Load();
+		return FVector(-R.PadCenterCm(), 0.f, 130.f);
+	}
 	case ECLGreyboxLayout::PracticePillar:
 		return FVector(0.f, 0.f, 130.f);
 	case ECLGreyboxLayout::RaidApproach:
@@ -429,7 +433,9 @@ FVector ACLGreyboxFloors::GetBluePlayerStartLocation() const
 {
 	if (Layout == ECLGreyboxLayout::PvpThreeLane)
 	{
-		return FVector(14500.f, 0.f, 130.f);
+		FCLPvpThreeLaneRecipe R;
+		R.Load();
+		return FVector(R.PadCenterCm(), 0.f, 130.f);
 	}
 	return GetPlayerStartLocation();
 }
@@ -601,6 +607,40 @@ void ACLGreyboxFloors::StampModule(FName Id, const FVector& CenterCm, const FRot
 	AddBox(CenterCm, Size, Rot);
 }
 
+void ACLGreyboxFloors::StampCornerShrines(const FCLPvpThreeLaneRecipe& Recipe, float PitZ)
+{
+	const float Rim = Recipe.RimM() * 100.f;
+	const float Inset = 500.f;
+	const float Corner = Rim - Inset;
+	const FVector WellC(-Corner, Corner, PitZ);
+	const FVector TreeC(Corner, Corner, PitZ);
+	const FVector HeelC(-Corner, -Corner, PitZ);
+	const FVector CairnC(Corner, -Corner, PitZ);
+
+	const float WallH = 180.f;
+	const float WallT = 40.f;
+	const float Apothem = 270.f;
+	const float Side = 2.f * Apothem * FMath::Tan(PI / 8.f);
+	for (int32 i = 0; i < 8; ++i)
+	{
+		const float Deg = 22.5f + 45.f * static_cast<float>(i);
+		const float Ang = FMath::DegreesToRadians(Deg);
+		const FVector Off(FMath::Cos(Ang) * Apothem, FMath::Sin(Ang) * Apothem, WallH * 0.5f);
+		AddBox(WellC + Off, FVector(Side, WallT, WallH), FRotator(0.f, Deg + 90.f, 0.f));
+	}
+
+	AddBox(TreeC + FVector(0.f, 0.f, 200.f), FVector(80.f, 80.f, 400.f), FRotator::ZeroRotator);
+	AddBox(TreeC + FVector(0.f, 0.f, 380.f), FVector(280.f, 280.f, 80.f), FRotator::ZeroRotator);
+	AddBox(TreeC + FVector(0.f, 0.f, 440.f), FVector(180.f, 180.f, 60.f), FRotator::ZeroRotator);
+	AddBox(TreeC + FVector(-120.f, -80.f, 22.5f), FVector(180.f, 50.f, 45.f), FRotator(0.f, -45.f, 0.f));
+
+	AddBox(HeelC + FVector(0.f, 0.f, 200.f), FVector(90.f, 90.f, 400.f), FRotator(0.f, 45.f, 0.f));
+
+	AddBox(CairnC + FVector(0.f, 0.f, 40.f), FVector(220.f, 220.f, 80.f), FRotator::ZeroRotator);
+	AddBox(CairnC + FVector(0.f, 0.f, 120.f), FVector(150.f, 150.f, 80.f), FRotator::ZeroRotator);
+	AddBox(CairnC + FVector(0.f, 0.f, 200.f), FVector(80.f, 80.f, 80.f), FRotator::ZeroRotator);
+}
+
 void ACLGreyboxFloors::StampFillFloor(const FVector& CenterCm, float SizeXMeters, float SizeYMeters, float SlabZCm)
 {
 	const float Tile = 500.f;
@@ -632,8 +672,7 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 	const float SlabZ = R.SlabZ;
 	const float LaneW = R.LaneW;
 	const float PadInnerM = R.PadInnerM;
-	const float RimM = CourtM * 0.5f;
-	const float SpanM = 280.f;
+	const float RimM = R.RimM();
 	const float SlopeM = PadInnerM - RimM;
 	const float LaneY[3] = { R.LaneYMeters[0] * M, R.LaneYMeters[1] * M, R.LaneYMeters[2] * M };
 
@@ -644,8 +683,8 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 	const float Hyp = FMath::Sqrt(Run * Run + Drop * Drop);
 	const float PitchDeg = FMath::RadiansToDegrees(FMath::Atan2(Drop, Run));
 
-	StampFillFloor(FVector(-145.f * M, 0.f, FloorZ), PadDepthM, WidthM, SlabZ);
-	StampFillFloor(FVector(145.f * M, 0.f, FloorZ), PadDepthM, WidthM, SlabZ);
+	StampFillFloor(FVector(-R.PadCenterCm(), 0.f, FloorZ), PadDepthM, WidthM, SlabZ);
+	StampFillFloor(FVector(R.PadCenterCm(), 0.f, FloorZ), PadDepthM, WidthM, SlabZ);
 	StampFillFloor(FVector(0.f, 0.f, PitZ), CourtM, WidthM, SlabZ);
 
 	const FVector WestUp = FVector(Drop, 0.f, Run).GetSafeNormal();
@@ -692,11 +731,15 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 	};
 
 	const float CrossXs[2] = {
-		(-PadInnerM + R.CrossFractions[0] * SpanM) * M,
-		(-PadInnerM + R.CrossFractions[1] * SpanM) * M
+		FMath::Lerp(-PadInnerM, -RimM, R.CrossFractions[0]) * M,
+		FMath::Lerp(PadInnerM, RimM, R.CrossFractions[1]) * M
 	};
 	for (float CrossX : CrossXs)
 	{
+		if (FMath::Abs(CrossX) <= RimM * M + 50.f)
+		{
+			continue;
+		}
 		// Thin along the ramp (X): a wide terrace at SlopeZ overhangs the slope by ~1 m at the
 		// downhill lip. Keep a short X so DropDown / step can land on the ramp below.
 		const float CrossAlongM = FMath::Min(LaneW, 4.f);
@@ -705,13 +748,13 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 
 	for (float Y : LaneY)
 	{
-		StampModule(FName(TEXT("cover_full")), FVector(-141.f * M, Y, 120.f), FRotator::ZeroRotator);
-		StampModule(FName(TEXT("cover_full")), FVector(141.f * M, Y, 120.f), FRotator::ZeroRotator);
+		StampModule(FName(TEXT("cover_full")), FVector(-R.CoverLipM() * M, Y, 120.f), FRotator::ZeroRotator);
+		StampModule(FName(TEXT("cover_full")), FVector(R.CoverLipM() * M, Y, 120.f), FRotator::ZeroRotator);
 	}
 
 	AddBox(FVector(0.f, 0.f, PitZ + 175.f), FVector(80.f, 80.f, 350.f), FRotator::ZeroRotator);
-	AddBox(FVector(-149.f * M, 0.f, 175.f), FVector(80.f, 80.f, 350.f), FRotator::ZeroRotator);
-	AddBox(FVector(149.f * M, 0.f, 175.f), FVector(80.f, 80.f, 350.f), FRotator::ZeroRotator);
+	AddBox(FVector(-R.ControlPostM() * M, 0.f, 175.f), FVector(80.f, 80.f, 350.f), FRotator::ZeroRotator);
+	AddBox(FVector(R.ControlPostM() * M, 0.f, 175.f), FVector(80.f, 80.f, 350.f), FRotator::ZeroRotator);
 
 	auto NearCross = [&](float Xcm) -> bool
 	{
@@ -851,6 +894,8 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 	// Short inner hide for the hold pawn (not a 5 m cover_half slab).
 	AddBox(FVector(0.f, 320.f, PitZ + HalfCoverZ * 0.5f), FVector(80.f, 180.f, HalfCoverZ), FRotator::ZeroRotator);
 
+	StampCornerShrines(R, PitZ);
+
 	FVector EdgeLip;
 	FVector EdgePad;
 	R.EdgeAirDiveEnds(EdgeLip, EdgePad, EdgePadPlaceChordCm(), EdgeAirDiveEdgeCm(), EdgePadDropFromLipCm());
@@ -881,8 +926,8 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 		}
 	}
 	UE_LOG(LogCalling, Display,
-		TEXT("Greybox PvpThreeLane padZ=0 courtZ=%.0f courtM=%.0f laneW=%.0f rampPitch=%.1f deg red=%s edgePad=%s"),
-		PitZ, CourtM, LaneW, PitchDeg,
+		TEXT("Greybox PvpThreeLane padZ=0 courtZ=%.0f courtM=%.0f laneW=%.0f rampPitch=%.1f deg westCut=%.0f eastCut=%.0f red=%s edgePad=%s"),
+		PitZ, CourtM, LaneW, PitchDeg, CrossXs[0], CrossXs[1],
 		*GetPlayerStartLocation().ToCompactString(),
 		*EdgePad.ToCompactString());
 }
@@ -909,17 +954,24 @@ void ACLGreyboxFloors::StampTaskMarkers()
 	ACLTaskMarker::DestroyAllInWorld(World);
 	if (Layout == ECLGreyboxLayout::PvpThreeLane)
 	{
-		const float PitZ = -2000.f;
 		FCLPvpThreeLaneRecipe R;
 		R.Load();
+		const float PitZ = R.PitZCm();
 		const float LintelTop = PitZ + R.MenhirHeightCm + R.MenhirLintelHeightCm;
 		const float MenhirRad = R.MenhirRadiusM * 100.f;
+		const float CoverX = R.CoverLipM() * 100.f;
+		const float Rim = R.RimM() * 100.f;
+		const float Corner = Rim - 500.f;
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("spawn_red")), GetPlayerStartLocation());
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("spawn_blue")), GetBluePlayerStartLocation());
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("court_center")), FVector(0.f, 0.f, PitZ));
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("hide_center_lee")), FVector(0.f, 400.f, PitZ));
-		ACLTaskMarker::SpawnAt(World, FName(TEXT("cover_west_cut")), FVector(-14100.f, 0.f, 120.f));
-		ACLTaskMarker::SpawnAt(World, FName(TEXT("cover_east_cut")), FVector(14100.f, 0.f, 120.f));
+		ACLTaskMarker::SpawnAt(World, FName(TEXT("cover_west_cut")), FVector(-CoverX, 0.f, 120.f));
+		ACLTaskMarker::SpawnAt(World, FName(TEXT("cover_east_cut")), FVector(CoverX, 0.f, 120.f));
+		ACLTaskMarker::SpawnAt(World, FName(TEXT("shrine_well")), FVector(-Corner, Corner, PitZ), 280.f);
+		ACLTaskMarker::SpawnAt(World, FName(TEXT("shrine_tree")), FVector(Corner - 120.f, Corner - 80.f, PitZ), 180.f);
+		ACLTaskMarker::SpawnAt(World, FName(TEXT("shrine_heel")), FVector(-Corner, -Corner, PitZ), 150.f);
+		ACLTaskMarker::SpawnAt(World, FName(TEXT("shrine_cairn")), FVector(Corner, -Corner, PitZ + 240.f), 150.f);
 		for (int32 i = 0; i < 8; ++i)
 		{
 			const float Deg = 45.f * static_cast<float>(i);
@@ -1023,7 +1075,16 @@ void ACLGreyboxFloors::RebuildNavigation()
 	}
 	if (!Box.IsValid && Layout == ECLGreyboxLayout::PvpThreeLane)
 	{
-		Box = FBox(FVector(-16000.f, -9000.f, -5600.f), FVector(16000.f, 9000.f, 800.f));
+		FCLPvpThreeLaneRecipe R;
+		R.Load();
+		const float PadX = (R.PadInnerM + R.PadDepthM) * 100.f + 800.f;
+		FVector Lip;
+		FVector Pad;
+		R.EdgeAirDiveEnds(Lip, Pad, EdgePadPlaceChordCm(), EdgeAirDiveEdgeCm(), EdgePadDropFromLipCm());
+		const float MinZ = FMath::Min(Pad.Z, R.PitZCm()) - 800.f;
+		Box = FBox(FVector(-PadX, -9000.f, MinZ), FVector(PadX, 9000.f, 800.f));
+		Box += Lip;
+		Box += Pad;
 	}
 	if (!Box.IsValid)
 	{

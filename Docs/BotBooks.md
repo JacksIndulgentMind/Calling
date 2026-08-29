@@ -14,14 +14,25 @@ Calling scripts pawn bots as **PlantUML BotBooks**, not as Unreal Behavior Trees
 
 **Anytime an agent needs to drive a pawn, use a BotBook.** Catalog name or JIT PlantUML on hub `appendBotBook` / `branchBotBook`. That includes a one-off jump, a cover walk, the ring lap, and megalith hops. Do not invent MCP `plan` / `sequence` / `intent` / raw `goto` chains. Those stay **loopback debug** (Practice, no-invoice scenes).
 
+Mid-match “personality” is still a BotBook. Why splice, monitor vs pawn, keep the objective spine: parent [design/bot-books-mid-match.md](../../../design/bot-books-mid-match.md). Engagement law: [design/feel-notes.md](../../../design/feel-notes.md). Space vs kills (10 kills in conflict with a place): [design/map-design.md](../../../design/map-design.md).
+
 In-game pawn behavior:
 
 1. Bind a **SeatMotor** (`kind: cursor` / `remoteAgent` / `algorithmic`).
-2. Run a **BotBook** — catalog name or JIT PlantUML on hub `appendBotBook` / `branchBotBook`.
+2. Run a **BotBook** — catalog name or JIT PlantUML on hub `appendBotBook` / `branchBotBook`. Send **`agentId`** (the connecting agent’s UUID) and **`intendedTarget`**: `localHuman`, `headlessBot`, or a seat GUID. Every process mints an **`instanceId`** at startup. Hub/`/state` replies echo `instanceId` + `agentId`; `LogCallingHub` and `goto tick` stamp both. `originInstanceId` is the host when a **proxy** command runs on the guest (`Calling-Connect-Mode: proxy`, not per-op `via`). `LogCallingHub` errors `remote_player_pawn` if the body is another process’s net-human. Two-box ingress: [VirtualMp.md](VirtualMp.md) / [HubIngress.puml](HubIngress.puml).
 
 To test one move, POST a **JIT BotBook** (`{ "type":"appendBotBook", "seatId", "puml":"@startuml..." }`), not a one-off stick sequence. Durable files **must** `goto` by **marker id**. JIT books **may** `goto` x,y,z; if that path lasts, stamp a marker and rewrite the file.
 
-`GET /state?seat=` includes `botBook: { name, nodeId, stack, remaining, jit }`.
+`appendBotBook` starts the book if the seat is idle. If a book is already running, it **queues** (FIFO, max 4) and does **not** `CancelGoto` — Tick still runs the live leaf. Re-append of the same catalog name while it is live or queued is a no-op. `branchBotBook` stops the current leaf and replaces remaining walk. **`cause` is required:**
+
+| `cause` | Meaning | Effect |
+|---------|---------|--------|
+| `execution` (aliases `failure`, `fail`) | The bot failed the book **independent of outside factors** (nav/`goto` did not walk, timeout, stack leak, poller treated idle as done). Not combat, personality, or a world change. | Increments `/state.botBook.executionFails`. **One** fail is `executionError: true` and reports `botbook_execution` (`UCLErrorBoundary`, NonDeterministic) — find it and **fix**, do not hide it. The replacement book still starts so the pawn can recover. Does **not** count toward cancel-storm. |
+| `situation` (aliases `combat`, `personality`, `strategic`) | Combat replan, personality, or other world change. The book was not an execution defect. | Same cancel-storm as before: **8 situation branches in 4 seconds** is `botbook_cancel_storm`. |
+
+Missing `cause` is `missing_branch_cause`. Unknown values are `invalid_branch_cause`. `clearBotBook` and append-queue are not this signal. `PushBook` deeper than **32** frames is `botbook_stack`. Live book is `/state.botBook.name` (not `catalog`).
+
+`GET /state?seat=` includes `botBook: { name, nodeId, stack, stackLen, remaining, remainingLen, queued, queueLen, jit, lastBranchCause, lastBranchNodeId, lastBranchBook, executionFails, executionError }`. Branch observability survives the stack going idle so a later `/state` still shows the last execution fail.
 
 MCP tools `hub` / `director` / `state` / `boot` remain. MCP `plan`, `sequence`, `intent`, `goto`: loopback only; do not use them when a lobby seat exists.
 
@@ -70,8 +81,8 @@ Recast, Enhanced Input, and the pawn codec stay Unreal.
 
 ## Markers
 
-Greybox stamps `ACLTaskMarker` actors when it builds. Same ids across maps; each layout re-stamps.
+Greybox stamps `ACLTaskMarker` actors when it builds. Same ids across maps; each layout re-stamps. Markers carry **tags** (spawn, space) from the map catalog. A marker may have more than one tag. Game modes require tags, not raw ids — [design/game-modes.md](../../../design/game-modes.md).
 
-PvP minimum: `spawn_red`, `spawn_blue`, `court_center`, `hide_center_lee`, `menhir_0`…`menhir_7`, `menhir_*_approach`, `cover_west_cut`, `cover_east_cut`, `edge_lip`, `edge_pad`, `slide_end`, `dash_end`. Social/raid/practice: `spawn_default`.
+PvP minimum: `spawn_red`, `spawn_blue`, `court_center`, `hide_center_lee`, `menhir_0`…`menhir_7`, `menhir_*_approach`, `cover_west_cut`, `cover_east_cut`, `shrine_well`, `shrine_tree`, `shrine_heel`, `shrine_cairn`, `edge_lip`, `edge_pad`, `slide_end`, `dash_end`. Tags: `spawn.player.red` / `.blue`, `space.center`, `space.shrine`. Do not use `edge_pad` as a mode objective. Social/raid/practice: `spawn_default`.
 
 `UCLSocialMarkerWidget` is UI chrome, not a nav target.

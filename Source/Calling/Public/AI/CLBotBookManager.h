@@ -24,10 +24,15 @@ public:
 
 	bool AppendCatalog(UCLParticipantSeat* Seat, const FString& BookName, FString& OutError);
 	bool AppendJit(UCLParticipantSeat* Seat, const FString& Puml, FString& OutError);
-	bool BranchCatalog(UCLParticipantSeat* Seat, const FString& AfterId, int32 Offset, const FString& BookName, FString& OutError);
-	bool BranchJit(UCLParticipantSeat* Seat, const FString& AfterId, int32 Offset, const FString& Puml, FString& OutError);
+	bool BranchCatalog(UCLParticipantSeat* Seat, const FString& AfterId, int32 Offset, const FString& BookName, const FString& Cause, FString& OutError);
+	bool BranchJit(UCLParticipantSeat* Seat, const FString& AfterId, int32 Offset, const FString& Puml, const FString& Cause, FString& OutError);
 	void ClearSeat(const FGuid& SeatId);
 	void NotifyRespawn(UCLParticipantSeat* Seat);
+
+	/** Tick unwind + PushBook ceiling. Deeper than this cannot finish in one NetHz guard. */
+	static constexpr int32 MaxBookStack = 32;
+	/** FIFO books waiting after the live one. */
+	static constexpr int32 MaxQueuedBooks = 4;
 
 	void FillStateJson(TSharedRef<FJsonObject> Root, const FGuid& SeatId) const;
 	TSharedRef<FJsonObject> MakeSeatBotJson(const FGuid& SeatId) const;
@@ -49,19 +54,43 @@ protected:
 		TUniquePtr<ICLBotVerb> Verb;
 	};
 
+	struct FQueuedBook
+	{
+		FName CatalogName;
+		TSharedPtr<FCLBotBook> Jit;
+	};
+
 	struct FRuntime
 	{
 		TArray<FFrame> Stack;
+		TArray<FQueuedBook> Queue;
 		TArray<FName> Fallbacks;
 		FName OnRespawn;
 		bool bJit = false;
 		FName ActiveName;
 		int32 FallbackIndex = 0;
 		TSharedPtr<FCLBotBook> JitBook;
+		TArray<TSharedPtr<FCLBotBook>> JitHold;
 		FGuid FocusSeat;
+		TArray<double> StrategicCancelAt;
+		TArray<double> PreemptCancelAt;
+		int32 ExecutionFails = 0;
+		FString LastBranchCause;
+		FString LastBranchNode;
+		bool bReportedExecution = false;
+		bool bReportedStack = false;
 	};
 
 	void LoadCatalog();
+	TSharedPtr<FRuntime> EnsureRuntime(const FGuid& SeatId);
+	bool IsExecuting(const FRuntime& Rt) const;
+	bool CatalogAlreadyLiveOrQueued(const FRuntime& Rt, FName Name) const;
+	bool NoteCancelStorm(FRuntime& Rt, bool bStrategic, FString& OutError);
+	bool ParseBranchCause(const FString& Cause, ECLBotBookBranchCause& OutCause, FString& OutError) const;
+	bool NoteBranchCause(UCLParticipantSeat* Seat, FRuntime& Rt, ECLBotBookBranchCause Cause, FString& OutError);
+	bool EnqueueBook(FRuntime& Rt, FName CatalogName, TSharedPtr<FCLBotBook> Jit, FString& OutError);
+	bool BeginNow(UCLParticipantSeat* Seat, FRuntime& Rt, const FCLBotBook& Book, FString& OutError);
+	bool StartQueued(UCLParticipantSeat* Seat, FRuntime& Rt, FString& OutError);
 	bool PushBook(FRuntime& Rt, const FCLBotBook& Book, FString& OutError);
 	bool AdvanceAfterLeaf(FRuntime& Rt, ECLBotOutcome Outcome);
 	bool EvalPredicate(const FCLBotPredicate& Pred, UCLParticipantSeat* Seat, const FFrame* Frame, ECLBotOutcome Last) const;
@@ -78,4 +107,14 @@ protected:
 
 	TMap<FName, TSharedPtr<FCLBotBook>> Catalog;
 	TMap<FGuid, TSharedPtr<FRuntime>> Runtimes;
+
+	struct FBranchObs
+	{
+		int32 ExecutionFails = 0;
+		FString LastCause;
+		FString LastNode;
+		FString LastBook;
+		bool bReportedExecution = false;
+	};
+	TMap<FGuid, FBranchObs> BranchObs;
 };

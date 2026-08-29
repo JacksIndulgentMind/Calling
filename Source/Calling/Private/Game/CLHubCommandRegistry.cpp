@@ -1,4 +1,6 @@
 #include "Game/CLHubCommandRegistry.h"
+#include "Game/CLHubDriveTrace.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Game/CLLobbyTypes.h"
 #include "Game/CLAgentCodec.h"
 #include "Game/CLLobbySubsystem.h"
@@ -74,6 +76,13 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 		}
 	}
 
+	CLHubDriveTrace::FillAndLog(Lobby, Root, FallbackSeat);
+
+	if (CLHubDriveTrace::Last().Alert == TEXT("remote_player_pawn"))
+	{
+		return Fail(TEXT("remote_player_pawn"));
+	}
+
 	const FString Type = JsonStr(Root, TEXT("type")).ToLower();
 	if (Type.IsEmpty())
 	{
@@ -95,9 +104,24 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 			Out->SetStringField(TEXT("seatId"), GuidStr(Seat->GetSeatId()));
 			Out->SetBoolField(TEXT("headless"), JsonBool(Root, TEXT("headless")));
 			Out->SetStringField(TEXT("kind"), Seat->GetSeatMotor() ? Seat->GetSeatMotor()->GetKindId() : TEXT("none"));
+			if (UGameInstance* GI = Lobby->GetGameInstance())
+			{
+				if (UCLInstanceIdentitySubsystem* Id = GI->GetSubsystem<UCLInstanceIdentitySubsystem>())
+				{
+					Id->BindSeat(Seat);
+				}
+			}
 			if (FallbackSeat)
 			{
 				*FallbackSeat = Seat->GetSeatId();
+			}
+			if (UWorld* World = Lobby->GetWorld())
+			{
+				if (World->GetNetMode() == NM_Client)
+				{
+					FString McError;
+					Lobby->MindControl(Seat->GetSeatId(), FGuid(), McError);
+				}
 			}
 		}
 		else
@@ -251,6 +275,26 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 		return Out;
 	}
 
+	if (Type == TEXT("clearbotbook"))
+	{
+		const FGuid SeatId = ResolveSeat(Lobby, Root, FallbackSeat);
+		UCLParticipantSeat* Seat = Lobby->FindSeat(SeatId);
+		if (!Seat)
+		{
+			return Fail(TEXT("no_seat"));
+		}
+		UGameInstance* GI = Lobby->GetGameInstance();
+		UCLBotBookManager* Mgr = GI ? GI->GetSubsystem<UCLBotBookManager>() : nullptr;
+		if (!Mgr)
+		{
+			return Fail(TEXT("no_botbook_manager"));
+		}
+		Mgr->ClearSeat(Seat->GetSeatId());
+		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+		Out->SetBoolField(TEXT("ok"), true);
+		return Out;
+	}
+
 	if (Type == TEXT("appendbotbook"))
 	{
 		const FGuid SeatId = ResolveSeat(Lobby, Root, FallbackSeat);
@@ -306,17 +350,22 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 		}
 		const FString AfterId = JsonStr(Root, TEXT("afterId"));
 		const int32 Offset = static_cast<int32>(JsonNum(Root, TEXT("offset"), -1));
+		const FString Cause = JsonStr(Root, TEXT("cause"));
 		FString Error;
 		bool bOk = false;
 		const FString Puml = JsonStr(Root, TEXT("puml"));
 		const FString Name = JsonStr(Root, TEXT("botBook"));
+		if (Cause.TrimStartAndEnd().IsEmpty())
+		{
+			return Fail(TEXT("missing_branch_cause"));
+		}
 		if (!Puml.IsEmpty())
 		{
-			bOk = Mgr->BranchJit(Seat, AfterId, Offset, Puml, Error);
+			bOk = Mgr->BranchJit(Seat, AfterId, Offset, Puml, Cause, Error);
 		}
 		else if (!Name.IsEmpty())
 		{
-			bOk = Mgr->BranchCatalog(Seat, AfterId, Offset, Name, Error);
+			bOk = Mgr->BranchCatalog(Seat, AfterId, Offset, Name, Cause, Error);
 		}
 		else
 		{

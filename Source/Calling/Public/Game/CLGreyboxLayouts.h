@@ -34,6 +34,16 @@ struct FCLPvpThreeLaneRecipe
 
 	bool Load();
 
+	float PitZCm() const { return -RavineM * 100.f; }
+	float RimM() const { return CourtM * 0.5f; }
+	float SpanM() const { return 2.f * PadInnerM; }
+	float PadCenterM() const { return PadInnerM + PadDepthM * 0.5f; }
+	float PadCenterCm() const { return PadCenterM() * 100.f; }
+	/** Cover on the pad, 1 m past the inner lip. */
+	float CoverLipM() const { return PadInnerM + 1.f; }
+	/** Control post near the outer pad edge. */
+	float ControlPostM() const { return PadInnerM + PadDepthM - 1.f; }
+
 	/** South court nav edge → canary island. PadDropFromLipCm is (3000 − 300) − JumpApexUpCm(3).
 	 *  ChordCm is Recast launch-plane intercept (x0); Ends apply rim inset 200. Recast knobs do not move this pad. */
 	void EdgeAirDiveEnds(FVector& OutLip, FVector& OutPad, float ChordCm, float JumpDistanceFromEdgeCm,

@@ -25,6 +25,7 @@ public:
 
 	bool StartGoto(UWorld* World, ACLPlayerCharacter* Char, const FVector& Dest, FString& OutError);
 	void CancelGoto();
+	void StampRequestIds(UCLParticipantSeat* Seat);
 	bool IsGotoActive() const { return Goto.bActive; }
 	bool IsGotoPartial() const { return Goto.bPartial; }
 	FVector GetGotoGoal() const { return Goto.Goal; }

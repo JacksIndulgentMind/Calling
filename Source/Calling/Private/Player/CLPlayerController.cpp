@@ -11,6 +11,11 @@
 #include "Game/CLGameModeBase.h"
 #include "Game/CLGameStateBase.h"
 #include "Game/CLLobbySubsystem.h"
+#include "Game/CLHubDriveTrace.h"
+#include "Game/CLAgentCodec.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLSessionSubsystem.h"
 #include "Game/CLInputBindSubsystem.h"
@@ -20,7 +25,8 @@
 #include "Core/CLTypes.h"
 #include "InputCoreTypes.h"
 #include "Misc/ConfigCacheIni.h"
-#include "Engine/GameInstance.h"
+#include "Net/UnrealNetwork.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Engine/GameViewportClient.h"
 #include "ShowFlags.h"
 
@@ -54,6 +60,56 @@ void ACLPlayerController::BeginPlay()
 	EnsureMainMenu();
 	EnsureComposerMenu();
 	RestoreLitView();
+	BindInstanceIdentity();
+}
+
+void ACLPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ACLPlayerController, ReplicatedInstanceId);
+}
+
+void ACLPlayerController::BindInstanceIdentity()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+	UGameInstance* GI = GetGameInstance();
+	UCLInstanceIdentitySubsystem* Id = GI ? GI->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr;
+	if (!Id)
+	{
+		return;
+	}
+	DeviceRequestorId = Id->GetDeviceRequestorId();
+	if (HasAuthority())
+	{
+		ReplicatedInstanceId = Id->GetInstanceId();
+	}
+	else
+	{
+		ServerReportInstanceId(Id->GetInstanceId());
+	}
+}
+
+void ACLPlayerController::ServerReportInstanceId_Implementation(FGuid Id)
+{
+	ReplicatedInstanceId = Id;
+}
+
+void ACLPlayerController::StampLocalDeviceRequestor()
+{
+	if (!DeviceRequestorId.IsValid() || !IsLocalController())
+	{
+		return;
+	}
+	UGameInstance* GI = GetGameInstance();
+	UCLLobbySubsystem* Lobby = GI ? GI->GetSubsystem<UCLLobbySubsystem>() : nullptr;
+	UCLParticipantSeat* Seat = Lobby ? Lobby->FindSeatForController(this) : nullptr;
+	if (Seat)
+	{
+		Seat->SetRequestorId(DeviceRequestorId);
+	}
 }
 
 void ACLPlayerController::RestoreLitView()
@@ -314,6 +370,11 @@ void ACLPlayerController::EnsureComposerMenu()
 		{
 			ComposerMenuInstance->RemoveFromParent();
 			ComposerMenuInstance = nullptr;
+			if (!(MainMenuInstance && MainMenuInstance->IsOverlayVisible()))
+			{
+				ApplyMenuInputMode(false);
+				ResetIgnoreInputFlags();
+			}
 		}
 		return;
 	}
@@ -379,8 +440,31 @@ void ACLPlayerController::ServerComposerReady_Implementation(bool bReady)
 	}
 }
 
+void ACLPlayerController::NoteHubReceive(int32 ListenPort, const FString& Recv, const FString& IntendedTarget)
+{
+	LastHubListenPort = ListenPort;
+	LastHubRecv = Recv;
+	LastHubIntendedTarget = IntendedTarget;
+	const APawn* Body = GetPawn();
+	const FCLHubDriveSnap& Snap = CLHubDriveTrace::Last();
+	UE_LOG(LogCallingHub, Display,
+		TEXT("PC HubRecv name=%s local=%d listenPort=%d recv=%s instance=%s agent=%s requestor=%s intended=%s pawnLocal=%d hasPawn=%d ignoreMove=%d ignoreLook=%d loc=(%.0f,%.0f,%.0f)"),
+		*GetName(), IsLocalController() ? 1 : 0, ListenPort, *Recv,
+		*Snap.InstanceId, *Snap.AgentId, *Snap.RequestorId, *IntendedTarget,
+		Body && Body->IsLocallyControlled() ? 1 : 0, Body ? 1 : 0,
+		IsMoveInputIgnored() ? 1 : 0, IsLookInputIgnored() ? 1 : 0,
+		Body ? Body->GetActorLocation().X : 0.f, Body ? Body->GetActorLocation().Y : 0.f,
+		Body ? Body->GetActorLocation().Z : 0.f);
+}
+
 void ACLPlayerController::ClientHubDispatch_Implementation(const FString& Json, int32 CorrelationId)
 {
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
+	if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+	{
+		CLHubDriveTrace::NotePlayerController(this, Root);
+	}
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
@@ -457,6 +541,10 @@ void ACLPlayerController::PushInputToPawn()
 			}
 		}
 		Char->AccumulateInput(CurrentMove, CurrentLook, bSprint, bCrouch, bADS, bFire);
+		if (!CurrentMove.IsNearlyZero())
+		{
+			StampLocalDeviceRequestor();
+		}
 	}
 }
 

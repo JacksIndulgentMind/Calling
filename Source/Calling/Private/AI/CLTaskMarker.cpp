@@ -30,6 +30,29 @@ ACLTaskMarker* ACLTaskMarker::SpawnAt(UWorld* World, FName MarkerId, const FVect
 	return Marker;
 }
 
+ACLTaskMarker* ACLTaskMarker::FindByTag(UWorld* World, FName Tag)
+{
+	TArray<ACLTaskMarker*> Found;
+	CollectByTag(World, Tag, Found);
+	return Found.Num() > 0 ? Found[0] : nullptr;
+}
+
+void ACLTaskMarker::CollectByTag(UWorld* World, FName Tag, TArray<ACLTaskMarker*>& Out)
+{
+	Out.Reset();
+	if (!World || Tag.IsNone())
+	{
+		return;
+	}
+	for (TActorIterator<ACLTaskMarker> It(World); It; ++It)
+	{
+		if (It->HasObjectiveTag(Tag))
+		{
+			Out.Add(*It);
+		}
+	}
+}
+
 ACLTaskMarker* ACLTaskMarker::FindById(UWorld* World, FName MarkerId)
 {
 	if (!World || MarkerId.IsNone())

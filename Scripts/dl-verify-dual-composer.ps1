@@ -185,8 +185,8 @@ while ((Get-Date) -lt $navWait) {
 }
 Write-Host ("A x={0:N0} z={1:N0} nav={2}" -f $a0.x, $a0.z, $a0.navTiles)
 Write-Host ("B x={0:N0} z={1:N0} nav={2}" -f $b0.x, $b0.z, $b0.navTiles)
-if ([math]::Abs($a0.x + 14500) -gt 800) { throw "A not red spawn" }
-if ([math]::Abs($b0.x - 14500) -gt 800) { throw "B not blue spawn" }
+if ([math]::Abs($a0.x + 6380) -gt 800) { throw "A not red spawn" }
+if ([math]::Abs($b0.x - 6380) -gt 800) { throw "B not blue spawn" }
 if ($a0.navTiles -le 0 -or $b0.navTiles -le 0) { throw "navTiles still 0 after wait" }
 
 function Seat($id) { J "GET" "/state?seat=$id" $null }
@@ -461,7 +461,7 @@ function FireUntilHit($atk, $tgt, $tries = 6) {
 }
 
 function HideB {
-  return @{ x = 0; y = 400; z = -2000 }
+  return @{ x = 0; y = 400; z = -600 }
 }
 function DistBHide($st) {
   $h = HideB
@@ -498,7 +498,7 @@ function CoverHolds {
 }
 function Polar($deg, $r) {
   $rad = [double]$deg * [math]::PI / 180.0
-  return @{ x = [math]::Cos($rad) * $r; y = [math]::Sin($rad) * $r; z = -2000 }
+  return @{ x = [math]::Cos($rad) * $r; y = [math]::Sin($rad) * $r; z = -600 }
 }
 function OriginDeg($st) { return [math]::Atan2([double]$st.y, [double]$st.x) * 180.0 / [math]::PI }
 function OnLintel($st, $deg) {
@@ -651,7 +651,7 @@ function RadarLos {
   if ((RadarBlips $still) -ne 0) { throw "expected radarBlips 0 when B stops" }
 
   Write-Host "radar cover: 60-deg spoke wall"
-  GotoPair $seatA 127 620 -2000 $seatB 473 420 -2000 150 | Out-Null
+  GotoPair $seatA 127 620 -600 $seatB 473 420 -600 150 | Out-Null
   WaitAlive $seatA 5 | Out-Null
   WaitAlive $seatB 5 | Out-Null
   $a = Seat $seatA
@@ -911,9 +911,9 @@ Write-Host "restore host view"
 SetView $hostSeat.id
 
 Write-Host "home"
-$homeA = GotoOne $seatA -14500 0 98 800
-$homeB = GotoOne $seatB 14500 0 98 800
+$homeA = GotoOne $seatA -6380 0 98 800
+$homeB = GotoOne $seatB 6380 0 98 800
 Write-Host ("A home x={0:N0} B home x={1:N0}" -f $homeA.x, $homeB.x)
-if ([math]::Abs($homeA.x + 14500) -gt 800) { throw "A missed red home" }
-if ([math]::Abs($homeB.x - 14500) -gt 800) { throw "B missed blue home" }
+if ([math]::Abs($homeA.x + 6380) -gt 800) { throw "A missed red home" }
+if ([math]::Abs($homeB.x - 6380) -gt 800) { throw "B missed blue home" }
 Write-Host "VERIFY_OK"

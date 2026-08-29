@@ -1,11 +1,11 @@
 {
   "padDepthM": 10,
   "courtM": 48,
-  "ravineM": 20,
+  "ravineM": 6,
   "widthM": 48,
   "slabZ": 40,
   "laneW": 12,
-  "padInnerM": 140,
+  "padInnerM": 58.8,
   "laneYMeters": [-18, 0, 18],
   "crossFractions": [0.33, 0.66],
   "halfCoverZ": 85,

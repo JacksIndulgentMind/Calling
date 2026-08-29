@@ -1,5 +1,6 @@
 #include "Game/CLGameInstance.h"
 #include "Game/CLLobbySubsystem.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Game/CLSessionHub.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLVaultSubsystem.h"
@@ -88,6 +89,15 @@ UCLLootRulesService* UCLGameInstance::GetLootRulesService() const
 UCLLobbySubsystem* UCLGameInstance::GetLobbySubsystem() const
 {
 	return GetSubsystem<UCLLobbySubsystem>();
+}
+
+FGuid UCLGameInstance::GetInstanceId() const
+{
+	if (const UCLInstanceIdentitySubsystem* Id = GetSubsystem<UCLInstanceIdentitySubsystem>())
+	{
+		return Id->GetInstanceId();
+	}
+	return FGuid();
 }
 
 void UCLGameInstance::SetLastSocialMap(const FString& MapName)

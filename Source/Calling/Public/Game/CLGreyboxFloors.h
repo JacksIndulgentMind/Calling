@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Game/CLGreyboxLayouts.h"
 #include "CLGreyboxFloors.generated.h"
 
 class UStaticMeshComponent;
@@ -83,6 +84,7 @@ public:
 	/** 5 m × 5 m catalog: floor, ramp_low, ramp_mid, ramp_steep, rail, cover_half, cover_full. */
 	void StampModule(FName Id, const FVector& CenterCm, const FRotator& Rotation = FRotator::ZeroRotator);
 	void StampFillFloor(const FVector& CenterCm, float SizeXMeters, float SizeYMeters, float SlabZCm);
+	void StampCornerShrines(const FCLPvpThreeLaneRecipe& Recipe, float PitZ);
 	void BuildPvpThreeLane();
 	void BuildPracticePillar();
 	void StampTaskMarkers();
