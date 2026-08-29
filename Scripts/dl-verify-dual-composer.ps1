@@ -268,6 +268,9 @@ function BookBusy($st) {
 function AppendBook($id, $name) {
   return Hub @{ type = "appendBotBook"; seatId = $id; botBook = $name }
 }
+function BranchBook($id, $name) {
+  return Hub @{ type = "branchBotBook"; seatId = $id; botBook = $name }
+}
 function WaitBot($id, $sec = 90) {
   $until = (Get-Date).AddSeconds($sec)
   $last = $null
@@ -1245,6 +1248,8 @@ WaitBot $seatB 50 | Out-Null
 WaitBot $seatA 55 | Out-Null
 WaitAlive $seatA 5 | Out-Null
 WaitAlive $seatB 5 | Out-Null
+AppendBook $seatB "hold_lee" | Out-Null
+Write-Host "B hold_lee until megalith 8/8"
 if ($Sequence -ne "radar") {
   EdgeHop
 }
@@ -1263,8 +1268,7 @@ if ($Sequence -eq "radar") {
   SetView $seatB
   RadarViewB
 } else {
-  Write-Host "sequence=ring (BotBooks: cover, edge_pad, ring_lap, megalith_hop)"
-  AppendBook $seatB "cover_then_peek" | Out-Null
+  Write-Host "sequence=ring (BotBooks: cover, hold_lee, edge_pad, ring_lap, megalith_hop, court_gunfight)"
   AppendBook $seatA "ring_lap" | Out-Null
   $dived = $false
   if ($script:edgeDived) { $dived = $true; Write-Host "diving=true (from EdgeHop)" }
@@ -1282,9 +1286,7 @@ if ($Sequence -eq "radar") {
   }
   if (-not $dived) { throw "diving never true (EdgeHop Recast Launch / catalog airDive verb - no JIT fallback)" }
   WaitBot $seatA 20 | Out-Null
-  WaitBot $seatB 20 | Out-Null
-  MuteB
-  Write-Host "megalith hop"
+  Write-Host "megalith hop (B still hold_lee)"
   AppendBook $seatA "megalith_hop" | Out-Null
   $stuck = @{}
   $degs = @(0, 45, 90, 135, 180, 225, 270, 315)
@@ -1332,13 +1334,17 @@ stop
     $script:lintelSticks = $stuck.Count
     Write-Host ("megalith sticks after retry={0}/8" -f $script:lintelSticks)
   }
-  UnmuteB
   if ($script:lintelSticks -lt 8) { throw "megalith sticks $($script:lintelSticks)/8" }
+  Write-Host "court gunfight: B court_center slide/dash, A track_fire"
+  DropOffLintel $seatA
+  HoldRing
+  BranchBook $seatB "court_gunfight" | Out-Null
+  AppendBook $seatA "track_fire" | Out-Null
+  WaitAlive $seatA 8 | Out-Null
+  WaitAlive $seatB 8 | Out-Null
+  WaitBot $seatA 40 | Out-Null
+  WaitBot $seatB 40 | Out-Null
   RecoilDemo
-  Write-Host "view B ring lap"
-  SetView $seatB
-  AppendBook $seatB "ring_lap" | Out-Null
-  WaitBot $seatB 120 | Out-Null
 }
 Write-Host "restore host view"
 SetView $hostSeat.id

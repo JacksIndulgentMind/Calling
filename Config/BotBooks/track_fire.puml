@@ -1,0 +1,10 @@
+@startuml track_fire
+start
+:setFocus focus=enemy;
+:fire;
+note right
+  while: trackFocus
+  fail.timeout: 28
+end note
+stop
+@enduml

@@ -1,0 +1,39 @@
+@startuml court_gunfight
+floating note
+trySuccessFor: 0.5
+end note
+start
+if (qualify navTiles > 0) then (yes)
+  :setFocus focus=enemy;
+  :goto marker=court_center;
+  note right
+    while: trackFocus
+    success: distXY 220
+    goodEnough: distXY 450
+    fail.timeout: 25
+  end note
+  :slide marker=slide_end;
+  note right
+    while: trackFocus, fire
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 4
+  end note
+  :dash marker=dash_end;
+  note right
+    while: trackFocus, fire
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 4
+  end note
+  :goto marker=menhir_0_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 400
+    goodEnough: distXY 700
+    fail.timeout: 18
+  end note
+else (skip)
+endif
+stop
+@enduml

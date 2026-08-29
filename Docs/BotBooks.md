@@ -37,7 +37,7 @@ Disallowed: classes, sequence diagrams, includes except `ref`, arbitrary skinpar
 
 **Qualify:** `alive`, `navTiles`, `distXY`, `hasFocus`, `air`, `hasMarker`, `z`, `sliding`, `diving`, `output is Success or GoodEnough`.
 
-**Settle:** Success immediately. GoodEnough holds `trySuccessFor` seconds then settles. Probe `successImpossible` settles now (GoodEnough if in band, else Fail). `fail.timeout` is the hard cap. A hard Fail with no fallback **advances** to the next node (so a missed hop does not abort the rest of the book). Catalog `edge_pad` is Recast `goto` only; megalith books still chain `:airDive marker=` as an authored verb.
+**Settle:** Success immediately. GoodEnough holds `trySuccessFor` seconds then settles. Probe `successImpossible` settles now (GoodEnough if in band, else Fail). `fail.timeout` is the hard cap. A hard Fail with no fallback **advances** to the next node (so a missed hop does not abort the rest of the book). `goto` Success/`distXY` also requires on ground, not diving, standing on the goal floor (same as `*-to`). Catalog `edge_pad` is Recast `goto` only; megalith books still chain `:airDive marker=` as an authored verb.
 
 `goto` on a catalog file **must** use `marker=id`. xyz on a catalog file is a load error.
 

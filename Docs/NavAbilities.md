@@ -44,7 +44,7 @@ On nav rebuild, `CLNavAbilityValidate` checks feel locks and that AirDive **Jump
 
 Recast does not search the whole courtyard. Each link kind looks only as far as that mechanic can go.
 
-`MaxLaunchXY(drop) = JumpSteerXY(3) + PinnedDiveXY(drop)`. Jump steer is AirControl **0.35** through the triple (a few meters). Pinned dive is hang **0.44 s** at `AirDiveMaxXY` **1200**, then the rest of the drop at **1g** with stick pinned — **not** 8G slam. At 30 m that is **~30 m+ XY**. Bake and `goto` share `min(MaxLaunchXY, airDiveSearchMaxCm)` with cap **0** meaning uncapped. Slam stays landing **feel** on short hops.
+`MaxLaunchXY(drop) = JumpSteerXY(3) + PinnedDiveXY(drop)`. Jump steer is AirControl **0.35** through the triple (a few meters). Pinned dive is hang **0.44 s** at `AirDiveMaxXY` **1200**, then the rest of the drop at **1g** with stick pinned — **not** 8G slam. At 30 m play hull XY is **~30 m+**. Recast AirDive* **JumpLength** is clipped same-plane launch XY (~**1508**), not that fall-extra hull. Slam stays landing **feel** on short hops.
 
 **DropDown** is a short XY chord (~2.8 m) with strain depth: pad right under the lip is a walk-off, not a Launch. **AirDiveDown** is the long-XY drop Recast searches from the **walkable edge** (JumpMaxDepth = **Abs(apex − maxFall 3000) ≈ 1420**, not raw 30 m). Play strain still allows a 30 m fall. **AirDiveOver** is the long spanning gap. Both AirDive* use `UCLNavArea_AirDive` (**DefaultCost 50**, vs walk 1 / LongJump 25) so FindPath prefers the walk/DropDown corridor when both exist; `goto` Launchs AirDive edges only when FindPath still picks them (e.g. island with no walk).
 
@@ -110,7 +110,7 @@ The tick still runs that recipe in time (jump pulses, hang, then pin or release)
 
 | Box | Rough figure | Why |
 |-----|----------------|-----|
-| Hull DistXY | `SearchRadiusCm` = `MaxLaunchXY` vs drop (~**30 m+** on a 30 m pinned dive) | Recast AirDive* is this hull, not slam-shortened ~15–18 m. |
+| Hull DistXY (play) | `MaxLaunchXY` vs drop (~**30 m+** on a 30 m pinned dive) | Runtime torus lookup. Recast JumpLength is clipped same-plane ~**1508**, not this hull. |
 | Min DistXY | **0** | Inner ring: still-jump and drop straight down |
 | ΔZ | start may be **below** (jump slices, up to triple apex); dive only once above | Slam does not climb; the leaf jumps first |
 | `releaseXY` | success DistXY **− coastXY** | Inner: release **140**, land **180**. Outer does **not** release. |
@@ -146,9 +146,9 @@ Hold stick (strafe **380** or forward **420**/sprint). No pulse. Use for a short
 
 ## Recast `goto` vs these leaves
 
-`goto` asks Recast for a path (drop-down, jump-down, cover-over, jump-up to full triple apex, jump-over = expensive, **AirDiveDown** / **AirDiveOver** = strain-depth from the walkable + look radius). It follows Recast only when the path **reaches** the destination (not `IsPartial()`, not a rim crawl). Off-mesh polys with `UCLNavArea_AirDive` run the shared Launch executor (`recastAirDive`). DropDown stays a walk-off even at 30 m if the pad is under the lip. If Recast cannot connect, `goto` tries **jump-to** when that box passes, else **Launch** when `LaunchInEnvelope` passes. A Launch / recastAirDive arm does **not** settle on DistXY while airborne — same on-ground / on-pad check as `airDive-to`. Jump-to / slide-to / strafe-to still fail a void gap; airDive-to is why goto passes. `goto` does **not** run slide-to or dash-to.
+`goto` asks Recast for a path (drop-down, jump-down, cover-over, jump-up to full triple apex, jump-over = expensive, **AirDiveDown** / **AirDiveOver**). It follows Recast only when the path **reaches** the destination (not `IsPartial()`, not a rim crawl). Off-mesh polys with `UCLNavArea_AirDive` run the shared Launch executor (`recastAirDive`): walk the lip, then fly — recipe if lookup hits, else recastLaunchFallback. Envelope is **not** a veto. DropDown stays a walk-off even at 30 m if the pad is under the lip. `goto` does **not** arm jump-to or Launch when Recast misses a path. A Launch / recastAirDive arm does **not** settle on DistXY while airborne — same on-ground / on-pad check as `airDive-to`. `goto` does **not** run slide-to or dash-to.
 
-If `goto` fails `no_path` / `no_project_*`, rewrite the book from `/state` or fix Recast. Do not invent MCP `plan` / raw `/goto` when a seat exists. Jump-to / Launch are separate leaves — `goto` does not arm them when Recast misses.
+If `goto` fails `no_path` / `no_project_*`, rewrite the book from `/state` or fix Recast. Do not invent MCP `plan` / raw `/goto` when a seat exists. Jump-to / `airDive marker=` are separate leaves (lintels). Catalog `edge_pad` is Recast `goto` only.
 
 ## Choosing a leaf (any map)
 

@@ -1,0 +1,20 @@
+@startuml hold_lee
+floating note
+trySuccessFor: 0.5
+end note
+start
+if (qualify hasMarker hide_center_lee) then (yes)
+  :goto marker=hide_center_lee;
+  note right
+    success: distXY 220
+    goodEnough: distXY 500
+    fail.timeout: 45
+  end note
+  :wait;
+  note right
+    fail.timeout: 200
+  end note
+else (skip)
+endif
+stop
+@enduml

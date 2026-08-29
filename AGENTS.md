@@ -12,7 +12,7 @@ Cursor **cloud** agents cannot build or run Unreal. The recipes below need a Win
 | [`.cursor/skills/dl-agent-nav/SKILL.md`](.cursor/skills/dl-agent-nav/SKILL.md) | BotBooks (`appendBotBook`), markers, probes; loopback `/goto` is debug |
 | [`.cursor/skills/dl-circle-run/SKILL.md`](.cursor/skills/dl-circle-run/SKILL.md) | Compose PvP ring verify (`VERIFY_OK`, diving, megalith 8/8) |
 
-Pawn scripting is **SeatMotor + BotBook** (catalog or JIT PlantUML). Anytime an agent drives a pawn — stroll, cover, ring, megalith, one test move — POST hub `appendBotBook` / `branchBotBook`. Read [Docs/BotBooks.md](Docs/BotBooks.md). Landing a point with jump / air-dive / slide / dash (vs Recast `goto`): [Docs/NavAbilities.md](Docs/NavAbilities.md). Do not invent MCP `plan` / `sequence` / `intent` / `goto`.
+Pawn scripting is **SeatMotor + BotBook** (catalog or JIT PlantUML). Anytime an agent drives a pawn — stroll, cover, ring, megalith, one test move — POST hub `appendBotBook` / `branchBotBook`. Read [Docs/BotBooks.md](Docs/BotBooks.md). Landing a point with jump / air-dive / slide / dash (vs Recast `goto`): [Docs/NavAbilities.md](Docs/NavAbilities.md). Recast knobs: [Docs/RecastLinks.md](Docs/RecastLinks.md). Recast policy (TileSize, no Engine patches, no cheat) lives in the parent design repo `.cursor/rules/recast-*.mdc` if this nested git is opened alone. Do not invent MCP `plan` / `sequence` / `intent` / `goto`.
 
 ## Spin up
 

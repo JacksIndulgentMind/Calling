@@ -40,7 +40,7 @@ Epic wording ([Automatic Navigation Link Generation](https://dev.epicgames.com/d
 | **SamplingSeparationFactor** | Epic: × CellSize between sampling trajectories. Epic ClampMin **1**. Larger = faster, can miss. Long recipes **1**. |
 | **FilterDistanceThreshold** | Epic: when filtering similar links, distance to compare **segment endpoints**. Blends **adjacent** almost-duplicate hops (granularity). **0** turns merge off (noisier, not more reach). Recommended **120**. Long recipes **120**. DropDown **120** (terrace → ramp). JumpDown **180**. |
 | **LinkBuilderFlags** | `CreateCenterPointLink` and/or `CreateExtremityLink`. |
-| **DownDirectionAreaClass** / **UpDirectionAreaClass** | Traversal flavor only. Same class → one bidirectional link. **Null** → that direction is not generated (Epic). Long recipes: both directions the long-launch area class. JumpUp: Up = default. DropDown: Up may be null (walk-off). |
+| **DownDirectionAreaClass** / **UpDirectionAreaClass** | Traversal flavor only. Same class → one bidirectional link. **Null** → that direction is not generated (Epic). Long recipes: both directions `UCLNavArea_AirDive` (**DefaultCost 50** vs walk **1** / LongJump **25**) so FindPath prefers the walk/DropDown corridor when both exist. `goto` Launchs that hop when FindPath still picks AirDive (island, no walk). JumpUp: Up = default. DropDown: Up may be null (walk-off). |
 | **LinkProxyClass** | Optional path-follow only. Not required for FindPath. |
 
 ### Recast generation (`ARecastNavMesh`)
