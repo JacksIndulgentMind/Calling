@@ -17,4 +17,6 @@ namespace CLLoopbackJoin
 	FString ResolveConnect(const FString& Selected);
 	void AppendLog(const FString& Line);
 	int32 ListenPort(UWorld* World);
+	int32 AgentHttpPort();
+	int32 SessionHubPort();
 }

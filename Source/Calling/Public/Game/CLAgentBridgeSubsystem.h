@@ -14,7 +14,7 @@ class UCLRemoteAgentSeatMotor;
 class UCLLobbySubsystem;
 
 /**
- * Loopback HTTP codec (18765). Hub JSON goes through FCLHubCommandRegistry.
+ * Loopback HTTP codec (default 18765; cmdline `-CallingAgentHttpPort=`). Hub JSON goes through FCLHubCommandRegistry.
  * Director through FCLDirectorCommandRegistry. State through FCLAgentStateSerializer.
  * Sequence/goto/intent are aliases onto the seat motor — no second clock.
  */

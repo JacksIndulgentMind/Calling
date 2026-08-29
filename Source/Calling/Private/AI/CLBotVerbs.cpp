@@ -75,11 +75,7 @@ void CLApplyBotWhile(FCLBotVerbContext& Ctx, bool bIncludeMove)
 		const FString S = W.ToString().ToLower();
 		if (S == TEXT("trackfocus") || S == TEXT("setfocus"))
 		{
-			const FGuid Focus = ResolveFocusSeat(Ctx);
-			if (Focus.IsValid())
-			{
-				Ctx.Char->SetLookTrackSeat(Focus);
-			}
+			Ctx.Char->SetLookTrackSeat(ResolveFocusSeat(Ctx));
 		}
 		else if (S == TEXT("maintainads"))
 		{
@@ -342,18 +338,16 @@ namespace
 	{
 		void Start(FCLBotVerbContext& Ctx) override
 		{
-			const FGuid Focus = ResolveFocusSeat(Ctx);
-			if (Ctx.Char && Focus.IsValid())
+			if (Ctx.Char)
 			{
-				Ctx.Char->SetLookTrackSeat(Focus);
+				Ctx.Char->SetLookTrackSeat(ResolveFocusSeat(Ctx));
 			}
 		}
 		void Tick(float, FCLBotVerbContext& Ctx) override
 		{
-			const FGuid Focus = ResolveFocusSeat(Ctx);
-			if (Ctx.Char && Focus.IsValid())
+			if (Ctx.Char)
 			{
-				Ctx.Char->SetLookTrackSeat(Focus);
+				Ctx.Char->SetLookTrackSeat(ResolveFocusSeat(Ctx));
 			}
 			CLApplyBotWhile(Ctx, false);
 		}

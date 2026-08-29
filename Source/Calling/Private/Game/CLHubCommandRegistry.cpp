@@ -6,6 +6,7 @@
 #include "Game/CLSeatMotor.h"
 #include "AI/CLBotBookManager.h"
 #include "Engine/GameInstance.h"
+#include "Engine/World.h"
 
 using namespace CLAgentCodec;
 
@@ -37,6 +38,16 @@ namespace
 		{
 			SeatId = Lobby->GetLastJoinedSeatId();
 		}
+		if (SeatId.IsValid() && Lobby && !Lobby->FindSeat(SeatId))
+		{
+			if (UWorld* World = Lobby->GetWorld())
+			{
+				if (World->GetNetMode() == NM_Client)
+				{
+					SeatId = Lobby->GetLastJoinedSeatId();
+				}
+			}
+		}
 		return SeatId;
 	}
 }
@@ -53,6 +64,14 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 	if (!Root.IsValid())
 	{
 		return Fail(TEXT("invalid_json"));
+	}
+
+	if (UWorld* World = Lobby->GetWorld())
+	{
+		if (World->GetNetMode() == NM_Client)
+		{
+			Lobby->PrepareGuestLocalHub(FallbackSeat);
+		}
 	}
 
 	const FString Type = JsonStr(Root, TEXT("type")).ToLower();

@@ -11,6 +11,9 @@ Durable files **must** `goto` by marker id. JIT hub trees may use x,y,z.
 | `megalith_hop` | Eight `airDive marker=menhir_N` sticks. |
 | `hold_lee` | `goto hide_center_lee` then wait (no fire). Seat B parks through edge/megalith. |
 | `court_gunfight` | `goto court_center` then slide/dash/approach with `trackFocus, fire`. |
+| `to_court_center` | Recast `goto court_center` only (spawn-to-pit; 60s timeout). |
+| `ring_orbit_ccw` | One CCW lap `menhir_0`…`7_approach` with `trackFocus, fire`. No self-ref. |
+| `ring_orbit_ccw_from4` | Same lap starting at `menhir_4` (west) so two pawns stay opposite. |
 | `track_fire` | `setFocus` + fire while tracking (ring gunfight, not 0.7s peek). |
 | `edge_pad` | `goto marker=edge_pad` only. Recast AirDive off-mesh + DropDown terrace links; no JIT/catalog airDive fallback. Island stand recalls to the lip. |
 | `pillar_dive` | `goto marker=pillar_pad` (practice void gap). |

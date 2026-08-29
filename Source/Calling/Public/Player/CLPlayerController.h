@@ -53,6 +53,12 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerComposerReady(bool bReady);
 
+	UFUNCTION(Client, Reliable)
+	void ClientHubDispatch(const FString& Json, int32 CorrelationId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerHubDispatchResult(int32 CorrelationId, const FString& Json);
+
 protected:
 	void OnMove(const FInputActionValue& Value);
 	void OnLook(const FInputActionValue& Value);

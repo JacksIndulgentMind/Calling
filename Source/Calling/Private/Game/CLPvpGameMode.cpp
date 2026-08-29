@@ -54,11 +54,11 @@ void ACLPvpGameMode::InitGame(const FString& MapName, const FString& Options, FS
 
 void ACLPvpGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
 {
+	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
 	{
 		Lobby->EnsureNetHumanSeat(NewPlayer);
 	}
-	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 }
 
 AActor* ACLPvpGameMode::ChoosePlayerStart_Implementation(AController* Player)
@@ -70,6 +70,13 @@ AActor* ACLPvpGameMode::ChoosePlayerStart_Implementation(AController* Player)
 		if (const UCLParticipantSeat* Seat = Lobby->FindSeatForController(Player))
 		{
 			if (Seat->GetTeam() == ECLPvpTeam::Blue)
+			{
+				Tag = FName(TEXT("Blue"));
+			}
+		}
+		else if (const APlayerController* PC = Cast<APlayerController>(Player))
+		{
+			if (!PC->IsLocalController())
 			{
 				Tag = FName(TEXT("Blue"));
 			}

@@ -26,10 +26,24 @@ namespace
 		{
 			return FGuid();
 		}
-		const ECLPvpTeam Mine = Seat->GetTeam();
+		const APawn* MinePawn = Seat->GetDrivenPawn();
+		UCLParticipantSeat* Identity = Seat;
+		if (Seat->GetDriveSeatId().IsValid())
+		{
+			if (UCLParticipantSeat* Drive = Lobby->FindSeat(Seat->GetDriveSeatId()))
+			{
+				Identity = Drive;
+			}
+		}
+		const ECLPvpTeam Mine = Identity->GetTeam();
 		for (UCLParticipantSeat* Other : Lobby->GetSeats())
 		{
 			if (!Other || Other == Seat)
+			{
+				continue;
+			}
+			APawn* OtherPawn = Other->GetDrivenPawn();
+			if (!OtherPawn || OtherPawn == MinePawn)
 			{
 				continue;
 			}
@@ -37,10 +51,7 @@ namespace
 			{
 				continue;
 			}
-			if (Other->GetDrivenPawn())
-			{
-				return Other->GetSeatId();
-			}
+			return Other->GetSeatId();
 		}
 		return FGuid();
 	}

@@ -12,6 +12,7 @@ Append one line after a failed or surprising stroll. Write the **method**, not a
 - Agent `"slide": true` pulses `RequestSlide()`. Crouch-hold C still needs a rising edge if you are not using the slide pulse. Hold the plan until `/state.sliding` is false; commit from `slideDistanceCm` instead of truncating or `goto`-rewriting mid-slide.
 - A look-only sequence step replaced by the next POST before a 30 Hz tick never applies. Put `yawAbs`/`pitchAbs` or `lookAtSeat` on the **first movement step**, then confirm heading. Spawn pitch is often −12; hold **0** for same-height headshots and yaw at the objective. `yawAbs` is a rate-limited goal (420/280 deg/s), not a snap.
 - `look.yaw` is a delta, also clamped to the agent turn cap. A 180° turn as a delta takes multiple ticks; `yawAbs` sets the goal. Use `lookAtSeat` to track a pawn (sticky point, 100 ms react if they move).
+- `while: trackFocus, fire` must aim at the **other combat pawn**, not the cursor seat’s own body. Hip recoil still kicks control pitch; LookController must keep slewing pitch at `RecoilCorrectPitchRate` while spraying (do not freeze pitch for `RecoilCorrectDelay` on every shot).
 - Never leave a strafe hold waiting for the next tool call (new shells are ~8 s). `/sequence` unpresses on the sim.
 - HTTP handlers run on the game thread. Poll `/state` at most ~10 Hz; post on command change only. Fast GET+POST hitch PIE and fools stall-detect.
 - PowerShell `-f` eats `{` in JSON. Never format a JSON body with `-f`. Prefer integer look values if you must concatenate.

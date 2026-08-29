@@ -5,6 +5,7 @@
 #include "Game/CLLobbyTypes.h"
 #include "Game/CLAgentSequenceRunner.h"
 #include "Dom/JsonObject.h"
+#include "TimerManager.h"
 #include "CLLobbySubsystem.generated.h"
 
 class UCLParticipantSeat;
@@ -13,6 +14,7 @@ class UCLSeatRegistry;
 class UCLGateCountdown;
 class UCLTravelCoordinator;
 class ACLPlayerCharacter;
+class ACLPlayerController;
 class APawn;
 class AController;
 class APlayerController;
@@ -92,6 +94,14 @@ public:
 	void RestoreBodiesAfterTravel();
 	void NotifyHubSnapshots(ECLHubSnapshotReason Reason, const FGuid& OnlySeat = FGuid());
 
+	/** Net client: local human + cursor driving this process's pawn. */
+	void PrepareGuestLocalHub(FGuid* FallbackSeat);
+
+	/** If hub JSON has via=remote PC, Client-RPC it and invoke OnDone with the reply JSON. */
+	bool TryRouteHubVia(const TSharedPtr<FJsonObject>& Root, TFunction<void(FString)> OnDone);
+	void HandleIncomingViaHub(const FString& Json, int32 CorrelationId, ACLPlayerController* ReplyTo);
+	void CompleteHubVia(int32 CorrelationId, const FString& Json);
+
 	TSharedRef<FJsonObject> HandleMessage(const TSharedPtr<FJsonObject>& Root);
 	void FillStateJson(const TSharedRef<FJsonObject>& Root) const;
 
@@ -131,4 +141,12 @@ protected:
 	TWeakObjectPtr<APawn> LastDemoViewPawn;
 
 	FDelegateHandle NetTickHandle;
+
+	struct FHubViaPending
+	{
+		TFunction<void(FString)> OnDone;
+		FTimerHandle Timeout;
+	};
+	TMap<int32, FHubViaPending> HubViaPending;
+	int32 NextHubViaId = 1;
 };

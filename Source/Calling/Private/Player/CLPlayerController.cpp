@@ -379,6 +379,28 @@ void ACLPlayerController::ServerComposerReady_Implementation(bool bReady)
 	}
 }
 
+void ACLPlayerController::ClientHubDispatch_Implementation(const FString& Json, int32 CorrelationId)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->HandleIncomingViaHub(Json, CorrelationId, this);
+		}
+	}
+}
+
+void ACLPlayerController::ServerHubDispatchResult_Implementation(int32 CorrelationId, const FString& Json)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->CompleteHubVia(CorrelationId, Json);
+		}
+	}
+}
+
 void ACLPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);

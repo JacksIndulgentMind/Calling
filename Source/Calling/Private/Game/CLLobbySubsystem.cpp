@@ -4,6 +4,7 @@
 #include "Game/CLSeatMotor.h"
 #include "AI/CLBotBookManager.h"
 #include "Game/CLHubCommandRegistry.h"
+#include "Game/CLAgentCodec.h"
 #include "Game/CLInvoiceService.h"
 #include "Game/CLSeatRegistry.h"
 #include "Game/CLGateCountdown.h"
@@ -14,6 +15,7 @@
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLSessionHub.h"
 #include "Player/CLPlayerCharacter.h"
+#include "Player/CLPlayerController.h"
 #include "Player/CLCombatPawn.h"
 #include "Player/CLPossessionComponent.h"
 #include "Player/CLHeadlessAgent.h"
@@ -32,6 +34,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Core/CLTunes.h"
 #include "Dom/JsonValue.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 namespace
 {
@@ -392,17 +396,27 @@ UCLParticipantSeat* UCLLobbySubsystem::JoinRemoteAgent(const FString& DisplayNam
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	if (bHeadless)
 	{
-		ACLHeadlessAgent* Anchor = World->SpawnActor<ACLHeadlessAgent>(ACLHeadlessAgent::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
-		if (!Anchor)
+		if (World->GetNetMode() == NM_Client)
 		{
-			OutError = TEXT("spawn_failed");
-			SeatReg->MutableSeats().Remove(Seat);
-			return nullptr;
+			UCLPossessionComponent* Poss = NewObject<UCLPossessionComponent>(Seat);
+			Poss->GoHeadless();
+			Seat->SetPossession(Poss);
+			Seat->SetHeadlessJoin(true);
 		}
-		Seat->SetAnchor(Anchor);
-		Seat->SetPossession(Anchor->GetPossession());
-		Seat->SetHeadlessJoin(true);
-		Anchor->GetPossession()->GoHeadless();
+		else
+		{
+			ACLHeadlessAgent* Anchor = World->SpawnActor<ACLHeadlessAgent>(ACLHeadlessAgent::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
+			if (!Anchor)
+			{
+				OutError = TEXT("spawn_failed");
+				SeatReg->MutableSeats().Remove(Seat);
+				return nullptr;
+			}
+			Seat->SetAnchor(Anchor);
+			Seat->SetPossession(Anchor->GetPossession());
+			Seat->SetHeadlessJoin(true);
+			Anchor->GetPossession()->GoHeadless();
+		}
 	}
 	else
 	{
@@ -629,6 +643,11 @@ bool UCLLobbySubsystem::MindControl(const FGuid& AgentSeatId, const FGuid& Targe
 		OutError = TEXT("no_target");
 		return false;
 	}
+	if (!TargetPawn->IsLocallyControlled())
+	{
+		OutError = TEXT("remote_pawn");
+		return false;
+	}
 	Agent->GetPossession()->MindControl(TargetPawn);
 	Agent->SetDriveSeatId(Target ? Target->GetSeatId() : FGuid());
 	OutError.Reset();
@@ -727,6 +746,145 @@ void UCLLobbySubsystem::CheckMinPlayers()
 		{
 			Pvp->EndMatchAndAward();
 		}
+	}
+}
+
+void UCLLobbySubsystem::PrepareGuestLocalHub(FGuid* FallbackSeat)
+{
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() != NM_Client)
+	{
+		return;
+	}
+	APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+	if (!PC || !PC->IsLocalController())
+	{
+		return;
+	}
+	UCLParticipantSeat* Human = EnsureNetHumanSeat(PC);
+	UCLParticipantSeat* Cursor = nullptr;
+	for (UCLParticipantSeat* Seat : SeatReg->GetAll())
+	{
+		if (Seat && Seat->GetSeatMotor() && Seat->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
+		{
+			Cursor = Seat;
+			break;
+		}
+	}
+	if (!Cursor)
+	{
+		FString Error;
+		Cursor = JoinRemoteAgent(TEXT("guest-mcp"), true, Error, TEXT("cursor"));
+	}
+	if (Cursor && Human && Cursor->GetDrivenPawn() != Human->GetDrivenPawn())
+	{
+		FString Error;
+		MindControl(Cursor->GetSeatId(), Human->GetSeatId(), Error);
+	}
+	if (Cursor)
+	{
+		LastJoinedSeatId = Cursor->GetSeatId();
+		if (FallbackSeat)
+		{
+			*FallbackSeat = Cursor->GetSeatId();
+		}
+	}
+}
+
+bool UCLLobbySubsystem::TryRouteHubVia(const TSharedPtr<FJsonObject>& Root, TFunction<void(FString)> OnDone)
+{
+	if (!Root.IsValid() || !OnDone)
+	{
+		return false;
+	}
+	const FString Via = CLAgentCodec::JsonStr(Root, TEXT("via"));
+	if (Via.IsEmpty())
+	{
+		return false;
+	}
+	const FGuid ViaId = CLAgentCodec::ParseGuid(Via);
+	UCLParticipantSeat* Seat = FindSeat(ViaId);
+	auto Fail = [&OnDone](const TCHAR* Error)
+	{
+		OnDone(FString::Printf(TEXT("{\"ok\":false,\"error\":\"%s\"}"), Error));
+	};
+	if (!Seat)
+	{
+		Fail(TEXT("no_via_seat"));
+		return true;
+	}
+	APlayerController* PC = Seat->GetBoundController();
+	if (!PC)
+	{
+		Fail(TEXT("no_via_controller"));
+		return true;
+	}
+	if (PC->IsLocalController())
+	{
+		return false;
+	}
+	ACLPlayerController* CLPC = Cast<ACLPlayerController>(PC);
+	if (!CLPC)
+	{
+		Fail(TEXT("no_via_pc"));
+		return true;
+	}
+
+	Root->RemoveField(TEXT("via"));
+	const FString Payload = CLAgentCodec::JsonToString(Root.ToSharedRef());
+	const int32 Id = NextHubViaId++;
+	FHubViaPending Pending;
+	Pending.OnDone = MoveTemp(OnDone);
+	if (UWorld* World = GetWorld())
+	{
+		TWeakObjectPtr<UCLLobbySubsystem> WeakThis(this);
+		World->GetTimerManager().SetTimer(Pending.Timeout, [WeakThis, Id]()
+		{
+			if (UCLLobbySubsystem* Self = WeakThis.Get())
+			{
+				Self->CompleteHubVia(Id, TEXT("{\"ok\":false,\"error\":\"via_timeout\"}"));
+			}
+		}, 8.f, false);
+	}
+	HubViaPending.Add(Id, MoveTemp(Pending));
+	CLPC->ClientHubDispatch(Payload, Id);
+	return true;
+}
+
+void UCLLobbySubsystem::HandleIncomingViaHub(const FString& Json, int32 CorrelationId, ACLPlayerController* ReplyTo)
+{
+	PrepareGuestLocalHub(nullptr);
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
+	FString Reply = TEXT("{\"ok\":false,\"error\":\"invalid_json\"}");
+	if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+	{
+		Root->RemoveField(TEXT("via"));
+		const TSharedRef<FJsonObject> Out = FCLHubCommandRegistry::Dispatch(this, Root, &LastJoinedSeatId);
+		Reply = CLAgentCodec::JsonToString(Out);
+	}
+	if (ReplyTo)
+	{
+		ReplyTo->ServerHubDispatchResult(CorrelationId, Reply);
+	}
+}
+
+void UCLLobbySubsystem::CompleteHubVia(int32 CorrelationId, const FString& Json)
+{
+	FHubViaPending* Pending = HubViaPending.Find(CorrelationId);
+	if (!Pending)
+	{
+		return;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(Pending->Timeout);
+	}
+	TFunction<void(FString)> Done = MoveTemp(Pending->OnDone);
+	HubViaPending.Remove(CorrelationId);
+	if (Done)
+	{
+		Done(Json);
 	}
 }
 

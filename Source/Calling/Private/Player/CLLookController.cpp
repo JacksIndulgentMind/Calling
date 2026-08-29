@@ -1,9 +1,12 @@
 #include "Player/CLLookController.h"
+#include "Player/CLPlayerCharacter.h"
+#include "Player/CLCombatPawn.h"
 #include "Core/CLTunes.h"
 #include "Game/CLLobbySubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 
 UCLLookController::UCLLookController()
 {
@@ -87,10 +90,6 @@ void UCLLookController::ApplyAgentLookCommand(const FCLLookCommand& Look)
 
 void UCLLookController::SetLookTrackSeat(const FGuid& SeatId)
 {
-	if (!SeatId.IsValid())
-	{
-		return;
-	}
 	LookGoalYaw.Reset();
 	LookGoalPitch.Reset();
 	if (bLookTrack && LookTrackSeatId == SeatId)
@@ -138,6 +137,48 @@ void UCLLookController::SlewControlToward(const FRotator& Desired, float DeltaSe
 	Ctrl->SetControlRotation(Cur);
 }
 
+namespace
+{
+	AActor* FindOpposingPlayer(APawn* Self, const FGuid& SeatId)
+	{
+		if (!Self)
+		{
+			return nullptr;
+		}
+		if (SeatId.IsValid())
+		{
+			if (UGameInstance* GI = Self->GetGameInstance())
+			{
+				if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+				{
+					if (APawn* Driven = Lobby->GetDrivenPawn(SeatId))
+					{
+						if (Driven != Self)
+						{
+							return Driven;
+						}
+					}
+				}
+			}
+		}
+		UWorld* World = Self->GetWorld();
+		if (!World)
+		{
+			return nullptr;
+		}
+		for (TActorIterator<ACLPlayerCharacter> It(World); It; ++It)
+		{
+			ACLPlayerCharacter* Other = *It;
+			if (!Other || Other == Self || Other->IsA<ACLCombatPawn>())
+			{
+				continue;
+			}
+			return Other;
+		}
+		return nullptr;
+	}
+}
+
 void UCLLookController::TickAgentLook(float DeltaSeconds)
 {
 	APawn* Pawn = Cast<APawn>(GetOwner());
@@ -154,17 +195,9 @@ void UCLLookController::TickAgentLook(float DeltaSeconds)
 
 	FRotator Desired = Ctrl->GetControlRotation();
 	bool bSlew = false;
-	if (bLookTrack && LookTrackSeatId.IsValid())
+	if (bLookTrack)
 	{
-		AActor* Target = nullptr;
-		if (UGameInstance* GI = Pawn->GetGameInstance())
-		{
-			if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
-			{
-				Target = Lobby->GetDrivenPawn(LookTrackSeatId);
-			}
-		}
-		if (Target)
+		if (AActor* Target = FindOpposingPlayer(Pawn, LookTrackSeatId))
 		{
 			FCLAgentLookTune Tune;
 			Tune.LoadFromIni();
@@ -216,17 +249,17 @@ void UCLLookController::TickAgentLook(float DeltaSeconds)
 	{
 		FCLAgentLookTune Tune;
 		Tune.LoadFromIni();
-		const bool bSlewPitch = RecoilCorrectRemaining <= 0.f;
 		float PitchRate = Tune.MaxPitchRateDegPerSec;
-		if (bSlewPitch && bRecoilPitchSlow)
+		if (RecoilCorrectRemaining > 0.f || bRecoilPitchSlow)
 		{
 			PitchRate = Tune.RecoilCorrectPitchRate;
-			const float PitchErr = FMath::Abs(FRotator::NormalizeAxis(Desired.Pitch) - FRotator::NormalizeAxis(Ctrl->GetControlRotation().Pitch));
-			if (PitchErr < 1.f)
+			const float PitchErr = FMath::Abs(
+				FRotator::NormalizeAxis(Desired.Pitch) - FRotator::NormalizeAxis(Ctrl->GetControlRotation().Pitch));
+			if (PitchErr < 1.f && RecoilCorrectRemaining <= 0.f)
 			{
 				bRecoilPitchSlow = false;
 			}
 		}
-		SlewControlToward(Desired, DeltaSeconds, bSlewPitch, PitchRate);
+		SlewControlToward(Desired, DeltaSeconds, true, PitchRate);
 	}
 }

@@ -12,7 +12,19 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const HOST = "127.0.0.1";
-const PORT = Number(process.env.DL_AGENT_PORT || 18765);
+function resolveAgentPort() {
+  const url = process.env.CALLING_AGENT_HTTP;
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.port) return Number(parsed.port);
+    } catch {
+      /* fall through */
+    }
+  }
+  return Number(process.env.DL_AGENT_PORT || 18765);
+}
+const PORT = resolveAgentPort();
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = process.env.DL_REPO || path.resolve(HERE, "../..");
 const EDITOR =

@@ -25,6 +25,6 @@ Same-process composer Host/Guest is still the ring-verify path. A second **windo
 
 `Map?listen` without `game=` would load Social GameMode via map prefixes. Composer listen URL must include `game=/Script/Calling.CLComposerGameMode`.
 
-## Guest has no MCP
+## Guest MCP (ports + via)
 
-`UCLAgentBridgeSubsystem` and `UCLSessionHub` bind once per machine. Drive both agents from the **host** hub: cursor seats `mindControl` the bound humans. See the skill.
+`UCLAgentBridgeSubsystem` / `UCLSessionHub` read `AgentHttpPort` / `SessionHubPort`, then cmdline `-CallingAgentHttpPort=` / `-CallingSessionHubPort=`. Default two-box guest is **18767 / 18768**. Guest hub `Dispatch` binds a local cursor to the possessed pawn. Host `POST /hub` with `via` (net-human seat id) Client-RPCs the same JSON to that `ACLPlayerController`. Director session actions on the guest return `host_only`. Replication probe stays host 18765. See the skill.

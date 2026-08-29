@@ -1,5 +1,6 @@
 #include "Game/CLLoopbackJoin.h"
 #include "Core/CLLog.h"
+#include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -60,6 +61,24 @@ namespace CLLoopbackJoin
 			return World->URL.Port;
 		}
 		return 7777;
+	}
+
+	int32 ResolvePort(int32 DefaultPort, const TCHAR* IniSection, const TCHAR* IniKey, const TCHAR* CmdToken)
+	{
+		int32 Port = DefaultPort;
+		GConfig->GetInt(IniSection, IniKey, Port, GGameIni);
+		FParse::Value(FCommandLine::Get(), CmdToken, Port);
+		return FMath::Clamp(Port, 1024, 65535);
+	}
+
+	int32 AgentHttpPort()
+	{
+		return ResolvePort(18765, TEXT("/Script/Calling.CLAgentSettings"), TEXT("AgentHttpPort"), TEXT("CallingAgentHttpPort="));
+	}
+
+	int32 SessionHubPort()
+	{
+		return ResolvePort(18766, TEXT("/Script/Calling.CLLobbySettings"), TEXT("SessionHubPort"), TEXT("CallingSessionHubPort="));
 	}
 
 	void AppendLog(const FString& Line)

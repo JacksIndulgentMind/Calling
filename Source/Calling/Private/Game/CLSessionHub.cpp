@@ -17,7 +17,6 @@
 #include "Interfaces/IPv4/IPv4Endpoint.h"
 #include "Misc/Base64.h"
 #include "Misc/SecureHash.h"
-#include "Misc/ConfigCacheIni.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -43,9 +42,10 @@ namespace
 void UCLSessionHub::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	int32 PortIni = Port;
-	GConfig->GetInt(TEXT("/Script/Calling.CLLobbySettings"), TEXT("SessionHubPort"), PortIni, GGameIni);
-	Port = FMath::Clamp(PortIni, 1024, 65535);
+	Port = CLLoopbackJoin::SessionHubPort();
+#if !UE_BUILD_SHIPPING
+	StartHost();
+#endif
 }
 
 void UCLSessionHub::Deinitialize()
@@ -309,6 +309,13 @@ void UCLSessionHub::HandleText(int32 Index, const FString& Text)
 	if (!Lobby)
 	{
 		SendText(Index, TEXT("{\"ok\":false,\"error\":\"no_lobby\"}"));
+		return;
+	}
+	if (Lobby->TryRouteHubVia(Root, [this, Index](FString Json)
+	{
+		SendText(Index, Json);
+	}))
+	{
 		return;
 	}
 	const TSharedRef<FJsonObject> Out = FCLHubCommandRegistry::Dispatch(Lobby, Root, &Clients[Index].SeatId);

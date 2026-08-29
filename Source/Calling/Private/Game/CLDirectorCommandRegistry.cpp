@@ -9,6 +9,7 @@
 #include "UI/CLMainMenuOverlay.h"
 #include "Core/CLTypes.h"
 #include "Engine/GameInstance.h"
+#include "Engine/World.h"
 
 TSharedRef<FJsonObject> FCLDirectorCommandRegistry::Dispatch(
 	UGameInstance* GI,
@@ -46,6 +47,22 @@ TSharedRef<FJsonObject> FCLDirectorCommandRegistry::Dispatch(
 	}
 
 	UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>();
+	UWorld* World = GI->GetWorld();
+	if (World && World->GetNetMode() == NM_Client)
+	{
+		const bool bHostOnly =
+			Action == TEXT("virtualhost") || Action == TEXT("ready") || Action == TEXT("go")
+			|| Action == TEXT("start") || Action == TEXT("host") || Action == TEXT("guest")
+			|| Action == TEXT("pvp") || Action == TEXT("composer") || Action == TEXT("arena")
+			|| Action == TEXT("raid") || Action == TEXT("practice") || Action == TEXT("social")
+			|| Action == TEXT("join");
+		if (bHostOnly)
+		{
+			Out->SetBoolField(TEXT("ok"), false);
+			Out->SetStringField(TEXT("error"), TEXT("host_only"));
+			return Out;
+		}
+	}
 
 	if (Action == TEXT("open"))
 	{

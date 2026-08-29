@@ -126,6 +126,10 @@ void FCLAgentStateSerializer::FillSceneMenu(TSharedRef<FJsonObject> Root, UGameI
 		{
 			Scene = GM->GetSceneId();
 		}
+		else if (const ACLGameStateBase* GS = GI->GetWorld()->GetGameState<ACLGameStateBase>())
+		{
+			Scene = GS->GetSceneId();
+		}
 	}
 	Root->SetStringField(TEXT("scene"), SceneName(Scene));
 	bool bMenu = false;

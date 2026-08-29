@@ -208,11 +208,11 @@ void ACLGreyboxFloors::BeginPlay()
 void ACLGreyboxFloors::ScheduleNavRebuild()
 {
 	UWorld* World = GetWorld();
-	if (!World || !World->HasBegunPlay() || World->GetNetMode() == NM_Client)
+	if (!World || !World->HasBegunPlay())
 	{
 		return;
 	}
-	UE_LOG(LogCalling, Display, TEXT("Greybox nav scheduled pads=%d"), Platforms.Num());
+	UE_LOG(LogCalling, Display, TEXT("Greybox nav scheduled pads=%d net=%d"), Platforms.Num(), static_cast<int32>(World->GetNetMode()));
 	World->GetTimerManager().SetTimer(NavRebuildTimer, this, &ACLGreyboxFloors::OnNavRebuildTimer, 0.15f, false);
 }
 
@@ -224,6 +224,7 @@ void ACLGreyboxFloors::OnNavRebuildTimer()
 void ACLGreyboxFloors::OnRep_Layout()
 {
 	EnsureBuilt();
+	ScheduleNavRebuild();
 }
 
 void ACLGreyboxFloors::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -988,7 +989,7 @@ void ACLGreyboxFloors::ApplyVisibleShading()
 void ACLGreyboxFloors::RebuildNavigation()
 {
 	UWorld* World = GetWorld();
-	if (!World || World->GetNetMode() == NM_Client)
+	if (!World)
 	{
 		return;
 	}

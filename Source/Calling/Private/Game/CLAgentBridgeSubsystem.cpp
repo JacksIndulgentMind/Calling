@@ -71,9 +71,7 @@ void UCLAgentBridgeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 #else
 	bAllowAgentInput = true;
 	GConfig->GetBool(TEXT("/Script/Calling.CLAgentSettings"), TEXT("bAllowAgentInput"), bAllowAgentInput, GGameIni);
-	int32 PortIni = static_cast<int32>(Port);
-	GConfig->GetInt(TEXT("/Script/Calling.CLAgentSettings"), TEXT("AgentHttpPort"), PortIni, GGameIni);
-	Port = static_cast<uint32>(FMath::Clamp(PortIni, 1024, 65535));
+	Port = static_cast<uint32>(CLLoopbackJoin::AgentHttpPort());
 	if (bAllowAgentInput)
 	{
 		StartListener();
@@ -582,6 +580,14 @@ bool UCLAgentBridgeSubsystem::HandleHub(const FHttpServerRequest& Request, const
 	if (!ParseJson(BodyToString(Request.Body), Root, ParseError))
 	{
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::BadRequest, TEXT("invalid_json")));
+		return true;
+	}
+
+	if (Lobby->TryRouteHubVia(Root, [OnComplete](FString Json)
+	{
+		OnComplete(FHttpServerResponse::Create(MoveTemp(Json), TEXT("application/json")));
+	}))
+	{
 		return true;
 	}
 

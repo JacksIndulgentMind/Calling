@@ -1,0 +1,68 @@
+@startuml ring_orbit_ccw_from4
+floating note
+onRespawn: ring_orbit_ccw_from4
+trySuccessFor: 2.0
+end note
+start
+if (qualify navTiles > 0) then (yes)
+  :setFocus focus=enemy;
+  :goto marker=menhir_4_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :goto marker=menhir_5_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :goto marker=menhir_6_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :goto marker=menhir_7_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :goto marker=menhir_0_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :goto marker=menhir_1_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :goto marker=menhir_2_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :goto marker=menhir_3_approach;
+  note right
+    while: trackFocus, fire
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+else (skip)
+endif
+stop
+@enduml

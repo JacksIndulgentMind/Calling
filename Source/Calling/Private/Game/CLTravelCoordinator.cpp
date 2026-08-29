@@ -8,6 +8,7 @@
 #include "Player/CLHeadlessAgent.h"
 #include "Player/CLPossessionComponent.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 
 namespace
@@ -99,8 +100,20 @@ void UCLTravelCoordinator::RestoreBodiesAfterTravel(UCLInvoiceService* Invoices,
 			Remote->CancelPlan();
 			Remote->CancelGoto();
 		}
-		if (Seat->GetBoundController())
+		if (APlayerController* PC = Seat->GetBoundController())
 		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				Seat->SetAnchor(Pawn);
+				if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(Pawn))
+				{
+					if (UCLPossessionComponent* Possession = Char->GetPossession())
+					{
+						Possession->PossessOwn(Char);
+						Seat->SetPossession(Possession);
+					}
+				}
+			}
 			continue;
 		}
 		Seat->SetPossession(nullptr);

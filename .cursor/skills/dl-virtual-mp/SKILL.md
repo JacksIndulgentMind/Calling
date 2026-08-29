@@ -13,15 +13,21 @@ Same-PC two-box is Unreal **listen host** plus **ClientTravel** to `127.0.0.1`. 
 
 Hub vs director vs BotBooks: [dl-agent-control](../dl-agent-control/SKILL.md). Drive: [dl-agent-nav](../dl-agent-nav/SKILL.md). How it is wired: [Docs/VirtualMp.md](../../../Docs/VirtualMp.md). Lessons: [lessons.md](lessons.md).
 
+Guest CharacterMovement must originate on the **guest** (`ServerMove`). Do not mind-control the guest human from the host hub (that puppets the server copy). Do not skip guest `ServerMove` or server-sim the remote pawn.
+
 ## Ports (do not mix)
 
 | Port | Who binds | Role |
 |------|-----------|------|
 | **7777 UDP** | Host listen, client connects | World replication. Same port on localhost is correct. |
-| **18765 HTTP** | Host only | MCP / director / `GET /state` / `POST /hub` |
-| **18766 WS** | Host only | Session hub |
+| **18765 HTTP** | Host | MCP / director / `GET /state` / `POST /hub` |
+| **18766 WS** | Host | Session hub |
+| **18767 HTTP** | Guest (override) | Second MCP / guest `/hub` / guest `/state` (local prediction) |
+| **18768 WS** | Guest (override) | Guest session hub |
 
-The second `-game` **will** fail 18765/18766. That is OK. Director and hub stay on the **host** process. Do not Compose PvP as standalone on both windows and expect them to merge. Do not run two `?listen` hosts.
+Default two-box: guest cmdline `-CallingAgentHttpPort=18767 -CallingSessionHubPort=18768` (after Game.ini). Second Cursor MCP: `CALLING_AGENT_HTTP=http://127.0.0.1:18767` or `DL_AGENT_PORT=18767`.
+
+If the guest is launched **without** those flags, 18765/18766 bind fail is expected. Director `virtualhost` / `ready` / `go` only on the **host**. Do not Compose PvP as standalone on both windows. Do not run two `?listen` hosts.
 
 ## Bring up (verified)
 
@@ -36,35 +42,35 @@ Scripts/dl-rebuild.ps1 -Activity composer
 3. Guest (second process, own UserDir so logs/profiles do not fight). Beacon stays under **project** `Saved/Calling/` even when UserDir differs:
 
 ```
-UnrealEditor.exe Calling.uproject 127.0.0.1:7777 -game -WINDOWED -UserDir=<Calling>/Saved/CallingClient2
+UnrealEditor.exe Calling.uproject 127.0.0.1:7777 -game -WINDOWED -UserDir=<Calling>/Saved/CallingClient2 -CallingAgentHttpPort=18767 -CallingSessionHubPort=18768
 ```
 
-Or from the guest I-menu: **Virtual join**, combo **Loopback (127.0.0.1)** (or **Beacon**). Guest has no director HTTP.
+Or from the guest I-menu: **Virtual join**, combo **Loopback (127.0.0.1)** (or **Beacon**), still pass the port flags on that process.
 
 4. Host: `GET /state` until `lobby.seats >= 2`. Guest auto-readies. Host `{"action":"ready"}` then `{"action":"go"}`. Wait `scene=pvp`.
 
-Pass: two viewports; host Red `x ≈ -14500`; guest Blue `x ≈ 14500`; `lobby.seatList` two `kind: human`. Movement replicates.
+Pass: two viewports; host Red `x ≈ -14500`; guest Blue `x ≈ 14500`; `lobby.seatList` two `kind: human`. Movement replicates. `GET :18767/state` responds on the guest.
 
 UI (config `bShowLoopbackJoin=true`, off in shipping): composer + I-menu **Virtual host** / **Virtual join**. Director aliases `virtualhost` / `virtualjoin`. Debug crumbs: `Saved/Calling/loopback-ipc.log` (join/bind only — not replication).
 
-## Two agents (start building here)
+## Two agents (favor guest port)
 
-Both combat bodies are **net humans** on the **host** lobby (`BoundController`). MCP still talks to the **host** HTTP. The guest window has no `/hub`.
+Both combat bodies are **net humans** on the **host** lobby (`BoundController`). Replication probe is always **host** `GET http://127.0.0.1:18765/state` (and `?seat=` for a host cursor). Guest `/state` is that client’s prediction.
 
-To script both pawns, stay on the host hub:
+**Path A (default):** second MCP on 18767.
 
-1. `GET /state` — copy host and guest `seatList[].id` (`host: true` = Red human; the other human is Blue).
-2. `join` cursor A (`headless: true`, `kind: cursor`) → `mindControl` **host human** → `appendBotBook` on **A**. `GET /state?seat=<A>`.
-3. `join` cursor B → `mindControl` **guest human** → `appendBotBook` on **B**. `GET /state?seat=<B>`.
+1. Host 18765: `join` cursor A → `mindControl` **host human** → `appendBotBook` on A. `GET /state?seat=<A>`.
+2. Guest 18767: `appendBotBook` (`to_court_center`, etc.). Guest hub binds a local cursor to the possessed pawn. No host `mindControl` of Blue.
 
-Mind-control circumvents that seat’s Enhanced Input (guest window will not fight the book). Two seats must not share one `/state?seat=` probe. Do not MCP `plan` / `sequence` / `intent` / raw `goto`.
+**Path B (one MCP):** only host 18765. Hub JSON includes `via` = **guest human seat id** (not the cursor). Host Client-RPCs the command over 7777; guest runs it locally. Same host `/state` probe.
 
-If mind-control of the bound guest fails, say so and stop — do not invent a second HTTP server on the guest, and do not `join` a fake hub guest *instead of* the net client (that is the old same-process composer path).
+Do not MCP `plan` / `sequence` / `intent` / raw `goto`. Two seats must not share one `/state?seat=` probe.
 
 ## Do not
 
-- Two processes both `?listen`, or both binding 18765 as servers.
+- Two processes both `?listen`, or both binding 18765 as servers (guest uses 18767).
 - Composer Host/Guest on the **guest** window (that is same-process role swap).
 - Grow `TileSizeUU`, patch Engine, or move the island to “pass” nav.
 - Treat a guest `18765` bind failure as a join failure.
 - Poll `/state` at render rate.
+- Server-simulate the guest pawn so host BotBooks “look like” they moved Blue.

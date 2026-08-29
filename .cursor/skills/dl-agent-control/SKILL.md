@@ -24,8 +24,8 @@ Agents are seats. Anytime you drive a pawn, POST a **BotBook** (`appendBotBook` 
 
 | Plane | Where | Use for |
 |-------|--------|---------|
-| Overlay | `POST /director` on **127.0.0.1:18765** | I-menu: `open`, `composer` / `pvp` (Compose PvP), `host`, `guest`, `ready`, `go`/`start`, `virtualhost` / `virtualjoin` (second window; [dl-virtual-mp](../dl-virtual-mp/SKILL.md)), `social`, `raid`, `practice`, `arena` (solo PvP skip) |
-| Hub | `POST /hub` on 18765 **and** `ws://127.0.0.1:18766` (same `FCLHubCommandRegistry`) | `join` (`headless: true`, `kind: cursor`), `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, **`appendBotBook`**, **`branchBotBook`**, `view`. Loopback: `plan`, `goto` |
+| Overlay | `POST /director` on **127.0.0.1:18765** (guest two-box: **18767**, director session actions are `host_only`) | I-menu: `open`, `composer` / `pvp` (Compose PvP), `host`, `guest`, `ready`, `go`/`start`, `virtualhost` / `virtualjoin` (second window; [dl-virtual-mp](../dl-virtual-mp/SKILL.md)), `social`, `raid`, `practice`, `arena` (solo PvP skip) |
+| Hub | `POST /hub` on 18765 **and** `ws://127.0.0.1:18766` (guest two-box: **18767** / **18768**) | `join`, `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, **`appendBotBook`**, **`branchBotBook`**, `view`. Optional hub `via` (net-human seat) tunnels over IpNetDriver. Loopback: `plan`, `goto` |
 | Loopback codec | `POST /intent` `/sequence` `/goto` | No-lobby tests only. Not how agents drive pawns. |
 
 Loopback is enforced in game. If `/state` is unreachable, spawn the editor/game then Compose PvP: MCP `boot` (or Shell `UnrealEditor.exe` + `POST /director {"action":"pvp"}`). Default boot is standalone `-game`. `mode: editor` opens UnrealEditor and requests PIE.
@@ -56,8 +56,8 @@ Every hub body includes `seatId` once you have one (join returns it). Same JSON 
 | `setTeam` | `{ "seatId", "team": "red"\|"blue"\|"unassigned" }` | Own seat, or host any seat |
 | `ready` | `{ "seatId", "ready": true\|false }` | Toggle until Go queues start |
 | `go` | `{}` | Host. Queues countdown if `ready >= min`. Composer then stamps roster and travels to PvP |
-| `appendBotBook` | `{ "seatId", "botBook": "ring_lap" }` or `{ "seatId", "puml": "@startuml..." }` | Catalog or JIT PlantUML. **This is how agents script pawns.** |
-| `branchBotBook` | `{ "seatId", "afterId"\|"offset", "botBook" or "puml" }` | Replace remaining walk; if already past, append |
+| `appendBotBook` | `{ "seatId", "botBook": "ring_lap" }` or `{ "seatId", "puml": "@startuml..." }` | Catalog or JIT PlantUML. **This is how agents script pawns.** Optional `via`: net-human seat id — host Client-RPCs the same JSON to that player’s machine ([dl-virtual-mp](../dl-virtual-mp/SKILL.md)). |
+| `branchBotBook` | `{ "seatId", "afterId"\|"offset", "botBook" or "puml" }` | Replace remaining walk; if already past, append. Same optional `via`. |
 | `plan` | `{ "seatId", "steps", "replaceFrom" }` | Loopback timed motor. **Do not use** when a seat exists — `appendBotBook`. |
 | `goto` | `{ "seatId", "x", "y", "z?" }` | Loopback Recast. **Do not use** when a seat exists — JIT BotBook `goto` (marker, or xyz only on JIT). |
 | `view` | `{ "seatId" }` | Blend the listen-server camera onto that seat’s driven pawn (~0.45s ease). Empty `seatId` restores the host pawn |
