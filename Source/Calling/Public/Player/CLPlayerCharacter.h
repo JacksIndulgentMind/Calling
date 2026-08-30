@@ -97,6 +97,11 @@ public:
 	/** Zero stick and pending pulses. Sequence / goto / empty intent call this. */
 	void ClearAgentIntent();
 
+	/** BotBook `while:` holds on a live `goto` — latch fire/ADS without zeroing stick. */
+	void LatchAgentWhileHolds(bool bADS, bool bFire);
+
+	FVector2D GetAgentMove() const;
+
 	void ApplyAgentLookCommand(const FCLLookCommand& Look);
 	void ApplyAgentLookFromStep(const FGuid& TrackSeatId, const FCLLookCommand& Look);
 	void SetLookTrackSeat(const FGuid& SeatId);

@@ -3,7 +3,8 @@ start
 :setFocus focus=enemy;
 :fire;
 note right
-  while: trackFocus
+  while: trackFocus, fire
+  success: z > 99999
   fail.timeout: 28
 end note
 stop

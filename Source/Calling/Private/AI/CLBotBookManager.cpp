@@ -6,6 +6,10 @@
 #include "Game/CLSeatMotor.h"
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLLobbySubsystem.h"
+#include "Game/CLGameModeBase.h"
+#include "Game/CLGameStateBase.h"
+#include "Player/CLPlayerController.h"
+#include "Player/CLPlayerCharacter.h"
 #include "Game/CLErrorBoundary.h"
 #include "Core/CLError.h"
 #include "Nav/CLAgentNavProbe.h"
@@ -18,6 +22,7 @@
 #include "HAL/FileManager.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/PlatformTime.h"
 
 namespace
@@ -125,6 +130,13 @@ void UCLBotBookManager::LoadCatalog()
 		if (Book.Name.IsNone())
 		{
 			Book.Name = FName(*FPaths::GetBaseFilename(File));
+		}
+		FString VerbErr;
+		if (!ValidateLeaves(Book.Body, VerbErr))
+		{
+			UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+				ECLErrorKind::User, TEXT("botbook_unknown_verb"), FString::Printf(TEXT("%s: %s"), *File, *VerbErr)));
+			continue;
 		}
 		Catalog.Add(Book.Name, MakeShared<FCLBotBook>(MoveTemp(Book)));
 	}
@@ -258,6 +270,8 @@ bool UCLBotBookManager::NoteBranchCause(UCLParticipantSeat* Seat, FRuntime& Rt, 
 				TEXT("botbook_execution"),
 				FString::Printf(TEXT("branch cause=execution book=%s node=%s — bot failed the book (not outside factors)"),
 					*Obs.LastBook, *Node)));
+			NoteMatchEvent(Seat, TEXT("botbook_execution"),
+				FString::Printf(TEXT("cause=execution book=%s node=%s"), *Obs.LastBook, *Node), true);
 		}
 		return true;
 	}
@@ -294,7 +308,12 @@ bool UCLBotBookManager::BeginNow(UCLParticipantSeat* Seat, FRuntime& Rt, const F
 		}
 	}
 	Rt.FallbackIndex = 0;
-	return PushBook(Rt, Book, OutError);
+	if (!PushBook(Rt, Book, OutError))
+	{
+		return false;
+	}
+	NoteMatchEvent(Seat, TEXT("botbook_append"), Book.Name.ToString(), false);
+	return true;
 }
 
 bool UCLBotBookManager::StartQueued(UCLParticipantSeat* Seat, FRuntime& Rt, FString& OutError)
@@ -416,6 +435,11 @@ bool UCLBotBookManager::AppendJit(UCLParticipantSeat* Seat, const FString& Puml,
 		UCLErrorBoundary::ReportStatic(this, FCLError::Make(ECLErrorKind::User, TEXT("botbook_jit"), OutError));
 		return false;
 	}
+	if (!ValidateLeaves(Book.Body, OutError))
+	{
+		UCLErrorBoundary::ReportStatic(this, FCLError::Make(ECLErrorKind::User, TEXT("botbook_unknown_verb"), OutError));
+		return false;
+	}
 	Book.bJit = true;
 	TSharedPtr<FRuntime> Rt = EnsureRuntime(Seat->GetSeatId());
 	if (UCLRemoteAgentSeatMotor* Remote = Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor()))
@@ -511,6 +535,11 @@ bool UCLBotBookManager::BranchJit(UCLParticipantSeat* Seat, const FString& After
 	if (!St.IsOk())
 	{
 		UCLErrorBoundary::ReportStatic(this, FCLError::Make(ECLErrorKind::User, TEXT("botbook_jit"), OutError));
+		return false;
+	}
+	if (!ValidateLeaves(Book.Body, OutError))
+	{
+		UCLErrorBoundary::ReportStatic(this, FCLError::Make(ECLErrorKind::User, TEXT("botbook_unknown_verb"), OutError));
 		return false;
 	}
 	Book.bJit = true;
@@ -668,6 +697,8 @@ bool UCLBotBookManager::StartLeaf(FRuntime& Rt, UCLParticipantSeat* Seat, FStrin
 			UE_LOG(LogCalling, Warning, TEXT("BotBook missing marker %s"), **Marker);
 			if (Stmt->Leaf.Verb == FName(TEXT("goto")))
 			{
+				NoteFollowAlert(Seat, TEXT("botbook_missing_marker"),
+					FString::Printf(TEXT("goto marker=%s not in world"), **Marker));
 				return false;
 			}
 		}
@@ -692,17 +723,36 @@ bool UCLBotBookManager::StartLeaf(FRuntime& Rt, UCLParticipantSeat* Seat, FStrin
 			Ctx.FocusSeat = Rt.FocusSeat;
 		}
 	}
+	for (const FName& W : Stmt->Leaf.WhileVerbs)
+	{
+		const FString L = W.ToString().ToLower();
+		if (L != TEXT("trackfocus") && L != TEXT("setfocus") && L != TEXT("maintainads") && L != TEXT("fire"))
+		{
+			OutError = TEXT("unknown_while");
+			NoteFollowAlert(Seat, TEXT("botbook_unknown_while"), W.ToString());
+			return false;
+		}
+	}
 	Top.Verb = CLMakeBotVerb(Stmt->Leaf.Verb);
 	if (!Top.Verb.IsValid())
 	{
 		OutError = TEXT("unknown_verb");
+		NoteFollowAlert(Seat, TEXT("botbook_unknown_verb"), Stmt->Leaf.Verb.ToString());
 		return false;
 	}
 	Top.bLeafStarted = true;
 	Top.LeafElapsed = 0.f;
 	Top.GoodEnoughHold = 0.f;
 	Top.bSawGoodEnough = false;
+	Top.GotoNoStickHold = 0.f;
 	Top.Verb->Start(Ctx);
+	if (Stmt->Leaf.Verb == FName(TEXT("goto")) && Char
+		&& DistXY(Char->GetActorLocation(), Ctx.Goal) > 300.f
+		&& (!Ctx.Motor || !Ctx.Motor->IsGotoActive()))
+	{
+		NoteFollowAlert(Seat, TEXT("botbook_goto_start_failed"),
+			FString::Printf(TEXT("StartGoto did not activate DistXY=%.0f"), DistXY(Char->GetActorLocation(), Ctx.Goal)));
+	}
 	CLBotBookTrace::LeafStart(*Stmt->Leaf.Verb.ToString(), *Stmt->Id, Ctx.MarkerId,
 		Char ? Char->GetActorLocation() : FVector::ZeroVector, Ctx.Goal);
 	return true;
@@ -778,6 +828,69 @@ ECLBotOutcome UCLBotBookManager::TickLeaf(FRuntime& Rt, float DeltaSeconds, UCLP
 	{
 		Top.Verb->Tick(DeltaSeconds, Ctx);
 	}
+	if (bGotoVerb && Char)
+	{
+		const UCLCombatMovementComponent* MoveComp = Char->GetCombatMovement();
+		const bool bFlight = (MoveComp && (!MoveComp->IsMovingOnGround() || MoveComp->IsDiving()))
+			|| (Ctx.Motor && Ctx.Motor->GetGotoDriver().bFlight);
+		const FVector Loc = Char->GetActorLocation();
+		const float Dist = DistXY(Loc, Ctx.Goal);
+		if (Top.StillAnchor.IsNearlyZero())
+		{
+			Top.StillAnchor = Loc;
+		}
+		if (DistXY(Loc, Top.StillAnchor) > 80.f)
+		{
+			Top.StillAnchor = Loc;
+			Top.PawnStillSeconds = 0.f;
+		}
+		else
+		{
+			Top.PawnStillSeconds += DeltaSeconds;
+		}
+		const FVector2D IntentStick = Char->GetAgentMove();
+		const FVector2D RecastStick = Ctx.Motor ? Ctx.Motor->GetGotoDriver().LastMoveXY : FVector2D::ZeroVector;
+		const bool bFar = Dist > 300.f;
+		const bool bZeroIntent = IntentStick.Size() < 0.05f;
+		const bool bZeroRecast = RecastStick.Size() < 0.05f;
+			if (bFar && !bFlight)
+			{
+				const float WpStuck = Ctx.Motor ? Ctx.Motor->GetGotoDriver().StuckSeconds : 0.f;
+				if (Top.PawnStillSeconds >= 0.5f)
+				{
+					NoteFollowAlert(Seat, TEXT("botbook_goto_loc_still"),
+						FString::Printf(TEXT("pawn still %.1fs goalDist=%.0f wpStuck=%.1fs"),
+							Top.PawnStillSeconds, Dist, WpStuck),
+						false);
+				}
+				if (Stmt->Leaf.WhileVerbs.Num() > 0 && bZeroIntent && !bZeroRecast)
+			{
+				Top.GotoNoStickHold += DeltaSeconds;
+				if (Top.GotoNoStickHold >= 0.5f)
+				{
+					NoteFollowAlert(Seat, TEXT("botbook_goto_stick_clobber"),
+						FString::Printf(TEXT("while: overwrote Recast stick DistXY=%.0f"), Dist));
+				}
+			}
+			else if (bZeroIntent && bZeroRecast)
+			{
+				Top.GotoNoStickHold += DeltaSeconds;
+				if (Top.GotoNoStickHold >= 0.5f)
+				{
+					NoteFollowAlert(Seat, TEXT("botbook_goto_no_stick"),
+						FString::Printf(TEXT("goto live DistXY=%.0f stick=0"), Dist));
+				}
+			}
+			else
+			{
+				Top.GotoNoStickHold = 0.f;
+			}
+		}
+		else
+		{
+			Top.GotoNoStickHold = 0.f;
+		}
+	}
 
 	const FCLBotBook* Book = FindBook(Top.BookName);
 	if (!Book && Rt.JitBook.IsValid() && Rt.JitBook->Name == Top.BookName)
@@ -814,6 +927,10 @@ ECLBotOutcome UCLBotBookManager::TickLeaf(FRuntime& Rt, float DeltaSeconds, UCLP
 			if (Stmt->Leaf.Verb == FName(TEXT("wait")) || Stmt->Leaf.Verb == FName(TEXT("idle")))
 			{
 				return Top.LeafElapsed >= Timeout;
+			}
+			if (Stmt->Leaf.WhileVerbs.Num() > 0)
+			{
+				return false;
 			}
 			return Top.LeafElapsed > 0.35f;
 		}
@@ -940,6 +1057,11 @@ bool UCLBotBookManager::TickSeat(float DeltaSeconds, UCLParticipantSeat* Seat)
 	{
 		if (!Driven->IsLocallyControlled())
 		{
+			if (HasRuntime(Seat->GetSeatId()))
+			{
+				NoteFollowAlert(Seat, TEXT("botbook_not_local"),
+					TEXT("live BotBook on a pawn this process does not locally control"));
+			}
 			return false;
 		}
 	}
@@ -947,6 +1069,10 @@ bool UCLBotBookManager::TickSeat(float DeltaSeconds, UCLParticipantSeat* Seat)
 	if (!Found || !Found->IsValid())
 	{
 		return false;
+	}
+	if (FBranchObs* Obs = BranchObs.Find(Seat->GetSeatId()))
+	{
+		Obs->FollowAlertLive.Reset();
 	}
 	FRuntime& Rt = *Found->Get();
 	if (Rt.Stack.Num() == 0)
@@ -1133,12 +1259,44 @@ TSharedRef<FJsonObject> UCLBotBookManager::MakeSeatBotJson(const FGuid& SeatId) 
 			Obj->SetStringField(TEXT("lastBranchBook"), O->LastBook);
 			Obj->SetNumberField(TEXT("executionFails"), O->ExecutionFails);
 			Obj->SetBoolField(TEXT("executionError"), O->ExecutionFails >= 1);
+			Obj->SetStringField(TEXT("followAlert"), O->FollowAlertLive);
+			Obj->SetStringField(TEXT("lastFollowAlert"), O->LastFollowAlert.IsEmpty() ? O->FollowAlert : O->LastFollowAlert);
+			Obj->SetBoolField(TEXT("followed"), O->FollowAlertLive.IsEmpty());
+		}
+		else
+		{
+			Obj->SetStringField(TEXT("followAlert"), TEXT(""));
+			Obj->SetStringField(TEXT("lastFollowAlert"), TEXT(""));
+			Obj->SetBoolField(TEXT("followed"), true);
+		}
+	};
+	auto WriteEnemy = [&]()
+	{
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+			{
+				if (UCLParticipantSeat* Seat = Lobby->FindSeat(SeatId))
+				{
+					const FGuid Enemy = EnemySeat(Seat, Lobby);
+					if (APawn* Mine = Seat->GetDrivenPawn())
+					{
+						if (APawn* Other = Lobby->GetDrivenPawn(Enemy))
+						{
+							Obj->SetNumberField(TEXT("enemyDistXY"), DistXY(Mine->GetActorLocation(), Other->GetActorLocation()));
+							Obj->SetNumberField(TEXT("enemyX"), Other->GetActorLocation().X);
+							Obj->SetNumberField(TEXT("enemyY"), Other->GetActorLocation().Y);
+						}
+					}
+				}
+			}
 		}
 	};
 	const TSharedPtr<FRuntime>* Found = Runtimes.Find(SeatId);
 	if (!Found || !Found->IsValid() || ((*Found)->Stack.Num() == 0 && (*Found)->Queue.Num() == 0))
 	{
 		Obj->SetBoolField(TEXT("jit"), false);
+		WriteEnemy();
 		WriteObs();
 		return Obj;
 	}
@@ -1148,7 +1306,28 @@ TSharedRef<FJsonObject> UCLBotBookManager::MakeSeatBotJson(const FGuid& SeatId) 
 	if (const FCLBotStmt* Stmt = CurrentStmt(Rt))
 	{
 		Obj->SetStringField(TEXT("nodeId"), Stmt->Id);
+		if (Stmt->Kind == ECLBotStmtKind::Leaf)
+		{
+			Obj->SetStringField(TEXT("verb"), Stmt->Leaf.Verb.ToString());
+			TArray<TSharedPtr<FJsonValue>> WhileArr;
+			for (const FName& W : Stmt->Leaf.WhileVerbs)
+			{
+				WhileArr.Add(MakeShared<FJsonValueString>(W.ToString()));
+			}
+			Obj->SetArrayField(TEXT("whiles"), WhileArr);
+		}
 	}
+	if (Rt.Stack.Num() > 0)
+	{
+		const FFrame& Top = Rt.Stack.Last();
+		Obj->SetNumberField(TEXT("leafElapsed"), Top.LeafElapsed);
+		Obj->SetNumberField(TEXT("pawnStill"), Top.PawnStillSeconds);
+	}
+	if (Rt.FocusSeat.IsValid())
+	{
+		Obj->SetStringField(TEXT("focusSeat"), Rt.FocusSeat.ToString(EGuidFormats::DigitsWithHyphens));
+	}
+	WriteEnemy();
 	TArray<TSharedPtr<FJsonValue>> StackArr;
 	const int32 StackN = Rt.Stack.Num();
 	const int32 StackShow = FMath::Min(StackN, 8);
@@ -1241,4 +1420,132 @@ bool UCLBotBookManager::HasXyzGoto(const TArray<FCLBotStmt>& Body)
 		}
 	}
 	return false;
+}
+
+void UCLBotBookManager::NoteFollowAlert(UCLParticipantSeat* Seat, const TCHAR* Code, const FString& Detail, bool bCountExecution)
+{
+	if (!Seat || !Code)
+	{
+		return;
+	}
+	FBranchObs& Obs = BranchObs.FindOrAdd(Seat->GetSeatId());
+	const FString Key(Code);
+	Obs.FollowAlertLive = Key;
+	if (Obs.LastFollowAlert.IsEmpty())
+	{
+		Obs.LastFollowAlert = Key;
+	}
+	if (Obs.ReportedFollow.Contains(Key))
+	{
+		return;
+	}
+	Obs.ReportedFollow.Add(Key);
+	Obs.FollowAlert = Key;
+	Obs.LastFollowAlert = Key;
+	if (bCountExecution)
+	{
+		Obs.ExecutionFails++;
+		Obs.bReportedExecution = true;
+	}
+	if (TSharedPtr<FRuntime>* Found = Runtimes.Find(Seat->GetSeatId()))
+	{
+		if (Found->IsValid() && bCountExecution)
+		{
+			(*Found)->ExecutionFails++;
+			(*Found)->bReportedExecution = true;
+		}
+	}
+	const FString Msg = Detail.IsEmpty() ? Key : FString::Printf(TEXT("%s: %s"), Code, *Detail);
+	UE_LOG(LogCalling, Error, TEXT("BotBook followAlert %s"), *Msg);
+	UCLErrorBoundary::ReportStatic(this, FCLError::Make(ECLErrorKind::NonDeterministic, Key, Msg));
+	NoteMatchEvent(Seat, Code, Detail, true);
+}
+
+void UCLBotBookManager::NoteMatchEvent(UCLParticipantSeat* Seat, const TCHAR* Code, const FString& Detail, bool bFailMatch)
+{
+	if (!Code)
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	APawn* Pawn = Seat ? Seat->GetDrivenPawn() : nullptr;
+	const FVector Loc = Pawn ? Pawn->GetActorLocation() : FVector::ZeroVector;
+	FString SeatStr;
+	FString Book;
+	if (Seat)
+	{
+		SeatStr = Seat->GetSeatId().ToString(EGuidFormats::DigitsWithHyphens);
+		if (const TSharedPtr<FRuntime>* Found = Runtimes.Find(Seat->GetSeatId()))
+		{
+			if (Found->IsValid())
+			{
+				Book = (*Found)->ActiveName.ToString();
+			}
+		}
+	}
+	if (World->GetNetMode() == NM_Client)
+	{
+		APlayerController* PC = Seat ? Seat->GetBoundController() : nullptr;
+		if (!PC)
+		{
+			PC = World->GetFirstPlayerController();
+		}
+		if (ACLPlayerController* CLPC = Cast<ACLPlayerController>(PC))
+		{
+			CLPC->ServerBotBookEvent(FString(Code), Detail, SeatStr, Book, Loc.X, Loc.Y, bFailMatch);
+		}
+		return;
+	}
+	FCLMatchEvent E;
+	E.Code = Code;
+	E.Detail = Detail;
+	E.Seat = SeatStr;
+	E.Book = Book;
+	E.X = Loc.X;
+	E.Y = Loc.Y;
+	E.Time = World->GetTimeSeconds();
+	if (ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>())
+	{
+		GS->AppendMatchEvent(E);
+	}
+	if (bFailMatch)
+	{
+		if (ACLPvpGameMode* Pvp = World->GetAuthGameMode<ACLPvpGameMode>())
+		{
+			Pvp->FailBook(FString(Code));
+		}
+	}
+}
+
+bool UCLBotBookManager::ValidateLeaves(const TArray<FCLBotStmt>& Body, FString& OutError)
+{
+	for (const FCLBotStmt& S : Body)
+	{
+		if (S.Kind == ECLBotStmtKind::Leaf)
+		{
+			if (!CLMakeBotVerb(S.Leaf.Verb).IsValid())
+			{
+				OutError = FString::Printf(TEXT("unknown_verb %s"), *S.Leaf.Verb.ToString());
+				return false;
+			}
+			for (const FName& W : S.Leaf.WhileVerbs)
+			{
+				const FString L = W.ToString().ToLower();
+				if (L != TEXT("trackfocus") && L != TEXT("setfocus") && L != TEXT("maintainads") && L != TEXT("fire"))
+				{
+					OutError = FString::Printf(TEXT("unknown_while %s"), *W.ToString());
+					return false;
+				}
+			}
+		}
+		if (!ValidateLeaves(S.ThenBody, OutError) || !ValidateLeaves(S.ElseBody, OutError))
+		{
+			return false;
+		}
+	}
+	return true;
 }

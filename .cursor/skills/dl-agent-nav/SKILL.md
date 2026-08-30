@@ -18,8 +18,9 @@ Prefer Recast `goto` (as a BotBook leaf) when `navTiles > 0` on **that seat’s*
 4. **`fwdKind`:** `walk` = connected rising floor. `drop` = lower platform you can walk off onto. `jumpDown` / `jumpUp` / `cover` / `wall` as in probe.
 5. **Stay on the floor you are on.** Void is the drop. If Z drops well below the standing surface, stop that seat’s book.
 6. Never dodge unless the book names `dodge`. Do not leave a strafe latched — the book unpresses when the leaf settles.
-7. Sample `/state?seat=` at most ~10 Hz. Log a short x/y/z trail **per seat**. After a failed stroll, add a **general** lesson to [lessons.md](lessons.md).
-8. **Recover instead of throw:** `branchBotBook` with **`cause`**. Use `execution` when the bot failed the book (nav/`goto`/timeout) independent of outside factors — that is an error state (`executionError`, fix it). Use `situation` for combat, personality, or world change. Or append a new JIT tree if stalled; rewrite from `/state`. Z-collapse still stops that seat.
+7. Sample `/state?seat=` at most ~10 Hz. On the **first** sample after `appendBotBook`, throw if `botBook.followAlert`, `executionError`, or `followed` is false — that is a broken book or a pawn that is not executing, not a combat stall. Log a short x/y/z trail **per seat**. After a failed stroll, add a **general** lesson to [lessons.md](lessons.md).
+8. **`cause=execution` fails the drive.** Do not use it as a silent unstick. Throw `command_not_followed` (or let hub `alert: botbook_execution` / `/state.botBook.executionError` throw). Combat recover is `situation`. A poller that branches `execution` then keeps waiting on `modeResult` hid “bot failed the book.”
+9. **First followAlert / `botbook_execution` fails the PvP match** (`modeResult=fail`, `modeFailReason` is the code). Dump `/state.events` and **stop**. Do not resume the same `in_progress` instance, do not weaken `loc_still`, do not keep polling until `zero_kills`. A pass is `modeResult=winner` plus an event log (`botbook_append`, `kill`, `shrine_held`, `mode_winner`).
 
 Do **not** use MCP `plan` / `sequence` / `intent` / raw `goto` when a seat exists. Those are loopback debug.
 

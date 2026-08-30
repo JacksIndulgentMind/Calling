@@ -60,6 +60,9 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerReportInstanceId(FGuid Id);
 
+	UFUNCTION(Server, Reliable)
+	void ServerBotBookEvent(const FString& Code, const FString& Detail, const FString& Seat, const FString& Book, float X, float Y, bool bFailMatch);
+
 	FGuid GetInstanceId() const { return ReplicatedInstanceId; }
 	FGuid GetDeviceRequestorId() const { return DeviceRequestorId; }
 	void StampLocalDeviceRequestor();

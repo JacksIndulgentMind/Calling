@@ -4,6 +4,7 @@
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLLobbyTypes.h"
+#include "Core/CLLog.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
@@ -31,6 +32,7 @@ void ACLGameStateBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ACLGameStateBase, ModeResult);
 	DOREPLIFETIME(ACLGameStateBase, WinningTeam);
 	DOREPLIFETIME(ACLGameStateBase, ModeFailReason);
+	DOREPLIFETIME(ACLGameStateBase, MatchEvents);
 	DOREPLIFETIME(ACLGameStateBase, SeatScores);
 	DOREPLIFETIME(ACLGameStateBase, LobbySeats);
 	DOREPLIFETIME(ACLGameStateBase, LobbyReady);
@@ -243,6 +245,11 @@ void ACLGameStateBase::AddTeamFinalBlow(ECLPvpTeam Team)
 	{
 		++TeamBKills;
 	}
+	FCLMatchEvent E;
+	E.Code = TEXT("kill");
+	E.Detail = Team == ECLPvpTeam::Red ? TEXT("red") : TEXT("blue");
+	E.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	AppendMatchEvent(E);
 }
 
 void ACLGameStateBase::SetLiveShrine(FName Id)
@@ -261,11 +268,29 @@ void ACLGameStateBase::SetShrineHeld(ECLPvpTeam Team, bool bHeld)
 	}
 	if (Team == ECLPvpTeam::Red)
 	{
+		const bool bWas = bShrineHeldRed;
 		bShrineHeldRed = bHeld;
+		if (bHeld && !bWas)
+		{
+			FCLMatchEvent E;
+			E.Code = TEXT("shrine_held");
+			E.Detail = TEXT("red");
+			E.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+			AppendMatchEvent(E);
+		}
 	}
 	else if (Team == ECLPvpTeam::Blue)
 	{
+		const bool bWas = bShrineHeldBlue;
 		bShrineHeldBlue = bHeld;
+		if (bHeld && !bWas)
+		{
+			FCLMatchEvent E;
+			E.Code = TEXT("shrine_held");
+			E.Detail = TEXT("blue");
+			E.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+			AppendMatchEvent(E);
+		}
 	}
 }
 
@@ -278,6 +303,29 @@ void ACLGameStateBase::SetModeOutcome(const FString& Result, const FString& Winn
 	ModeResult = Result;
 	WinningTeam = Winner;
 	ModeFailReason = FailReason;
+}
+
+void ACLGameStateBase::AppendMatchEvent(const FCLMatchEvent& Event)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	MatchEvents.Add(Event);
+	while (MatchEvents.Num() > 48)
+	{
+		MatchEvents.RemoveAt(0);
+	}
+	UE_LOG(LogCalling, Display, TEXT("MatchEvent code=%s seat=%s book=%s loc=(%.0f,%.0f) %s"),
+		*Event.Code, *Event.Seat, *Event.Book, Event.X, Event.Y, *Event.Detail);
+}
+
+void ACLGameStateBase::ClearMatchEvents()
+{
+	if (HasAuthority())
+	{
+		MatchEvents.Reset();
+	}
 }
 
 FString ACLGameStateBase::GetScoreLine() const

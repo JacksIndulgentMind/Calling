@@ -17,6 +17,8 @@ public:
 	void ApplyAgentIntent(const FCLAgentIntent& Intent);
 	void ApplyAgentIntent(FVector2D MoveXY, FVector2D LookDelta, bool bSprint, bool bCrouch, bool bADS, bool bFire,
 		bool bJump, bool bDodge, bool bDash, bool bReload, bool bSwap);
+	/** while: fire/ads on a goto leaf — do not replace stick. */
+	void LatchWhileHolds(bool bADS, bool bFire);
 	void ClearAgentIntent();
 	void ConsumeAgentPulses();
 

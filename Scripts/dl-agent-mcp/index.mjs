@@ -286,7 +286,7 @@ const tools = [
   {
     name: "state",
     description:
-      "Read a Calling pawn and scene. Pass seat to sample that hub seat's driven pawn (GET /state?seat=). Omit seat for the listen-server / last-joined pawn. PIE or -game must be running.",
+      "Read a Calling pawn and scene. Pass seat to sample that hub seat's driven pawn (GET /state?seat=). Omit seat for the listen-server / last-joined pawn. After appendBotBook, throw if botBook.followAlert / executionError / followed=false — do not wait for modeResult. PIE or -game must be running.",
     inputSchema: {
       type: "object",
       properties: {

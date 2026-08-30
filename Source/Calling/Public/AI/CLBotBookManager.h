@@ -37,6 +37,10 @@ public:
 	void FillStateJson(TSharedRef<FJsonObject> Root, const FGuid& SeatId) const;
 	TSharedRef<FJsonObject> MakeSeatBotJson(const FGuid& SeatId) const;
 
+	/** Live goto/book not walking the pawn, unknown verb, or not local. Reports once per code/seat. */
+	void NoteFollowAlert(UCLParticipantSeat* Seat, const TCHAR* Code, const FString& Detail, bool bCountExecution = true);
+	void NoteMatchEvent(UCLParticipantSeat* Seat, const TCHAR* Code, const FString& Detail, bool bFailMatch);
+
 	const FCLBotBook* FindBook(FName Name) const;
 	static FString BooksDir();
 
@@ -52,6 +56,9 @@ protected:
 		float GoodEnoughHold = 0.f;
 		bool bSawGoodEnough = false;
 		TUniquePtr<ICLBotVerb> Verb;
+		float GotoNoStickHold = 0.f;
+		FVector StillAnchor = FVector::ZeroVector;
+		float PawnStillSeconds = 0.f;
 	};
 
 	struct FQueuedBook
@@ -104,6 +111,7 @@ protected:
 	static bool HasXyzGoto(const TArray<FCLBotStmt>& Body);
 	static bool CollectRefs(const TArray<FCLBotStmt>& Body, TArray<FName>& OutRefs);
 	bool DetectCycles(FName From, TSet<FName>& Path, TSet<FName>& Done, FString& OutError) const;
+	static bool ValidateLeaves(const TArray<FCLBotStmt>& Body, FString& OutError);
 
 	TMap<FName, TSharedPtr<FCLBotBook>> Catalog;
 	TMap<FGuid, TSharedPtr<FRuntime>> Runtimes;
@@ -115,6 +123,10 @@ protected:
 		FString LastNode;
 		FString LastBook;
 		bool bReportedExecution = false;
+		FString FollowAlert;
+		FString LastFollowAlert;
+		FString FollowAlertLive;
+		TSet<FString> ReportedFollow;
 	};
 	TMap<FGuid, FBranchObs> BranchObs;
 };

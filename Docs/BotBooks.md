@@ -27,12 +27,12 @@ To test one move, POST a **JIT BotBook** (`{ "type":"appendBotBook", "seatId", "
 
 | `cause` | Meaning | Effect |
 |---------|---------|--------|
-| `execution` (aliases `failure`, `fail`) | The bot failed the book **independent of outside factors** (nav/`goto` did not walk, timeout, stack leak, poller treated idle as done). Not combat, personality, or a world change. | Increments `/state.botBook.executionFails`. **One** fail is `executionError: true` and reports `botbook_execution` (`UCLErrorBoundary`, NonDeterministic) — find it and **fix**, do not hide it. The replacement book still starts so the pawn can recover. Does **not** count toward cancel-storm. |
+| `execution` (aliases `failure`, `fail`) | The bot failed the book **independent of outside factors** (nav/`goto` did not walk, timeout, stack leak, poller treated idle as done). Not combat, personality, or a world change. | Increments `/state.botBook.executionFails`. **One** fail is `executionError: true` and reports `botbook_execution` (`UCLErrorBoundary`, NonDeterministic) — find it and **fix**, do not hide it. Hub `branchBotBook` still starts the replacement book (`ok: true`) but stamps `executionError` / `alert: botbook_execution` / `error: botbook_execution` on the reply so a drive cannot treat it as a successful poke. Does **not** count toward cancel-storm. |
 | `situation` (aliases `combat`, `personality`, `strategic`) | Combat replan, personality, or other world change. The book was not an execution defect. | Same cancel-storm as before: **8 situation branches in 4 seconds** is `botbook_cancel_storm`. |
 
 Missing `cause` is `missing_branch_cause`. Unknown values are `invalid_branch_cause`. `clearBotBook` and append-queue are not this signal. `PushBook` deeper than **32** frames is `botbook_stack`. Live book is `/state.botBook.name` (not `catalog`).
 
-`GET /state?seat=` includes `botBook: { name, nodeId, stack, stackLen, remaining, remainingLen, queued, queueLen, jit, lastBranchCause, lastBranchNodeId, lastBranchBook, executionFails, executionError }`. Branch observability survives the stack going idle so a later `/state` still shows the last execution fail.
+`GET /state?seat=` includes `botBook: { name, nodeId, verb, whiles, leafElapsed, pawnStill, focusSeat, enemyDistXY, enemyX, enemyY, stack, stackLen, remaining, remainingLen, queued, queueLen, jit, lastBranchCause, lastBranchNodeId, lastBranchBook, executionFails, executionError, followAlert, lastFollowAlert, followed }`. `followAlert` is **this tick** (`botbook_unknown_verb`, `botbook_unknown_while`, `botbook_missing_marker`, `botbook_not_local`, `botbook_goto_start_failed`, `botbook_goto_stick_clobber`, `botbook_goto_no_stick`, `botbook_goto_loc_still`). `lastFollowAlert` is the latched code after the condition clears. `followed` is false only while `followAlert` is live. `loc_still` is pawn loc not moving ~80 cm for 0.5 s with goal still far — not Recast waypoint `gotoStuck`. One **execution** hit (`unknown_*` / `not_local` / `goto_start_failed` / `stick_clobber` / `missing_marker`) sets `executionError`. The **first** followAlert or `cause=execution` also **fails the PvP match** (`modeResult=fail`, `modeFailReason` is that code) and appends `/state.events`. Pollers dump `events` and stop — do not resume `in_progress`. A pass is `modeResult=winner` with `botbook_append` / `kill` / `shrine_held` / `mode_winner` in `events`. `/state` also has `agentMoveX` / `agentMoveY` / `agentFire` / `lookTrack` / `lookTrackSeat`. Helper: `Scripts/dl-assert-command-followed.ps1`.
 
 MCP tools `hub` / `director` / `state` / `boot` remain. MCP `plan`, `sequence`, `intent`, `goto`: loopback only; do not use them when a lobby seat exists.
 
@@ -43,6 +43,8 @@ Allowed: `@startuml` / `@enduml`, `start` / `stop`, `:verb ...;`, `:ref name;`, 
 Disallowed: classes, sequence diagrams, includes except `ref`, arbitrary skinparam. Anything outside this subset is `UCLErrorBoundary` / load fail.
 
 **Verbs:** `goto`, `setFocus`, `trackFocus`, `maintainADS`, `fire`, `useAbilitySelf`, `useAbilityFocus`, `jump`, `slide`, `airDive`, `dodge`, `dash`, `melee`, `wait`.
+
+**`while:` on `goto`:** `trackFocus` / `fire` / `maintainADS` latch holds. They must **not** replace the Recast stick. `ApplyAgentIntent` assigns `Move` every call — a fire-only pulse with Move=0 plants the pawn at spawn and still shoots. Latch those holds; do not write Move. If that happens anyway, `/state.botBook.followAlert` is `botbook_goto_stick_clobber` on the first tick.
 
 **`goto` vs *-to:** `goto` is the Recast composer (walk, drop, jump links, **AirDiveDown** / **AirDiveOver** area edges) when the path **reaches** the marker. A partial rim-crawl does not count as Success. Jump-gen finds landings with **JumpLength** inside the nav bounds volume, not TileSize — [RecastLinks.md](RecastLinks.md). When FindPath is partial (A* node budget), `goto` walks that polyline and repaths — it does **not** arm jump-to or Launch as a substitute for Recast. `goto` never runs slide-to or dash-to — chain `:goto marker=…;` then `:slide marker=…;`. `airDive marker=` jumps, dives, and releases (or pins) on its own — do not wrap it in `:jump;` / `:wait;`. Bare `jump` / `airDive` / `slide` / `dash` without a marker are pulses. Range boxes: [NavAbilities.md](NavAbilities.md).
 
@@ -86,3 +88,7 @@ Greybox stamps `ACLTaskMarker` actors when it builds. Same ids across maps; each
 PvP minimum: `spawn_red`, `spawn_blue`, `court_center`, `hide_center_lee`, `menhir_0`…`menhir_7`, `menhir_*_approach`, `cover_west_cut`, `cover_east_cut`, `shrine_well`, `shrine_tree`, `shrine_heel`, `shrine_cairn`, `edge_lip`, `edge_pad`, `slide_end`, `dash_end`. Tags: `spawn.player.red` / `.blue`, `space.center`, `space.shrine`. Do not use `edge_pad` as a mode objective. Social/raid/practice: `spawn_default`.
 
 `UCLSocialMarkerWidget` is UI chrome, not a nav target.
+
+## Parked (return)
+
+Two-box shrine clash still has no `modeResult=winner`. FollowAlert / `cause=execution` already **fails the match**. Next session: squash remaining book errors until a winner — starting with `botbook_goto_loc_still` on Blue’s spawn corridor (~2 s after `shrine_clash_fight`, loc ~6062,-239, goalDist ~6 km). Need both teams ≥1 kill before anyone hits 10, then live-shrine closeout. Rebuild after C++. Dump `/state.events`. Do not wait on `zero_kills`.

@@ -66,6 +66,8 @@ Both combat bodies are **net humans** on the **host** lobby (`BoundController`).
 
 Do not MCP `plan` / `sequence` / `intent` / raw `goto`. Two seats must not share one `/state?seat=` probe.
 
+**Fail immediately if the pawn does not follow the book.** After `appendBotBook`, `GET /state?seat=` once. Throw `command_not_followed` if `botBook.followAlert` is set, `executionError` is true, `followed` is false, **or** `modeResult=fail` with `modeFailReason` starting `botbook_` — do **not** wait for `failTimeoutSeconds` or shrine rotation. The engine **ends the match** on the first followAlert / `botbook_execution` (`FinishMode` fail). Dump `/state.events` and stop; never resume that instance. A pass is `modeResult=winner` with a readable event log (`botbook_append`, `kill`, `shrine_held`, `mode_winner`). Helper: [Scripts/dl-assert-command-followed.ps1](../../../Scripts/dl-assert-command-followed.ps1). Engine codes: unknown leaf/`while:`, missing marker, book on a non-local pawn, `StartGoto` failed, `while:` zeroing Recast stick, goto with no stick, `loc_still`. The earlier two-box walk used a JIT `goto` with no `while:`; `shrine_clash_fight` adds `while: trackFocus, fire`, which used to zero Recast stick each tick (sitting + shooting). That is `botbook_goto_stick_clobber` on tick 1, not a match clock.
+
 ## Do not
 
 - Two processes both `?listen`, or both binding 18765 as servers (guest uses 18767).
@@ -73,4 +75,6 @@ Do not MCP `plan` / `sequence` / `intent` / raw `goto`. Two seats must not share
 - Grow `TileSizeUU`, patch Engine, or move the island to “pass” nav.
 - Treat a guest `18765` bind failure as a join failure.
 - Poll `/state` at render rate.
+- Wait for `modeResult` / `failTimeout` while loc is still spawn and a BotBook is live. That is `command_not_followed` on the first sample (`followAlert` if the rebuilt DLL is up).
+- Ignore `botBook.followAlert` / `executionError` / hub `alert: botbook_execution` and keep polling the match clock. `branchBotBook` `cause=execution` is a failed test, not a recover poke. A PowerShell throw while `modeResult` stays `in_progress` is not a match fail — the engine must `FinishMode`. After detection, dump `/state.events` and stop; do not resume.
 - Server-simulate the guest pawn so host BotBooks “look like” they moved Blue.

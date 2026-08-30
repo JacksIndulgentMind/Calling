@@ -20,6 +20,8 @@ public:
 	void ApplyAgentLookCommand(const FCLLookCommand& Look);
 	void ApplyAgentLookFromStep(const FGuid& TrackSeatId, const FCLLookCommand& Look);
 	void SetLookTrackSeat(const FGuid& SeatId);
+	FGuid GetLookTrackSeat() const { return LookTrackSeatId; }
+	bool IsLookTracking() const { return bLookTrack; }
 	void ClearAgentLook();
 	void SetLookGoalYawPitch(bool bYaw, float Yaw, bool bPitch, float Pitch);
 	void NoteHipRecoil();

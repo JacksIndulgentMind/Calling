@@ -247,6 +247,12 @@ void ACLPvpGameMode::HandleLobbyGo()
 
 void ACLPvpGameMode::StartMatchFromLobby()
 {
+	bModeFinished = false;
+	if (ACLGameStateBase* GS = GetGameState<ACLGameStateBase>())
+	{
+		GS->ClearMatchEvents();
+		GS->SetModeOutcome(TEXT("in_progress"), TEXT(""), TEXT(""));
+	}
 	if (UCLActivityStateComponent* Activity = GetActivityState())
 	{
 		Activity->BeginInProgress();
@@ -344,6 +350,11 @@ void ACLPvpGameMode::RotateLiveShrine()
 	NextRotateSeconds = FPlatformTime::Seconds() + RotateSeconds;
 }
 
+void ACLPvpGameMode::FailBook(const FString& Reason)
+{
+	FinishMode(TEXT("fail"), TEXT(""), Reason);
+}
+
 void ACLPvpGameMode::FinishMode(const FString& Result, const FString& Winner, const FString& FailReason)
 {
 	if (bModeFinished)
@@ -354,6 +365,12 @@ void ACLPvpGameMode::FinishMode(const FString& Result, const FString& Winner, co
 	if (ACLGameStateBase* GS = GetGameState<ACLGameStateBase>())
 	{
 		GS->SetModeOutcome(Result, Winner, FailReason);
+		FCLMatchEvent E;
+		E.Code = Result == TEXT("winner") ? TEXT("mode_winner") : TEXT("mode_fail");
+		E.Detail = FailReason.IsEmpty() ? Result : FailReason;
+		E.Book = Winner;
+		E.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+		GS->AppendMatchEvent(E);
 	}
 	UE_LOG(LogCalling, Display, TEXT("Pvp modeResult=%s winner=%s fail=%s"), *Result, *Winner, *FailReason);
 	if (Result == TEXT("winner"))

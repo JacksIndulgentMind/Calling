@@ -42,7 +42,7 @@ Defaults: standalone `-game`, then Compose PvP **through** host/ready/guest/go i
 
 Composer has an invoice and **no combat gate** (walk, join, pick teams). Host **Go** queues countdown only if `ready >= minPlayers` (composer default **2**). Ready toggles until Go; after Go, ready is locked. Unready before Go cancels a premature countdown. Direct `arena` / overlay Launch PvP still uses a gated min-1 skip.
 
-`GET /state?seat=<id>` samples **that seat’s driven pawn**. Two seats must not share one probe. `/state` also returns **`instanceId`** (this Unreal process) and **`agentId`** when the caller sent one. `/state.lobby.unlocked` is true in composer (no gate). After composer launch, PvP consumes the invoice roster, spawns by team, and skips a second Ready round.
+`GET /state?seat=<id>` samples **that seat’s driven pawn**. Two seats must not share one probe. After `appendBotBook`, treat `botBook.followAlert` / `executionError` / `followed=false` / `modeResult=fail` with `modeFailReason` `botbook_*` as an immediate fail — dump `/state.events` and stop. `/state` also returns **`instanceId`** (this Unreal process) and **`agentId`** when the caller sent one. `/state.lobby.unlocked` is true in composer (no gate). After composer launch, PvP consumes the invoice roster, spawns by team, and skips a second Ready round.
 
 ## Hub (default stroll)
 
@@ -54,7 +54,7 @@ Every hub body includes `seatId` once you have one (join returns it). Same JSON 
 | `subscribe` | `{ "seatId" }` | Bind this WebSocket to a seat already joined over HTTP |
 | `mindControl` | `{ "seatId", "targetSeatId" }` | Drive another seat’s pawn **on this instance** (local human or NPC). Remote net-human is `remote_pawn`. |
 | `appendBotBook` | `{ "seatId", "botBook": "ring_lap" }` or `{ "seatId", "puml": "@startuml..." }` | Start or **queue** behind the live book. Does not cancel `goto`. Same catalog already live/queued is a no-op. Host proxy: `connectMode: proxy` (not per-op `via`). **`intendedTarget`:** `localHuman` (this process’s possessed human), `headlessBot` (spawned AI body), or a seat GUID. Log `LogCallingHub`; `ok: false` `remote_player_pawn` if the driven body is another window’s net-human. |
-| `branchBotBook` | `{ "seatId", "cause", "afterId"\|"offset", "botBook" or "puml" }` | Replace remaining walk. **`cause` required:** `execution` (bot failed the book; one fail → `botbook_execution` + `/state.botBook.executionError`) or `situation` (combat/personality/world; 8 in 4s → `botbook_cancel_storm`). Same `connectMode: proxy` as append. |
+| `branchBotBook` | `{ "seatId", "cause", "afterId"\|"offset", "botBook" or "puml" }` | Replace remaining walk. **`cause` required:** `execution` (bot failed the book; one fail → `botbook_execution` + `/state.botBook.executionError` + **PvP `modeResult=fail`**; hub reply also sets `executionError` / `alert: botbook_execution` — dump `/state.events` and **stop**, do not keep polling) or `situation` (combat/personality/world; 8 in 4s → `botbook_cancel_storm`). Same `connectMode: proxy` as append. |
 | `setTeam` | `{ "seatId", "team": "red"\|"blue"\|"unassigned" }` | Own seat, or host any seat |
 | `ready` | `{ "seatId", "ready": true\|false }` | Toggle until Go queues start |
 | `go` | `{}` | Host. Queues countdown if `ready >= min`. Composer then stamps roster and travels to PvP |

@@ -133,6 +133,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Calling|Pvp")
 	void EndMatchAndAward();
 
+	/** Book not followed / bot failed the book: Results with modeResult=fail. */
+	void FailBook(const FString& Reason);
+
 protected:
 	void BindShrineClash();
 	void TickMode(float DeltaSeconds);

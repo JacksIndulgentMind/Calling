@@ -97,6 +97,34 @@ void ACLPlayerController::ServerReportInstanceId_Implementation(FGuid Id)
 	ReplicatedInstanceId = Id;
 }
 
+void ACLPlayerController::ServerBotBookEvent_Implementation(const FString& Code, const FString& Detail, const FString& Seat, const FString& Book, float X, float Y, bool bFailMatch)
+{
+	UWorld* World = GetWorld();
+	if (!World || !HasAuthority())
+	{
+		return;
+	}
+	FCLMatchEvent E;
+	E.Code = Code;
+	E.Detail = Detail;
+	E.Seat = Seat;
+	E.Book = Book;
+	E.X = X;
+	E.Y = Y;
+	E.Time = World->GetTimeSeconds();
+	if (ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>())
+	{
+		GS->AppendMatchEvent(E);
+	}
+	if (bFailMatch)
+	{
+		if (ACLPvpGameMode* Pvp = World->GetAuthGameMode<ACLPvpGameMode>())
+		{
+			Pvp->FailBook(Code);
+		}
+	}
+}
+
 void ACLPlayerController::StampLocalDeviceRequestor()
 {
 	if (!DeviceRequestorId.IsValid() || !IsLocalController())

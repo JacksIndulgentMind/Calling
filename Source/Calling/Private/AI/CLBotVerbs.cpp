@@ -86,9 +86,13 @@ void CLApplyBotWhile(FCLBotVerbContext& Ctx, bool bIncludeMove)
 			Intent.bFire = true;
 		}
 	}
-	if (Intent.bADS || Intent.bFire || bIncludeMove)
+	if (bIncludeMove)
 	{
 		PulseIntent(Ctx.Char, Intent);
+	}
+	else if (Intent.bADS || Intent.bFire)
+	{
+		Ctx.Char->LatchAgentWhileHolds(Intent.bADS, Intent.bFire);
 	}
 }
 
@@ -325,10 +329,16 @@ namespace
 			{
 				return;
 			}
+			const FString K = Kind.ToString().ToLower();
 			FCLAgentIntent Intent;
+			if (K == TEXT("fire"))
+			{
+				Intent.bFire = true;
+				PulseIntent(Ctx.Char, Intent);
+				return;
+			}
 			Intent.Move = StickForPulse(Ctx);
 			Intent.bSprint = !Intent.Move.IsNearlyZero();
-			const FString K = Kind.ToString().ToLower();
 			if (K == TEXT("airdive")) { Intent.bAirDive = true; }
 			PulseIntent(Ctx.Char, Intent);
 		}

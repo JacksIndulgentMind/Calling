@@ -13,12 +13,15 @@
 #include "Nav/CLAgentNavProbe.h"
 #include "Player/CLCombatMovementComponent.h"
 #include "Player/CLHealthShieldComponent.h"
+#include "Player/CLIntentReceiver.h"
+#include "Player/CLLookController.h"
 #include "Player/CLPlayerCharacter.h"
 #include "Player/CLPlayerController.h"
 #include "Player/CLWeaponMotorComponent.h"
 #include "UI/CLMainMenuOverlay.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "Dom/JsonValue.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerController.h"
 
@@ -35,6 +38,44 @@ namespace
 		case ECLSceneId::Practice: return TEXT("practice");
 		default: return TEXT("boot");
 		}
+	}
+
+	void FillMatchMode(TSharedRef<FJsonObject> Root, UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+		const ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>();
+		if (!GS)
+		{
+			return;
+		}
+		Root->SetNumberField(TEXT("teamAScore"), GS->GetTeamAScore());
+		Root->SetNumberField(TEXT("teamBScore"), GS->GetTeamBScore());
+		Root->SetNumberField(TEXT("teamAKills"), GS->GetTeamAKills());
+		Root->SetNumberField(TEXT("teamBKills"), GS->GetTeamBKills());
+		Root->SetStringField(TEXT("scoreLine"), GS->GetScoreLine());
+		Root->SetStringField(TEXT("liveShrine"), GS->GetLiveShrine().ToString());
+		Root->SetBoolField(TEXT("shrineHeldRed"), GS->GetShrineHeldRed());
+		Root->SetBoolField(TEXT("shrineHeldBlue"), GS->GetShrineHeldBlue());
+		Root->SetStringField(TEXT("modeResult"), GS->GetModeResult());
+		Root->SetStringField(TEXT("winningTeam"), GS->GetWinningTeam());
+		Root->SetStringField(TEXT("modeFailReason"), GS->GetModeFailReason());
+		TArray<TSharedPtr<FJsonValue>> EvArr;
+		for (const FCLMatchEvent& E : GS->GetMatchEvents())
+		{
+			TSharedRef<FJsonObject> Ev = MakeShared<FJsonObject>();
+			Ev->SetStringField(TEXT("code"), E.Code);
+			Ev->SetStringField(TEXT("seat"), E.Seat);
+			Ev->SetStringField(TEXT("book"), E.Book);
+			Ev->SetStringField(TEXT("detail"), E.Detail);
+			Ev->SetNumberField(TEXT("x"), E.X);
+			Ev->SetNumberField(TEXT("y"), E.Y);
+			Ev->SetNumberField(TEXT("t"), E.Time);
+			EvArr.Add(MakeShared<FJsonValueObject>(Ev));
+		}
+		Root->SetArrayField(TEXT("events"), EvArr);
 	}
 
 	void FillPawn(TSharedRef<FJsonObject> Root, ACLPlayerCharacter* Char, UWorld* World)
@@ -99,21 +140,20 @@ namespace
 		CLHitscanService::QueryRadarContacts(Char, Radar);
 		Root->SetNumberField(TEXT("radarBlips"), Radar.Num());
 		Root->SetNumberField(TEXT("radarRipple"), CLHitscanService::QueryRadarRippleMask(Char));
-		if (World)
+		const FVector2D AgentMove = Char->GetAgentMove();
+		Root->SetNumberField(TEXT("agentMoveX"), AgentMove.X);
+		Root->SetNumberField(TEXT("agentMoveY"), AgentMove.Y);
+		if (const UCLIntentReceiver* Intent = Char->GetIntentReceiver())
 		{
-			if (const ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>())
+			Root->SetBoolField(TEXT("agentFire"), Intent->WantsFire());
+			Root->SetBoolField(TEXT("agentAds"), Intent->WantsADS());
+		}
+		if (const UCLLookController* Look = Char->GetLookController())
+		{
+			Root->SetBoolField(TEXT("lookTrack"), Look->IsLookTracking());
+			if (Look->GetLookTrackSeat().IsValid())
 			{
-				Root->SetNumberField(TEXT("teamAScore"), GS->GetTeamAScore());
-				Root->SetNumberField(TEXT("teamBScore"), GS->GetTeamBScore());
-				Root->SetNumberField(TEXT("teamAKills"), GS->GetTeamAKills());
-				Root->SetNumberField(TEXT("teamBKills"), GS->GetTeamBKills());
-				Root->SetStringField(TEXT("scoreLine"), GS->GetScoreLine());
-				Root->SetStringField(TEXT("liveShrine"), GS->GetLiveShrine().ToString());
-				Root->SetBoolField(TEXT("shrineHeldRed"), GS->GetShrineHeldRed());
-				Root->SetBoolField(TEXT("shrineHeldBlue"), GS->GetShrineHeldBlue());
-				Root->SetStringField(TEXT("modeResult"), GS->GetModeResult());
-				Root->SetStringField(TEXT("winningTeam"), GS->GetWinningTeam());
-				Root->SetStringField(TEXT("modeFailReason"), GS->GetModeFailReason());
+				Root->SetStringField(TEXT("lookTrackSeat"), Look->GetLookTrackSeat().ToString(EGuidFormats::DigitsWithHyphens));
 			}
 		}
 	}
@@ -171,6 +211,7 @@ TSharedRef<FJsonObject> FCLAgentStateSerializer::Build(
 		Root->SetBoolField(TEXT("ok"), false);
 		Root->SetStringField(TEXT("error"), TEXT("no_local_pawn"));
 	}
+	FillMatchMode(Root, World);
 
 	if (const ACLPlayerCharacter* Viewed = LocalPC ? Cast<ACLPlayerCharacter>(LocalPC->GetViewTarget()) : nullptr)
 	{

@@ -691,6 +691,19 @@ void ACLPlayerCharacter::ClearAgentIntent()
 	ClearAgentLook();
 }
 
+void ACLPlayerCharacter::LatchAgentWhileHolds(bool bADS, bool bFire)
+{
+	if (IntentReceiver)
+	{
+		IntentReceiver->LatchWhileHolds(bADS, bFire);
+	}
+}
+
+FVector2D ACLPlayerCharacter::GetAgentMove() const
+{
+	return IntentReceiver ? IntentReceiver->GetMove() : FVector2D::ZeroVector;
+}
+
 void ACLPlayerCharacter::ClearAgentLook()
 {
 	if (LookController)

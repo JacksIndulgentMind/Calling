@@ -377,6 +377,17 @@ TSharedRef<FJsonObject> FCLHubCommandRegistry::Dispatch(
 		{
 			Out->SetStringField(TEXT("error"), Error);
 		}
+		else
+		{
+			Out->SetObjectField(TEXT("botBook"), Mgr->MakeSeatBotJson(Seat->GetSeatId()));
+			const FString CauseLower = Cause.ToLower();
+			if (CauseLower == TEXT("execution") || CauseLower == TEXT("failure") || CauseLower == TEXT("fail"))
+			{
+				Out->SetBoolField(TEXT("executionError"), true);
+				Out->SetStringField(TEXT("alert"), TEXT("botbook_execution"));
+				Out->SetStringField(TEXT("error"), TEXT("botbook_execution"));
+			}
+		}
 		return Out;
 	}
 

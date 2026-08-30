@@ -11,6 +11,33 @@ class AController;
 class APawn;
 
 USTRUCT(BlueprintType)
+struct CALLING_API FCLMatchEvent
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Code;
+
+	UPROPERTY()
+	FString Seat;
+
+	UPROPERTY()
+	FString Book;
+
+	UPROPERTY()
+	FString Detail;
+
+	UPROPERTY()
+	float X = 0.f;
+
+	UPROPERTY()
+	float Y = 0.f;
+
+	UPROPERTY()
+	float Time = 0.f;
+};
+
+USTRUCT(BlueprintType)
 struct CALLING_API FCLSeatScore
 {
 	GENERATED_BODY()
@@ -96,6 +123,9 @@ public:
 	void SetLiveShrine(FName Id);
 	void SetShrineHeld(ECLPvpTeam Team, bool bHeld);
 	void SetModeOutcome(const FString& Result, const FString& Winner, const FString& FailReason);
+	void AppendMatchEvent(const FCLMatchEvent& Event);
+	void ClearMatchEvents();
+	const TArray<FCLMatchEvent>& GetMatchEvents() const { return MatchEvents; }
 
 	void SetLobbySnapshot(const TArray<FCLLobbySeatSnap>& Seats, int32 Ready, int32 MinPlayers, bool bQueued);
 	const TArray<FCLLobbySeatSnap>& GetLobbySeats() const { return LobbySeats; }
@@ -145,6 +175,9 @@ protected:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
 	FString ModeFailReason;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	TArray<FCLMatchEvent> MatchEvents;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
 	TArray<FCLSeatScore> SeatScores;
