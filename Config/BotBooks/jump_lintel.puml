@@ -1,0 +1,22 @@
+@startuml jump_lintel
+floating note
+trySuccessFor: 0.5
+end note
+start
+if (qualify hasMarker menhir_0) then (yes)
+  :goto marker=menhir_0_approach;
+  note right
+    success: distXY 220
+    goodEnough: distXY 400
+    fail.timeout: 20
+  end note
+  :airDive marker=menhir_0;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 6
+  end note
+else (skip)
+endif
+stop
+@enduml

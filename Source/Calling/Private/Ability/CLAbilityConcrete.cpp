@@ -8,7 +8,7 @@
 #include "Ability/CLAbilityTypes.h"
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "DrawDebugHelpers.h"
@@ -424,7 +424,7 @@ bool UCLSuper_MindControl::Activate(APawn* Owner)
 		{
 			continue;
 		}
-		if (Seat->GetDrivenPawn() == Owner && Seat->GetPlaybook() && Seat->GetPlaybook()->IsA<UCLRemoteAgentPlaybook>())
+		if (Seat->GetDrivenPawn() == Owner && Seat->GetSeatMotor() && Seat->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 		{
 			AgentSeat = Seat->GetSeatId();
 		}

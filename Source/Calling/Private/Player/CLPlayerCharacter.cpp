@@ -17,6 +17,9 @@
 #include "Game/CLGameInstance.h"
 #include "Game/CLGameModeBase.h"
 #include "Game/CLLobbySubsystem.h"
+#include "Game/CLParticipantSeat.h"
+#include "AI/CLBotBookManager.h"
+#include "Engine/GameInstance.h"
 #include "Game/CLGameStateBase.h"
 #include "Loot/CLLootRulesService.h"
 #include "Core/CLTypes.h"
@@ -452,6 +455,22 @@ void ACLPlayerCharacter::NotifyRespawned()
 	{
 		World->GetTimerManager().ClearTimer(RespawnTimer);
 	}
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>();
+		UCLBotBookManager* Books = GI->GetSubsystem<UCLBotBookManager>();
+		if (Lobby && Books)
+		{
+			for (UCLParticipantSeat* Seat : Lobby->GetSeats())
+			{
+				if (Seat && Seat->GetDrivenPawn() == this)
+				{
+					Books->NotifyRespawn(Seat);
+					break;
+				}
+			}
+		}
+	}
 }
 
 void ACLPlayerCharacter::PlayKnifeSlash()
@@ -670,6 +689,19 @@ void ACLPlayerCharacter::ClearAgentIntent()
 		IntentReceiver->ClearAgentIntent();
 	}
 	ClearAgentLook();
+}
+
+void ACLPlayerCharacter::LatchAgentWhileHolds(bool bADS, bool bFire)
+{
+	if (IntentReceiver)
+	{
+		IntentReceiver->LatchWhileHolds(bADS, bFire);
+	}
+}
+
+FVector2D ACLPlayerCharacter::GetAgentMove() const
+{
+	return IntentReceiver ? IntentReceiver->GetMove() : FVector2D::ZeroVector;
 }
 
 void ACLPlayerCharacter::ClearAgentLook()

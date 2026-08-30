@@ -1,4 +1,6 @@
 #include "Nav/CLAgentNavProbe.h"
+#include "Game/CLGreyboxFloors.h"
+#include "EngineUtils.h"
 #include "Nav/CLNavTune.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -172,6 +174,27 @@ float CLAgentNavProbe::FloorDropCm(UWorld* World, const AActor* Ignore, const FV
 void CLAgentNavProbe::FillStateJson(const TSharedRef<FJsonObject>& Root, UWorld* World, const ACharacter* Char)
 {
 	Root->SetNumberField(TEXT("navTiles"), NavTileCount(World));
+	if (World)
+	{
+		for (TActorIterator<ACLGreyboxFloors> It(World); It; ++It)
+		{
+			Root->SetBoolField(TEXT("findPathMeshOk"), It->bFindPathMeshOk);
+			Root->SetBoolField(TEXT("edgePadLipOk"), It->bEdgePadLipOk);
+			Root->SetBoolField(TEXT("edgePadPadOk"), It->bEdgePadPadOk);
+			Root->SetBoolField(TEXT("edgePadPartial"), It->bEdgePadPartial);
+			Root->SetNumberField(TEXT("edgePadPoints"), It->EdgePadPathPoints);
+			Root->SetNumberField(TEXT("edgePadOffMesh"), It->EdgePadOffMesh);
+			Root->SetNumberField(TEXT("edgePadValidEndsMax"), It->EdgePadValidEndsMax);
+			Root->SetNumberField(TEXT("edgePadX"), It->CachedEdgePad.X);
+			Root->SetNumberField(TEXT("edgePadY"), It->CachedEdgePad.Y);
+			Root->SetNumberField(TEXT("edgePadZ"), It->CachedEdgePad.Z);
+			Root->SetNumberField(TEXT("airDiveJumpLength"), It->AirDiveJumpLengthCm);
+			Root->SetNumberField(TEXT("airDiveJumpMaxDepth"), It->AirDiveJumpMaxDepthCm);
+			Root->SetNumberField(TEXT("airDiveJumpHeight"), It->AirDiveJumpHeightCm);
+			Root->SetNumberField(TEXT("edgePadBakeMs"), It->EdgePadBakeMs);
+			break;
+		}
+	}
 	if (!Char || !World)
 	{
 		return;

@@ -30,13 +30,34 @@ enum class ECLPvpTeam : uint8
 	Blue UMETA(DisplayName = "Blue")
 };
 
-/** Why the hub would push a seat snapshot. Playbook decides which reasons it wants. */
+/** Why the hub would push a seat snapshot. SeatMotor decides which reasons it wants. */
 UENUM(BlueprintType)
 enum class ECLHubSnapshotReason : uint8
 {
 	Stale UMETA(DisplayName = "Stale"),
 	LobbyDirty UMETA(DisplayName = "Lobby Dirty"),
 	LowLookahead UMETA(DisplayName = "Low Lookahead")
+};
+
+USTRUCT(BlueprintType)
+struct CALLING_API FCLLobbySeatSnap
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FGuid SeatId;
+
+	UPROPERTY()
+	FString DisplayName;
+
+	UPROPERTY()
+	ECLPvpTeam Team = ECLPvpTeam::Unassigned;
+
+	UPROPERTY()
+	bool bReady = false;
+
+	UPROPERTY()
+	bool bHost = false;
 };
 
 USTRUCT(BlueprintType)
@@ -79,6 +100,10 @@ struct CALLING_API FCLLobbyInvoice
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Lobby")
 	ECLSceneId Activity = ECLSceneId::Social;
+
+	/** JSON game mode id (e.g. shrine_clash). Not an Unreal AGameMode class. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Lobby")
+	FName GameModeId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Lobby")
 	int32 MinPlayers = 1;

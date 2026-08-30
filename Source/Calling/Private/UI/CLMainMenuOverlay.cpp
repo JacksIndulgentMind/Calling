@@ -4,6 +4,7 @@
 #include "Game/CLErrorBoundary.h"
 #include "Core/CLError.h"
 #include "Game/CLSessionSubsystem.h"
+#include "Game/CLLoopbackJoin.h"
 #include "Engine/GameInstance.h"
 #include "Input/CLInputTypes.h"
 #include "Blueprint/WidgetTree.h"
@@ -12,6 +13,7 @@
 #include "Components/ButtonSlot.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/ComboBoxString.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
@@ -226,6 +228,23 @@ void UCLMainMenuOverlay::BuildDirectorPanel(UVerticalBox* RootCol)
 	UButton* HostClosedBtn = MakeTextButton(WidgetTree, TEXT("HostClosedBtn"), TEXT("Host Social (closed)"));
 	HostClosedBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleHostSocialClosedClicked);
 	AddPadded(DirectorBox, HostClosedBtn);
+
+	if (CLLoopbackJoin::ShowUi())
+	{
+		UButton* VirtHostBtn = MakeTextButton(WidgetTree, TEXT("VirtHostBtn"), TEXT("Virtual host"));
+		VirtHostBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleVirtualHostClicked);
+		AddPadded(DirectorBox, VirtHostBtn);
+
+		LoopbackJoinCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("LoopJoinSrc"));
+		LoopbackJoinCombo->AddOption(TEXT("Loopback (127.0.0.1)"));
+		LoopbackJoinCombo->AddOption(TEXT("Beacon"));
+		LoopbackJoinCombo->SetSelectedOption(TEXT("Loopback (127.0.0.1)"));
+		AddPadded(DirectorBox, LoopbackJoinCombo);
+
+		UButton* VirtJoinBtn = MakeTextButton(WidgetTree, TEXT("VirtJoinBtn"), TEXT("Virtual join"));
+		VirtJoinBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleVirtualJoinClicked);
+		AddPadded(DirectorBox, VirtJoinBtn);
+	}
 
 	UButton* SocialBtn = MakeTextButton(WidgetTree, TEXT("SocialBtn"), TEXT("Exit to Social"));
 	SocialBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleExitSocialClicked);
@@ -596,6 +615,27 @@ void UCLMainMenuOverlay::HandleHostSocialClosedClicked()
 	if (DirectorPanel)
 	{
 		DirectorPanel->HostSocialClosed();
+	}
+}
+
+void UCLMainMenuOverlay::HandleVirtualHostClicked()
+{
+	if (DirectorPanel)
+	{
+		DirectorPanel->StartLoopbackHost();
+	}
+}
+
+void UCLMainMenuOverlay::HandleVirtualJoinClicked()
+{
+	FString Selected;
+	if (LoopbackJoinCombo)
+	{
+		Selected = LoopbackJoinCombo->GetSelectedOption();
+	}
+	if (DirectorPanel)
+	{
+		DirectorPanel->JoinLoopback(Selected);
 	}
 }
 

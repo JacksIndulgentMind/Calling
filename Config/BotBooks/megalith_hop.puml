@@ -1,0 +1,64 @@
+@startuml megalith_hop
+floating note
+trySuccessFor: 0.5
+end note
+start
+if (qualify navTiles > 0) then (yes)
+  :goto marker=menhir_0_approach;
+  note right
+    success: distXY 220
+    goodEnough: distXY 400
+    fail.timeout: 30
+  end note
+  :airDive marker=menhir_0;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 8
+  end note
+  :airDive marker=menhir_1;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 8
+  end note
+  :airDive marker=menhir_2;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 8
+  end note
+  :airDive marker=menhir_3;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 8
+  end note
+  :airDive marker=menhir_4;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 8
+  end note
+  :airDive marker=menhir_5;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 8
+  end note
+  :airDive marker=menhir_6;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 8
+  end note
+  :airDive marker=menhir_7;
+  note right
+    success: distXY 180
+    goodEnough: distXY 280
+    fail.timeout: 8
+  end note
+else (skip)
+endif
+stop
+@enduml

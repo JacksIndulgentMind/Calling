@@ -88,7 +88,7 @@ public:
 
 	void SetRippleCamo(bool bEnabled);
 
-	/** Shared intent seam: HTTP, /goto, and in-game playbooks. Holdables latch; look/pulses consume. */
+	/** Shared intent seam: HTTP, /goto, and BotBooks. Holdables latch; look/pulses consume. */
 	void ApplyAgentIntent(const FCLAgentIntent& Intent);
 
 	void ApplyAgentIntent(FVector2D MoveXY, FVector2D LookDelta, bool bSprint, bool bCrouch, bool bADS, bool bFire,
@@ -96,6 +96,11 @@ public:
 
 	/** Zero stick and pending pulses. Sequence / goto / empty intent call this. */
 	void ClearAgentIntent();
+
+	/** BotBook `while:` holds on a live `goto` — latch fire/ADS without zeroing stick. */
+	void LatchAgentWhileHolds(bool bADS, bool bFire);
+
+	FVector2D GetAgentMove() const;
 
 	void ApplyAgentLookCommand(const FCLLookCommand& Look);
 	void ApplyAgentLookFromStep(const FGuid& TrackSeatId, const FCLLookCommand& Look);

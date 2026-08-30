@@ -10,11 +10,11 @@
 struct FHttpServerRequest;
 class IHttpRouter;
 class ACLPlayerCharacter;
-class UCLRemoteAgentPlaybook;
+class UCLRemoteAgentSeatMotor;
 class UCLLobbySubsystem;
 
 /**
- * Loopback HTTP codec (18765). Hub JSON goes through FCLHubCommandRegistry.
+ * Loopback HTTP codec (default 18765; cmdline `-CallingAgentHttpPort=`). Hub JSON goes through FCLHubCommandRegistry.
  * Director through FCLDirectorCommandRegistry. State through FCLAgentStateSerializer.
  * Sequence/goto/intent are aliases onto the seat motor — no second clock.
  */
@@ -29,6 +29,7 @@ public:
 
 	TSharedRef<FJsonObject> BuildStateJson(const FGuid& SeatId = FGuid()) const;
 	FString BuildStateJsonString(const FGuid& SeatId = FGuid()) const;
+	uint32 GetListenPort() const { return Port; }
 
 private:
 	void StartListener();
@@ -39,7 +40,7 @@ private:
 	APlayerController* FindLocalController() const;
 	UWorld* GetWorldSafe() const;
 	UCLLobbySubsystem* GetLobby() const;
-	UCLRemoteAgentPlaybook* ResolveMotor(FGuid& InOutSeatId) const;
+	UCLRemoteAgentSeatMotor* ResolveMotor(FGuid& InOutSeatId) const;
 
 	bool HandleState(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleIntent(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);

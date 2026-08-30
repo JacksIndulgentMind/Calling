@@ -4,7 +4,7 @@
 #include "NavAreas/NavArea.h"
 #include "CLNavArea_LongJump.generated.h"
 
-/** Expensive hop (triple-jump over a full wall). Recast can use it; walking around is cheaper. */
+/** Expensive hop. DefaultCost from NavTune areaCost.longJump (fallback 25). */
 UCLASS()
 class CALLING_API UCLNavArea_LongJump : public UNavArea
 {

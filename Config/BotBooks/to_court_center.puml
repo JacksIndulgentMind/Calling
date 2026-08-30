@@ -1,0 +1,19 @@
+@startuml to_court_center
+floating note
+onRespawn: to_court_center
+trySuccessFor: 0.5
+end note
+start
+if (qualify navTiles > 0) then (yes)
+  :setFocus focus=enemy;
+  :goto marker=court_center;
+  note right
+    while: trackFocus
+    success: distXY 220
+    goodEnough: distXY 450
+    fail.timeout: 60
+  end note
+else (skip)
+endif
+stop
+@enduml

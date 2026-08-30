@@ -18,11 +18,21 @@ Game must already be up (`Scripts/dl-rebuild.ps1` first). Then:
 Scripts/dl-verify-dual-composer.ps1 -Sequence ring
 ```
 
-Pass when the script prints `VERIFY_OK`, `diving=true`, and megalith sticks `8/8`. Radar/sighted regression:
+Pass when the script prints `VERIFY_OK`, `diving=true`, megalith sticks `8/8`, and the **edge hop** sticks the south island then **recalls to the court lip** (not spawn). Catalog `edge_pad` is Recast `goto` only (no JIT airDive). Radar/sighted regression:
 
 ```
-Scripts/dl-verify-dual-composer.ps1 -Sequence radar
+Scripts/dl-verify-dual-composer.ps1 -Sequence pillar
 ```
+
+Pass: `VERIFY_OK` after `goto marker=pillar_pad` sticks the practice pad (on the pad, not air, z below −2800). Nav envelopes: [Docs/NavAbilities.md](../../../Docs/NavAbilities.md).
+
+Bake-only island probe (no cover / ring / megalith):
+
+```
+Scripts/dl-verify-dual-composer.ps1 -Sequence nav
+```
+
+Pass: `VERIFY_OK` if `navTiles > 0` and `edgePadPadOk`. Uses `director arena` if not already `pvp` (no composer). Prints `findPathMeshOk` / `validEndsMax` / jumpLen / JumpMaxDepth. `findPathMeshOk=false` is not a throw; iterate Recast config until the mesh bar is true. [RecastLinks.md](../../../Docs/RecastLinks.md).
 
 ## Compose → PvP (expected MCP path)
 
@@ -36,9 +46,11 @@ If you drive it by hand instead of the script:
 
 Do **not** auto-Go when `ready >= min`. Host Start is required.
 
-After PvP: `navTiles > 0`. Red ~`(-14500,0,98)`, Blue ~`(14500,0,98)`. **Cover first:** do not rendezvous in the open pit. A behind a trilithon (~Polar 0° / 1250 cm). **B peeks from the lee of the center hide** (~`(0,400,-2000)`, north of the hide slab — not on A’s y=0 chord). Seat **B first**, then A; parallel `goto` through the pit shoves B off path. Return-fire is a glance then ADS (~0.55 s) with `lookAtSeat` A (not `FireUntilHit`, not a turret). Hurt (`shield` 0 or health missing): **no fire**, `goto` hide, crouch ~1.2 s — cover + regen, not a strafe in the pit. **A laps outside the menhirs** (~1200–1300 cm) with `lookAtSeat` B (no `yawAbs` snaps), **strafe-sliding** the full `SlideDuration` and holding `fire` when not hugging a post (commit only if predicted chord stays in-band; do not truncate). Heading slews at 420/280 deg/s; if B moves, ~100 ms then catch-up. Hub `{ "type":"view", "seatId" }` locks the window: lap 1 is A (1P + eased 3P peek on dodge/dash/dive), lap 2 is B **true 1P** (boom arm 0, body OwnerNoSee — not a stuck 3P boom). Then each back to **their** spawn. `GET /state?seat=` per seat. `/state` also reports `slideDuration`, `slideDistanceCm`, `dashDuration`, `dodgeDuration`.
+After PvP: `navTiles > 0`. Red ~`(-6380,0,98)`, Blue ~`(6380,0,98)`. **Cover first** via BotBooks (`cover_then_peek`, markers `hide_center_lee` / `menhir_0_approach`). Ring script runs **EdgeHop** (`edge_lip` then catalog `edge_pad`) before `ring_lap` / `megalith_hop`. B `hold_lee` until megalith 8/8, then `court_gunfight` vs A `track_fire`. Megalith hops are `airDive marker=menhir_N`. Agents drive pawns with BotBooks only — do not use MCP `plan` / `goto` for this path. Pass: `VERIFY_OK`, island stick + lip recall, `diving=true`, megalith sticks `8/8`.
 
-**Recover, do not fail-fast.** Retry `goto` on stall or `partial`; rewrite a short `plan` from live `/state`. Do not chain six independent ring gotos. Z-collapse (west through-floor) still stops that seat. Fail only after retries.
+**Recover, do not fail-fast on combat.** `branchBotBook` with `cause` (`execution` if the bot failed the book; `situation` for combat/world) or append a new JIT tree on stall; rewrite from live `/state`. Z-collapse still stops that seat. Fail only after retries.
+
+**Do fail-fast on a book that is not executing.** `botBook.followAlert` / `executionError` / loc glued at spawn with a live `goto` is not a take-out — throw `command_not_followed` on the first sample. Do not sit on `modeResult`.
 
 Recording check: A 1P tracers from the barrel + casings; B 3P gun + body flinch; A hip screen punch vs ADS reticle walk.
 

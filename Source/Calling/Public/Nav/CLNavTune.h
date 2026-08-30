@@ -34,12 +34,17 @@ struct FCLNavLinkTune
 
 struct FCLNavTune
 {
-	float JumpApexCm = 400.f;
+	float JumpApexCm = 1580.f;
 	float CoverHeightCm = 140.f;
 	float MaxStepHeightCm = 70.f;
 	float AgentRadiusCm = 42.f;
 	float AgentHeightCm = 192.f;
 	float AgentMaxSlopeDeg = 55.f;
+	/** 0 = uncapped MaxLaunchXY. Narrows AirDive bake+runtime search; must be <= MaxLaunchXY. */
+	float AirDiveSearchMaxCm = 0.f;
+	/** FindPath area weights. AirDive > walk (1) so DropDown/ramp wins when both exist. */
+	float AreaCostAirDive = 50.f;
+	float AreaCostLongJump = 25.f;
 	FCLNavProbeTune Probe;
 	TArray<FCLNavLinkTune> Links;
 };
@@ -48,4 +53,5 @@ namespace CLNavTune
 {
 	const FCLNavTune& Get();
 	float ResolveScalar(const FString& TokenOrNumber, float Fallback, const FCLNavTune& Tune, float SurvivingDropCm);
+	bool IsAirDiveLink(FName Name);
 }

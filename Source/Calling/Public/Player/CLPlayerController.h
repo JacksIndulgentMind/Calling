@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Core/CLTypes.h"
+#include "Game/CLLobbyTypes.h"
 #include "Input/CLInputTypes.h"
 #include "CLPlayerController.generated.h"
 
@@ -9,6 +11,7 @@ class UInputMappingContext;
 class UInputAction;
 class UCLMainMenuOverlay;
 class UCLCombatHudWidget;
+class UCLComposerMenu;
 class UCLInputBindSubsystem;
 struct FInputActionValue;
 
@@ -29,6 +32,7 @@ public:
 	virtual void PlayerTick(float DeltaTime) override;
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void AcknowledgePossession(APawn* P) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|UI")
 	void ToggleMainMenu();
@@ -38,6 +42,39 @@ public:
 
 	UCLMainMenuOverlay* GetMainMenu();
 	const UCLMainMenuOverlay* GetMainMenu() const { return MainMenuInstance; }
+
+	void EnsureComposerMenu();
+
+	UFUNCTION(Server, Reliable)
+	void ServerComposerReadyToggle();
+
+	UFUNCTION(Server, Reliable)
+	void ServerComposerTeam(ECLPvpTeam Team);
+
+	UFUNCTION(Server, Reliable)
+	void ServerComposerReady(bool bReady);
+
+	UFUNCTION(Client, Reliable)
+	void ClientHubDispatch(const FString& Json, int32 CorrelationId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerReportInstanceId(FGuid Id);
+
+	UFUNCTION(Server, Reliable)
+	void ServerBotBookEvent(const FString& Code, const FString& Detail, const FString& Seat, const FString& Book, float X, float Y, bool bFailMatch);
+
+	FGuid GetInstanceId() const { return ReplicatedInstanceId; }
+	FGuid GetDeviceRequestorId() const { return DeviceRequestorId; }
+	void StampLocalDeviceRequestor();
+
+	/** Last hub command this PC executed (HTTP port of the listener, or viaRpc fromPort). */
+	void NoteHubReceive(int32 ListenPort, const FString& Recv, const FString& IntendedTarget);
+	int32 GetLastHubListenPort() const { return LastHubListenPort; }
+	const FString& GetLastHubRecv() const { return LastHubRecv; }
+	const FString& GetLastHubIntendedTarget() const { return LastHubIntendedTarget; }
+
+	UFUNCTION(Server, Reliable)
+	void ServerHubDispatchResult(int32 CorrelationId, const FString& Json);
 
 protected:
 	void OnMove(const FInputActionValue& Value);
@@ -61,6 +98,9 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UCLCombatHudWidget> CombatHud;
 
+	UPROPERTY()
+	TObjectPtr<UCLComposerMenu> ComposerMenuInstance;
+
 	void EnsureCombatHud();
 	void EnsureMainMenu();
 	void ApplyMenuInputMode(bool bOpen);
@@ -76,6 +116,17 @@ protected:
 	bool bNativeLeft = false;
 	bool bNativeRight = false;
 	bool bMenuKeyLatched = false;
+
+	int32 LastHubListenPort = 0;
+	FString LastHubRecv;
+	FString LastHubIntendedTarget;
+
+	UPROPERTY(Replicated)
+	FGuid ReplicatedInstanceId;
+
+	FGuid DeviceRequestorId;
+
+	void BindInstanceIdentity();
 
 	void PushInputToPawn();
 	void BindMoveLookKeys();

@@ -48,6 +48,11 @@ ACLPracticeGameMode::ACLPracticeGameMode()
 void ACLPracticeGameMode::StartPlay()
 {
 	Super::StartPlay();
+	ACLGreyboxFloors::SpawnIfMissing(GetWorld(), ECLGreyboxLayout::PracticePillar);
+	for (TActorIterator<ACLGreyboxFloors> It(GetWorld()); It; ++It)
+	{
+		It->RebuildNavigation();
+	}
 	if (UCLLobbySubsystem* Lobby = GetGameInstance()->GetSubsystem<UCLLobbySubsystem>())
 	{
 		Lobby->ClearScene();

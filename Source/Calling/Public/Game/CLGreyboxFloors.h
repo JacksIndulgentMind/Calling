@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Game/CLGreyboxLayouts.h"
 #include "CLGreyboxFloors.generated.h"
 
 class UStaticMeshComponent;
@@ -23,7 +24,8 @@ enum class ECLGreyboxLayout : uint8
 	RaidArena UMETA(DisplayName = "Raid 03 (arena)"),
 	RaidPit UMETA(DisplayName = "Raid 04 (pit)"),
 	SocialSquare UMETA(DisplayName = "Social (100 m square)"),
-	PvpThreeLane UMETA(DisplayName = "PvP (3-lane ravine courtyard)")
+	PvpThreeLane UMETA(DisplayName = "PvP (3-lane ravine courtyard)"),
+	PracticePillar UMETA(DisplayName = "Practice (pillar air-dive)")
 };
 
 /**
@@ -42,7 +44,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Greybox")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Layout, Category = "Calling|Greybox")
 	ECLGreyboxLayout Layout = ECLGreyboxLayout::SocialSquare;
 
 	/** World-space spawn (cm). PvP returns Red (west). */
@@ -53,6 +55,10 @@ public:
 
 	/** Z below which RescueFallenPawns teleports. Pit maps sit lower than spawn. */
 	float GetRescueMinZ() const;
+	/** Court lip stand after an island dive. Empty if this layout has no edge pad. */
+	FVector GetEdgeRecallLocation() const;
+	bool IsOnEdgePad(const FVector& Loc) const;
+	bool HasEdgePad() const { return bHasEdgePad; }
 
 	/** Encounter director circle radius that stays on these floors. */
 	float GetSuggestedArenaHalfExtent() const;
@@ -78,17 +84,38 @@ public:
 	/** 5 m × 5 m catalog: floor, ramp_low, ramp_mid, ramp_steep, rail, cover_half, cover_full. */
 	void StampModule(FName Id, const FVector& CenterCm, const FRotator& Rotation = FRotator::ZeroRotator);
 	void StampFillFloor(const FVector& CenterCm, float SizeXMeters, float SizeYMeters, float SlabZCm);
+	void StampCornerShrines(const FCLPvpThreeLaneRecipe& Recipe, float PitZ);
 	void BuildPvpThreeLane();
+	void BuildPracticePillar();
+	void StampTaskMarkers();
+	/** Recast from NavTune.json (agent + jump links). Surviving drop is spawn Z minus rescue Z. */
+	void RebuildNavigation();
+
+	bool bFindPathMeshOk = false;
+	bool bEdgePadLipOk = false;
+	bool bEdgePadPadOk = false;
+	bool bEdgePadPartial = false;
+	int32 EdgePadPathPoints = 0;
+	int32 EdgePadOffMesh = 0;
+	int32 EdgePadValidEndsMax = 0;
+	float AirDiveJumpLengthCm = 0.f;
+	float AirDiveJumpMaxDepthCm = 0.f;
+	float AirDiveJumpHeightCm = 0.f;
+	float EdgePadBakeMs = 0.f;
+	FVector CachedEdgeLip = FVector::ZeroVector;
+	FVector CachedEdgePad = FVector::ZeroVector;
+	bool bHasEdgePad = false;
 
 protected:
+	UFUNCTION()
+	void OnRep_Layout();
+
 	void EnsureBuilt();
 	void BuildLayout();
 	void ApplyVisibleShading();
 	void ScheduleNavRebuild();
 	UFUNCTION()
 	void OnNavRebuildTimer();
-	/** Recast from NavTune.json (agent + jump links). Surviving drop is spawn Z minus rescue Z. */
-	void RebuildNavigation();
 
 	UPROPERTY(VisibleAnywhere, Category = "Calling|Greybox")
 	TObjectPtr<USceneComponent> Root;

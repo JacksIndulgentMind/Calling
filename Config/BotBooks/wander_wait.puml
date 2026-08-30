@@ -1,0 +1,11 @@
+@startuml wander_wait
+floating note
+fallbacks:
+end note
+start
+:wait;
+note right
+  fail.timeout: 2.0
+end note
+stop
+@enduml

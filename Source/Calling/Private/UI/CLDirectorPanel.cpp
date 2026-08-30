@@ -92,6 +92,30 @@ void UCLDirectorPanel::JoinListedLobby(int32 Index)
 	}
 }
 
+void UCLDirectorPanel::StartLoopbackHost()
+{
+	if (UGameInstance* GI = DirectorGameInstance(this))
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->StartComposerLoopbackHost();
+		}
+	}
+	HideHostOverlay(this);
+}
+
+void UCLDirectorPanel::JoinLoopback(const FString& Selected)
+{
+	if (UGameInstance* GI = DirectorGameInstance(this))
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->JoinLoopback(Selected);
+		}
+	}
+	HideHostOverlay(this);
+}
+
 void UCLDirectorPanel::ToggleLocalReady()
 {
 	if (UGameInstance* GI = DirectorGameInstance(this))

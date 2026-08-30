@@ -1,0 +1,28 @@
+@startuml pvp_patrol_blue
+floating note
+fallbacks: wander_wait
+onRespawn: cover_then_peek
+end note
+start
+:goto marker=cover_east_cut;
+note right
+  id: hunt
+  success: distXY 400
+  goodEnough: distXY 800
+  fail.timeout: 40
+end note
+:goto marker=hide_center_lee;
+note right
+  success: distXY 250
+  goodEnough: distXY 450
+  fail.timeout: 30
+end note
+:goto marker=spawn_blue;
+note right
+  id: reset
+  success: distXY 600
+  goodEnough: distXY 1000
+  fail.timeout: 45
+end note
+stop
+@enduml

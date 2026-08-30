@@ -1,0 +1,16 @@
+{
+  "id": "pvp_three_lane",
+  "umap": "/Game/Maps/CL_PvpArena",
+  "minPlayers": 2,
+  "maxPlayers": 8,
+  "supportedGameModes": ["shrine_clash"],
+  "markers": {
+    "spawn_red": ["spawn.player.red"],
+    "spawn_blue": ["spawn.player.blue"],
+    "court_center": ["space.center"],
+    "shrine_well": ["space.shrine"],
+    "shrine_tree": ["space.shrine"],
+    "shrine_heel": ["space.shrine"],
+    "shrine_cairn": ["space.shrine"]
+  }
+}

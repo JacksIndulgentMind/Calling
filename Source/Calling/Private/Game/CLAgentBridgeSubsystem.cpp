@@ -3,12 +3,15 @@
 #include "Game/CLAgentStateSerializer.h"
 #include "Game/CLDirectorCommandRegistry.h"
 #include "Game/CLHubCommandRegistry.h"
+#include "Game/CLHubDriveTrace.h"
+#include "Game/CLHubIngress.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLSceneRouter.h"
 #include "Game/CLGameModeBase.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
 #include "Player/CLPlayerCharacter.h"
 #include "Player/CLPlayerController.h"
 #include "Player/CLCombatPawn.h"
@@ -26,6 +29,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Game/CLLoopbackJoin.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Modules/ModuleManager.h"
@@ -59,20 +63,62 @@ namespace
 		}
 		return true;
 	}
+
+	FString HttpHeader(const FHttpServerRequest& Request, const TCHAR* Name)
+	{
+		for (const TPair<FString, TArray<FString>>& Pair : Request.Headers)
+		{
+			if (Pair.Key.Equals(Name, ESearchCase::IgnoreCase) && Pair.Value.Num() > 0)
+			{
+				return Pair.Value[0];
+			}
+		}
+		return FString();
+	}
+
+	void NoteAgentHttp(UGameInstance* GI, const FHttpServerRequest& Request, const TSharedPtr<FJsonObject>& Body, bool bMintIfMissing = true)
+	{
+		if (UCLInstanceIdentitySubsystem* Id = GI ? GI->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr)
+		{
+			FString Header = HttpHeader(Request, TEXT("X-Calling-Agent-Id"));
+			if (Header.IsEmpty())
+			{
+				Header = HttpHeader(Request, TEXT("X-Calling-AgentId"));
+			}
+			FString Query;
+			if (const FString* AgentId = Request.QueryParams.Find(TEXT("agentId")))
+			{
+				Query = *AgentId;
+			}
+			else if (const FString* Agent = Request.QueryParams.Find(TEXT("agent")))
+			{
+				Query = *Agent;
+			}
+			Id->NoteRequest(Header, Query, Body, bMintIfMissing);
+		}
+	}
+
+	FString ReplyJson(UGameInstance* GI, const TSharedRef<FJsonObject>& Out)
+	{
+		if (const UCLInstanceIdentitySubsystem* Id = GI ? GI->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr)
+		{
+			Id->StampJson(Out);
+		}
+		return CLAgentCodec::JsonToString(Out);
+	}
 }
 
 void UCLAgentBridgeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Collection.InitializeDependency(UCLTickSubsystem::StaticClass());
+	Collection.InitializeDependency(UCLInstanceIdentitySubsystem::StaticClass());
 	Super::Initialize(Collection);
 #if UE_BUILD_SHIPPING
 	bAllowAgentInput = false;
 #else
 	bAllowAgentInput = true;
 	GConfig->GetBool(TEXT("/Script/Calling.CLAgentSettings"), TEXT("bAllowAgentInput"), bAllowAgentInput, GGameIni);
-	int32 PortIni = static_cast<int32>(Port);
-	GConfig->GetInt(TEXT("/Script/Calling.CLAgentSettings"), TEXT("AgentHttpPort"), PortIni, GGameIni);
-	Port = static_cast<uint32>(FMath::Clamp(PortIni, 1024, 65535));
+	Port = static_cast<uint32>(CLLoopbackJoin::AgentHttpPort());
 	if (bAllowAgentInput)
 	{
 		StartListener();
@@ -97,6 +143,7 @@ void UCLAgentBridgeSubsystem::StartListener()
 	if (!Router.IsValid())
 	{
 		UE_LOG(LogCalling, Warning, TEXT("Calling: agent HTTP failed to bind 127.0.0.1:%u"), Port);
+		CLLoopbackJoin::AppendLog(FString::Printf(TEXT("http bind fail %u"), Port));
 		return;
 	}
 
@@ -165,7 +212,7 @@ UCLLobbySubsystem* UCLAgentBridgeSubsystem::GetLobby() const
 	return GI ? GI->GetSubsystem<UCLLobbySubsystem>() : nullptr;
 }
 
-UCLRemoteAgentPlaybook* UCLAgentBridgeSubsystem::ResolveMotor(FGuid& InOutSeatId) const
+UCLRemoteAgentSeatMotor* UCLAgentBridgeSubsystem::ResolveMotor(FGuid& InOutSeatId) const
 {
 	UCLLobbySubsystem* Lobby = GetLobby();
 	if (!Lobby)
@@ -177,7 +224,7 @@ UCLRemoteAgentPlaybook* UCLAgentBridgeSubsystem::ResolveMotor(FGuid& InOutSeatId
 		InOutSeatId = AgentSeatId.IsValid() ? AgentSeatId : Lobby->GetLastJoinedSeatId();
 	}
 	UCLParticipantSeat* Seat = Lobby->FindSeat(InOutSeatId);
-	if (!Seat || !Seat->GetPlaybook() || !Seat->GetPlaybook()->IsA<UCLRemoteAgentPlaybook>())
+	if (!Seat || !Seat->GetSeatMotor() || !Seat->GetSeatMotor()->IsA<UCLRemoteAgentSeatMotor>())
 	{
 		Seat = Lobby->FindOrCreateLoopbackSeat();
 	}
@@ -186,7 +233,7 @@ UCLRemoteAgentPlaybook* UCLAgentBridgeSubsystem::ResolveMotor(FGuid& InOutSeatId
 		return nullptr;
 	}
 	InOutSeatId = Seat->GetSeatId();
-	return Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook());
+	return Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor());
 }
 
 ACLPlayerCharacter* UCLAgentBridgeSubsystem::FindLocalPawn() const
@@ -258,12 +305,12 @@ TSharedRef<FJsonObject> UCLAgentBridgeSubsystem::BuildStateJson(const FGuid& Sea
 {
 	const FGuid ProbeSeat = SeatId.IsValid() ? SeatId : AgentSeatId;
 	ACLPlayerCharacter* Char = SeatId.IsValid() ? ResolvePawnForSeat(SeatId) : FindLocalPawn();
-	const UCLRemoteAgentPlaybook* Remote = nullptr;
+	const UCLRemoteAgentSeatMotor* Remote = nullptr;
 	if (UCLLobbySubsystem* Lobby = GetLobby())
 	{
 		if (const UCLParticipantSeat* Seat = Lobby->FindSeat(ProbeSeat))
 		{
-			Remote = Cast<UCLRemoteAgentPlaybook>(Seat->GetPlaybook());
+			Remote = Cast<UCLRemoteAgentSeatMotor>(Seat->GetSeatMotor());
 		}
 	}
 	return FCLAgentStateSerializer::Build(GetGameInstance(), Char, FindLocalController(), Remote, AgentSeatId, ProbeSeat);
@@ -271,7 +318,7 @@ TSharedRef<FJsonObject> UCLAgentBridgeSubsystem::BuildStateJson(const FGuid& Sea
 
 FString UCLAgentBridgeSubsystem::BuildStateJsonString(const FGuid& SeatId) const
 {
-	return CLAgentCodec::JsonToString(BuildStateJson(SeatId));
+	return ReplyJson(GetGameInstance(), BuildStateJson(SeatId));
 }
 
 bool UCLAgentBridgeSubsystem::HandleState(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
@@ -286,6 +333,8 @@ bool UCLAgentBridgeSubsystem::HandleState(const FHttpServerRequest& Request, con
 	{
 		FGuid::Parse(*SeatStr, SeatQuery);
 	}
+	TSharedPtr<FJsonObject> Probe = MakeShared<FJsonObject>();
+	NoteAgentHttp(GetGameInstance(), Request, Probe, false);
 	OnComplete(FHttpServerResponse::Create(BuildStateJsonString(SeatQuery), TEXT("application/json")));
 	return true;
 }
@@ -305,9 +354,10 @@ bool UCLAgentBridgeSubsystem::HandleIntent(const FHttpServerRequest& Request, co
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::BadRequest, TEXT("invalid_json")));
 		return true;
 	}
+	NoteAgentHttp(GetGameInstance(), Request, Root);
 
 	FGuid SeatId;
-	UCLRemoteAgentPlaybook* Motor = ResolveMotor(SeatId);
+	UCLRemoteAgentSeatMotor* Motor = ResolveMotor(SeatId);
 	if (Motor)
 	{
 		Motor->CancelMotor();
@@ -331,7 +381,9 @@ bool UCLAgentBridgeSubsystem::HandleIntent(const FHttpServerRequest& Request, co
 		Char->ApplyAgentLookCommand(CLAgentCodec::ParseLook(LookObj));
 	}
 	Char->ApplyAgentIntent(Intent);
-	OnComplete(FHttpServerResponse::Create(TEXT("{\"ok\":true}"), TEXT("application/json")));
+	TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+	Out->SetBoolField(TEXT("ok"), true);
+	OnComplete(FHttpServerResponse::Create(ReplyJson(GetGameInstance(), Out), TEXT("application/json")));
 	return true;
 }
 
@@ -350,6 +402,7 @@ bool UCLAgentBridgeSubsystem::HandleSequence(const FHttpServerRequest& Request, 
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::BadRequest, TEXT("invalid_json")));
 		return true;
 	}
+	NoteAgentHttp(GetGameInstance(), Request, Root);
 
 	UCLLobbySubsystem* Lobby = GetLobby();
 	if (!Lobby)
@@ -362,7 +415,7 @@ bool UCLAgentBridgeSubsystem::HandleSequence(const FHttpServerRequest& Request, 
 	bool bRemainder = false;
 	CLAgentCodec::ParseSteps(Root, Steps, bRemainder);
 	FGuid SeatId = CLAgentCodec::ParseGuid(CLAgentCodec::JsonStr(Root, TEXT("seatId")));
-	UCLRemoteAgentPlaybook* Motor = ResolveMotor(SeatId);
+	UCLRemoteAgentSeatMotor* Motor = ResolveMotor(SeatId);
 	if (!Motor)
 	{
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::NotFound, TEXT("not_remote_agent")));
@@ -380,7 +433,7 @@ bool UCLAgentBridgeSubsystem::HandleSequence(const FHttpServerRequest& Request, 
 		Out->SetBoolField(TEXT("ok"), true);
 		Out->SetNumberField(TEXT("queued"), 0);
 		Out->SetNumberField(TEXT("seconds"), 0);
-		OnComplete(FHttpServerResponse::Create(CLAgentCodec::JsonToString(Out), TEXT("application/json")));
+		OnComplete(FHttpServerResponse::Create(ReplyJson(GetGameInstance(), Out), TEXT("application/json")));
 		return true;
 	}
 
@@ -394,7 +447,7 @@ bool UCLAgentBridgeSubsystem::HandleSequence(const FHttpServerRequest& Request, 
 	Out->SetBoolField(TEXT("ok"), true);
 	Out->SetNumberField(TEXT("queued"), Motor->GetQueuedStepCount());
 	Out->SetNumberField(TEXT("seconds"), Motor->RemainingSeconds());
-	OnComplete(FHttpServerResponse::Create(CLAgentCodec::JsonToString(Out), TEXT("application/json")));
+	OnComplete(FHttpServerResponse::Create(ReplyJson(GetGameInstance(), Out), TEXT("application/json")));
 	return true;
 }
 
@@ -413,6 +466,7 @@ bool UCLAgentBridgeSubsystem::HandleGoto(const FHttpServerRequest& Request, cons
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::BadRequest, TEXT("invalid_json")));
 		return true;
 	}
+	NoteAgentHttp(GetGameInstance(), Request, Root);
 
 	UCLLobbySubsystem* Lobby = GetLobby();
 	if (!Lobby)
@@ -427,7 +481,7 @@ bool UCLAgentBridgeSubsystem::HandleGoto(const FHttpServerRequest& Request, cons
 	}
 
 	FGuid SeatId = CLAgentCodec::ParseGuid(CLAgentCodec::JsonStr(Root, TEXT("seatId")));
-	UCLRemoteAgentPlaybook* Motor = ResolveMotor(SeatId);
+	UCLRemoteAgentSeatMotor* Motor = ResolveMotor(SeatId);
 	if (!Motor)
 	{
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::NotFound, TEXT("not_remote_agent")));
@@ -456,7 +510,7 @@ bool UCLAgentBridgeSubsystem::HandleGoto(const FHttpServerRequest& Request, cons
 	Out->SetNumberField(TEXT("z"), Goal.Z);
 	Out->SetNumberField(TEXT("waypoints"), Motor->GetGotoWaypointCount());
 	Out->SetBoolField(TEXT("partial"), Motor->IsGotoPartial());
-	OnComplete(FHttpServerResponse::Create(CLAgentCodec::JsonToString(Out), TEXT("application/json")));
+	OnComplete(FHttpServerResponse::Create(ReplyJson(GetGameInstance(), Out), TEXT("application/json")));
 	return true;
 }
 
@@ -468,8 +522,11 @@ bool UCLAgentBridgeSubsystem::HandleRespawn(const FHttpServerRequest& Request, c
 		return true;
 	}
 
+	TSharedPtr<FJsonObject> Probe = MakeShared<FJsonObject>();
+	NoteAgentHttp(GetGameInstance(), Request, Probe);
+
 	FGuid SeatId;
-	if (UCLRemoteAgentPlaybook* Motor = ResolveMotor(SeatId))
+	if (UCLRemoteAgentSeatMotor* Motor = ResolveMotor(SeatId))
 	{
 		Motor->CancelMotor();
 		if (ACLPlayerCharacter* Char = ResolvePawnForSeat(SeatId))
@@ -507,6 +564,7 @@ bool UCLAgentBridgeSubsystem::HandleDirector(const FHttpServerRequest& Request, 
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::BadRequest, TEXT("invalid_json")));
 		return true;
 	}
+	NoteAgentHttp(GetGameInstance(), Request, Root);
 	FString Action = CLAgentCodec::JsonStr(Root, TEXT("action")).ToLower();
 	if (Action.IsEmpty())
 	{
@@ -540,23 +598,14 @@ bool UCLAgentBridgeSubsystem::HandleDirector(const FHttpServerRequest& Request, 
 		Entered->SetStringField(TEXT("action"), TEXT("enter"));
 		Entered->SetBoolField(TEXT("enteringSocial"), true);
 		FCLAgentStateSerializer::FillSceneMenu(Entered, GetGameInstance(), FindLocalController());
-		OnComplete(FHttpServerResponse::Create(CLAgentCodec::JsonToString(Entered), TEXT("application/json")));
+		OnComplete(FHttpServerResponse::Create(ReplyJson(GetGameInstance(), Entered), TEXT("application/json")));
 		return true;
 	}
 
 	ACLPlayerController* PC = Cast<ACLPlayerController>(FindLocalController());
 	const TSharedRef<FJsonObject> Out = FCLDirectorCommandRegistry::Dispatch(GetGameInstance(), PC, Action, &AgentSeatId);
-	if (!Out->GetBoolField(TEXT("ok")))
-	{
-		FString Error = CLAgentCodec::JsonStr(Out, TEXT("error"), TEXT("director_failed"));
-		const EHttpServerResponseCodes Code = Error == TEXT("unknown_action")
-			? EHttpServerResponseCodes::BadRequest
-			: EHttpServerResponseCodes::NotFound;
-		OnComplete(FHttpServerResponse::Error(Code, *Error));
-		return true;
-	}
 	FCLAgentStateSerializer::FillSceneMenu(Out, GetGameInstance(), PC);
-	OnComplete(FHttpServerResponse::Create(CLAgentCodec::JsonToString(Out), TEXT("application/json")));
+	OnComplete(FHttpServerResponse::Create(ReplyJson(GetGameInstance(), Out), TEXT("application/json")));
 	return true;
 }
 
@@ -582,8 +631,33 @@ bool UCLAgentBridgeSubsystem::HandleHub(const FHttpServerRequest& Request, const
 		OnComplete(FHttpServerResponse::Error(EHttpServerResponseCodes::BadRequest, TEXT("invalid_json")));
 		return true;
 	}
+	NoteAgentHttp(GetGameInstance(), Request, Root);
 
-	const TSharedRef<FJsonObject> Out = FCLHubCommandRegistry::Dispatch(Lobby, Root, &AgentSeatId);
-	OnComplete(FHttpServerResponse::Create(CLAgentCodec::JsonToString(Out), TEXT("application/json")));
+	CLHubDriveTrace::StampListen(Root, static_cast<int32>(Port), TEXT("http"));
+	const FCLHubConnect Connect = CLHubIngress::Parse(
+		Root,
+		HttpHeader(Request, TEXT("Calling-Connect-Mode")).IsEmpty()
+			? HttpHeader(Request, TEXT("X-Calling-Connect-Mode"))
+			: HttpHeader(Request, TEXT("Calling-Connect-Mode")),
+		HttpHeader(Request, TEXT("Calling-Target-Instance")).IsEmpty()
+			? HttpHeader(Request, TEXT("X-Calling-Target-Instance"))
+			: HttpHeader(Request, TEXT("Calling-Target-Instance")),
+		Request.QueryParams.Find(TEXT("connectMode")) ? *Request.QueryParams.Find(TEXT("connectMode")) : FString(),
+		Request.QueryParams.Find(TEXT("targetInstance")) ? *Request.QueryParams.Find(TEXT("targetInstance")) : FString());
+	if (Connect.bProxy)
+	{
+		if (Lobby->TryRouteHubProxy(Root, Connect.TargetInstance, Connect.ViaSeat, [OnComplete](FString Json)
+		{
+			OnComplete(FHttpServerResponse::Create(MoveTemp(Json), TEXT("application/json")));
+		}))
+		{
+			return true;
+		}
+	}
+
+	Lobby->IngressLocalHub(Root, &AgentSeatId, [this, OnComplete](FString Json)
+	{
+		OnComplete(FHttpServerResponse::Create(MoveTemp(Json), TEXT("application/json")));
+	});
 	return true;
 }

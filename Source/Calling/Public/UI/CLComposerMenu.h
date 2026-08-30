@@ -10,6 +10,7 @@ class UVerticalBox;
 class UTextBlock;
 class UButton;
 class UBorder;
+class UComboBoxString;
 
 /** Composer-scene menu: seats, local Ready (host or guest), host Start. Hub ready/go is the net twin. */
 UCLASS()
@@ -40,6 +41,12 @@ public:
 
 	UFUNCTION()
 	void HandleJoinBlueClicked();
+
+	UFUNCTION()
+	void HandleVirtualHostClicked();
+
+	UFUNCTION()
+	void HandleVirtualJoinClicked();
 
 protected:
 	void BuildWidgetTree();
@@ -80,6 +87,15 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UButton> BlueButton;
+
+	UPROPERTY()
+	TObjectPtr<UButton> VirtualHostButton;
+
+	UPROPERTY()
+	TObjectPtr<UButton> VirtualJoinButton;
+
+	UPROPERTY()
+	TObjectPtr<UComboBoxString> JoinSourceCombo;
 
 	float RefreshAccum = 0.f;
 	FTimerHandle RefreshTimer;

@@ -5,6 +5,7 @@
 #include "Game/CLLobbyTypes.h"
 #include "Game/CLAgentSequenceRunner.h"
 #include "Dom/JsonObject.h"
+#include "TimerManager.h"
 #include "CLLobbySubsystem.generated.h"
 
 class UCLParticipantSeat;
@@ -13,8 +14,10 @@ class UCLSeatRegistry;
 class UCLGateCountdown;
 class UCLTravelCoordinator;
 class ACLPlayerCharacter;
+class ACLPlayerController;
 class APawn;
 class AController;
+class APlayerController;
 class AActor;
 
 /**
@@ -69,6 +72,11 @@ public:
 	TArray<UCLParticipantSeat*> GetSeats() const;
 
 	UCLParticipantSeat* EnsureLocalHumanSeat();
+	UCLParticipantSeat* EnsureNetHumanSeat(APlayerController* PC);
+	void RemoveSeatForController(AController* Controller);
+	void PushLobbyToGameState();
+	bool SetReadyForController(APlayerController* PC, bool bReady);
+	bool SetTeamForController(APlayerController* PC, ECLPvpTeam Team);
 	UCLParticipantSeat* JoinRemoteAgent(const FString& DisplayName, bool bHeadless, FString& OutError, const FString& Kind = TEXT("remoteAgent"));
 	bool SetReady(const FGuid& SeatId, bool bReady);
 	bool ToggleLocalReady();
@@ -85,6 +93,18 @@ public:
 	void StampRosterOntoInvoice();
 	void RestoreBodiesAfterTravel();
 	void NotifyHubSnapshots(ECLHubSnapshotReason Reason, const FGuid& OnlySeat = FGuid());
+
+	/** Net client: local human + cursor driving this process's pawn. */
+	void PrepareGuestLocalHub(FGuid* FallbackSeat);
+
+	/** Shared guest/host MCP front: instance gate + Dispatch + stamp. HTTP 18767 and via land here. */
+	void IngressLocalHub(const TSharedPtr<FJsonObject>& Root, FGuid* FallbackSeat, TFunction<void(FString)> OnDone);
+
+	/** Host connectMode=proxy (or legacy via seat): Client-RPC into guest IngressLocalHub. */
+	bool TryRouteHubProxy(const TSharedPtr<FJsonObject>& Root, const FGuid& TargetInstance, const FGuid& ViaSeat, TFunction<void(FString)> OnDone);
+	ACLPlayerController* FindHubProxyTarget(const FGuid& TargetInstance, const FGuid& ViaSeat, FString& OutError) const;
+	void HandleIncomingViaHub(const FString& Json, int32 CorrelationId, ACLPlayerController* ReplyTo);
+	void CompleteHubVia(int32 CorrelationId, const FString& Json);
 
 	TSharedRef<FJsonObject> HandleMessage(const TSharedPtr<FJsonObject>& Root);
 	void FillStateJson(const TSharedRef<FJsonObject>& Root) const;
@@ -125,4 +145,12 @@ protected:
 	TWeakObjectPtr<APawn> LastDemoViewPawn;
 
 	FDelegateHandle NetTickHandle;
+
+	struct FHubViaPending
+	{
+		TFunction<void(FString)> OnDone;
+		FTimerHandle Timeout;
+	};
+	TMap<int32, FHubViaPending> HubViaPending;
+	int32 NextHubViaId = 1;
 };

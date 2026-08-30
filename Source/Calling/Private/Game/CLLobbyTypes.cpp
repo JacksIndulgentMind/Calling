@@ -15,6 +15,7 @@ FCLLobbyInvoice FCLLobbyInvoice::MakeComposerPvp(int32 MinPlayers, int32 MaxPlay
 {
 	FCLLobbyInvoice Invoice;
 	Invoice.Activity = ECLSceneId::Composer;
+	Invoice.GameModeId = FName(TEXT("shrine_clash"));
 	Invoice.MinPlayers = FMath::Max(2, MinPlayers);
 	Invoice.MaxPlayers = FMath::Max(Invoice.MinPlayers, MaxPlayers);
 	Invoice.Access = ECLLobbyAccess::Open;
@@ -25,6 +26,7 @@ FCLLobbyInvoice FCLLobbyInvoice::MakePvp(int32 MinPlayers, int32 MaxPlayers)
 {
 	FCLLobbyInvoice Invoice;
 	Invoice.Activity = ECLSceneId::Pvp;
+	Invoice.GameModeId = FName(TEXT("shrine_clash"));
 	Invoice.MinPlayers = FMath::Max(1, MinPlayers);
 	Invoice.MaxPlayers = FMath::Max(Invoice.MinPlayers, MaxPlayers);
 	Invoice.Access = ECLLobbyAccess::Open;

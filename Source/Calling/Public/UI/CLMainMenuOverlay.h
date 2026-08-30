@@ -11,6 +11,7 @@ class UCanvasPanel;
 class UVerticalBox;
 class UCLDirectorPanel;
 class UCLKeybindEditor;
+class UComboBoxString;
 
 /**
  * Director + keybinds overlay. I / Esc / F1 / Start (not remappable). Activities from here; remaps save immediately.
@@ -114,6 +115,12 @@ protected:
 	void HandleHostSocialClosedClicked();
 
 	UFUNCTION()
+	void HandleVirtualHostClicked();
+
+	UFUNCTION()
+	void HandleVirtualJoinClicked();
+
+	UFUNCTION()
 	void HandleExitSocialClicked();
 
 	UFUNCTION()
@@ -151,4 +158,7 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> KeybindsBox;
+
+	UPROPERTY()
+	TObjectPtr<UComboBoxString> LoopbackJoinCombo;
 };

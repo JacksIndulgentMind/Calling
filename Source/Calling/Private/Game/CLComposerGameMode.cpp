@@ -6,6 +6,9 @@
 #include "Game/CLGreyboxFloors.h"
 #include "Core/CLLog.h"
 #include "UI/CLComposerMenu.h"
+#include "Game/CLLoopbackJoin.h"
+#include "Game/CLParticipantSeat.h"
+#include "Player/CLPlayerController.h"
 #include "GameFramework/PlayerStart.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/Engine.h"
@@ -34,6 +37,38 @@ void ACLComposerGameMode::HandleStartingNewPlayer_Implementation(APlayerControll
 	EnsureComposerGreybox();
 	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 	EnsureComposerGreybox();
+	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
+	{
+		if (UCLParticipantSeat* Seat = Lobby->EnsureNetHumanSeat(NewPlayer))
+		{
+			if (NewPlayer && !NewPlayer->IsLocalController() && !Seat->IsReady())
+			{
+				Lobby->SetReady(Seat->GetSeatId(), true);
+			}
+		}
+	}
+	if (ACLPlayerController* PC = Cast<ACLPlayerController>(NewPlayer))
+	{
+		PC->EnsureComposerMenu();
+	}
+}
+
+void ACLComposerGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
+	{
+		Lobby->EnsureNetHumanSeat(NewPlayer);
+	}
+}
+
+void ACLComposerGameMode::Logout(AController* Exiting)
+{
+	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
+	{
+		Lobby->RemoveSeatForController(Exiting);
+	}
+	Super::Logout(Exiting);
 }
 
 AActor* ACLComposerGameMode::ChoosePlayerStart_Implementation(AController* Player)
@@ -53,29 +88,9 @@ void ACLComposerGameMode::ShowComposerMenu()
 		GEngine->AddOnScreenDebugMessage(99202, 60.f, FColor::Cyan, TEXT("Compose PvP"));
 	}
 
-	if (ComposerMenu)
+	if (ACLPlayerController* PC = Cast<ACLPlayerController>(GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr))
 	{
-		return;
-	}
-
-	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	if (!PC || !PC->IsLocalController())
-	{
-		return;
-	}
-
-	ComposerMenu = CreateWidget<UCLComposerMenu>(PC, UCLComposerMenu::StaticClass());
-	if (ComposerMenu)
-	{
-		ComposerMenu->AddToViewport(25);
-		PC->bShowMouseCursor = true;
-		PC->bEnableClickEvents = true;
-		PC->bEnableMouseOverEvents = true;
-		FInputModeGameAndUI Mode;
-		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		Mode.SetHideCursorDuringCapture(false);
-		Mode.SetWidgetToFocus(ComposerMenu->TakeWidget());
-		PC->SetInputMode(Mode);
+		PC->EnsureComposerMenu();
 	}
 }
 
@@ -89,6 +104,14 @@ void ACLComposerGameMode::StartPlay()
 	if (UCLLobbySubsystem* Lobby = GetGameInstance()->GetSubsystem<UCLLobbySubsystem>())
 	{
 		Lobby->BeginComposerScene();
+		if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+		{
+			Lobby->EnsureNetHumanSeat(PC);
+		}
+	}
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_ListenServer)
+	{
+		CLLoopbackJoin::WriteBeacon(GetWorld());
 	}
 	UE_LOG(LogCalling, Display, TEXT("Calling: composer scene live"));
 

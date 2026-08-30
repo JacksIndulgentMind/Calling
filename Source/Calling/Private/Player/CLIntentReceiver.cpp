@@ -59,6 +59,18 @@ void UCLIntentReceiver::ApplyAgentIntent(FVector2D MoveXY, FVector2D LookDelta, 
 	ApplyAgentIntent(Intent);
 }
 
+void UCLIntentReceiver::LatchWhileHolds(bool bADS, bool bFire)
+{
+	if (bADS)
+	{
+		bAgentADS = true;
+	}
+	if (bFire)
+	{
+		bAgentFire = true;
+	}
+}
+
 void UCLIntentReceiver::ClearAgentIntent()
 {
 	AgentMove = FVector2D::ZeroVector;

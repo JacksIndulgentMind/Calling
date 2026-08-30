@@ -1,0 +1,9 @@
+@startuml peek_fire
+start
+:fire;
+note right
+  while: trackFocus, maintainADS
+  fail.timeout: 0.7
+end note
+stop
+@enduml

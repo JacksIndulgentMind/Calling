@@ -1,6 +1,8 @@
 #include "Game/CLSessionSubsystem.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLLobbySubsystem.h"
+#include "Game/CLLoopbackJoin.h"
+#include "Game/CLSceneRouter.h"
 #include "OnlineSubsystem.h"
 #include "OnlineSessionSettings.h"
 #include "Kismet/GameplayStatics.h"
@@ -134,9 +136,73 @@ void UCLSessionSubsystem::TravelToMapAsListenServer(const FString& MapName)
 {
 	if (UWorld* World = GetWorld())
 	{
-		const FString URL = MapName + TEXT("?listen");
+		FString URL = MapName;
+		if (!URL.Contains(TEXT("listen"), ESearchCase::IgnoreCase))
+		{
+			URL += TEXT("?listen");
+		}
 		World->ServerTravel(URL, true);
 	}
+}
+
+bool UCLSessionSubsystem::StartComposerLoopbackHost()
+{
+	UGameInstance* GI = GetGameInstance();
+	UCLLobbySubsystem* Lobby = GI ? GI->GetSubsystem<UCLLobbySubsystem>() : nullptr;
+	UCLSceneRouter* Router = GI ? GI->GetSubsystem<UCLSceneRouter>() : nullptr;
+	if (!Lobby || !Router)
+	{
+		OnSessionEvent.Broadcast(false, TEXT("no_lobby"));
+		return false;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (World->GetNetMode() == NM_Client)
+		{
+			OnSessionEvent.Broadcast(false, TEXT("already_client"));
+			return false;
+		}
+		if (World->GetNetMode() == NM_ListenServer)
+		{
+			CLLoopbackJoin::WriteBeacon(World);
+			OnSessionEvent.Broadcast(true, TEXT("Already listen; beacon refreshed."));
+			return true;
+		}
+	}
+	int32 MaxPlayers = 8;
+	GConfig->GetInt(TEXT("/Script/Calling.CLSessionSettings"), TEXT("MaxLobbyPlayers_Pvp"), MaxPlayers, GGameIni);
+	Lobby->SetPendingInvoice(FCLLobbyInvoice::MakeComposerPvp(2, MaxPlayers));
+	Lobby->ClaimLocalHost();
+	const FString Map = Router->GetMapNameForScene(ECLSceneId::Composer);
+	PendingTravelMap = FString::Printf(TEXT("%s?game=/Script/Calling.CLComposerGameMode"), *Map);
+	HostedActivity = ECLSceneId::Composer;
+	bIsHosting = true;
+	CLLoopbackJoin::AppendLog(TEXT("virtual host composer listen"));
+	TravelToMapAsListenServer(PendingTravelMap);
+	OnSessionEvent.Broadcast(true, TEXT("Loopback composer listen."));
+	return true;
+}
+
+bool UCLSessionSubsystem::JoinLoopback(const FString& Selected)
+{
+	UWorld* World = GetWorld();
+	if (World && (World->GetNetMode() == NM_ListenServer || World->GetNetMode() == NM_DedicatedServer))
+	{
+		OnSessionEvent.Broadcast(false, TEXT("already_host"));
+		return false;
+	}
+	APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+	if (!PC)
+	{
+		OnSessionEvent.Broadcast(false, TEXT("no_pc"));
+		return false;
+	}
+	const FString Connect = CLLoopbackJoin::ResolveConnect(Selected);
+	bJoinReadyPending = true;
+	CLLoopbackJoin::AppendLog(FString::Printf(TEXT("virtual join %s"), *Connect));
+	PC->ClientTravel(Connect, TRAVEL_Absolute);
+	OnSessionEvent.Broadcast(true, FString::Printf(TEXT("Joining %s"), *Connect));
+	return true;
 }
 
 bool UCLSessionSubsystem::FindSessions(ECLSceneId ActivityFilter)
@@ -277,5 +343,6 @@ void UCLSessionSubsystem::HandleDestroySessionComplete(FName SessionName, bool b
 		Sessions->ClearOnDestroySessionCompleteDelegate_Handle(DestroyCompleteHandle);
 	}
 	bIsHosting = false;
+	CLLoopbackJoin::ClearBeacon();
 	OnSessionEvent.Broadcast(bWasSuccessful, TEXT("Session destroyed."));
 }

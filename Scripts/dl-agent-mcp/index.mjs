@@ -7,12 +7,28 @@
 import http from "node:http";
 import readline from "node:readline";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const HOST = "127.0.0.1";
-const PORT = Number(process.env.DL_AGENT_PORT || 18765);
+function resolveAgentPort() {
+  const url = process.env.CALLING_AGENT_HTTP;
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.port) return Number(parsed.port);
+    } catch {
+      /* fall through */
+    }
+  }
+  return Number(process.env.DL_AGENT_PORT || 18765);
+}
+const PORT = resolveAgentPort();
+const CONNECT_MODE = (process.env.CALLING_CONNECT_MODE || "local").toLowerCase();
+const TARGET_INSTANCE = process.env.CALLING_TARGET_INSTANCE || "";
+let instanceId = "";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = process.env.DL_REPO || path.resolve(HERE, "../..");
 const EDITOR =
@@ -22,19 +38,48 @@ const UPROJECT =
   process.env.DL_UPROJECT || path.join(REPO, "Calling.uproject");
 const PLAY_PY = path.join(REPO, "Scripts", "dl-editor-play.py");
 
+function rememberInstance(data) {
+  if (data && typeof data === "object" && data.instanceId) {
+    instanceId = data.instanceId;
+  }
+}
+
 function request(method, pathname, body, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
-    const payload = body ? Buffer.from(JSON.stringify(body)) : null;
+    const payloadObj =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? { ...body, agentId: body.agentId || AGENT_ID }
+        : body;
+    let pathWithAgent = pathname;
+    if (!/[?&]agentId=/.test(pathWithAgent)) {
+      pathWithAgent += (pathWithAgent.includes("?") ? "&" : "?") + `agentId=${encodeURIComponent(AGENT_ID)}`;
+    }
+    const payload = payloadObj ? Buffer.from(JSON.stringify(payloadObj)) : null;
+    const isHub = pathname === "/hub" || pathname.startsWith("/hub?");
+    const connectMode = isHub
+      ? String(payloadObj?.connectMode || CONNECT_MODE || "local").toLowerCase()
+      : "local";
+    const targetInstance = isHub
+      ? String(payloadObj?.targetInstance || payloadObj?.targetInstanceId || TARGET_INSTANCE || "")
+      : "";
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Calling-Agent-Id": AGENT_ID,
+      ...(payload ? { "Content-Length": payload.length } : {}),
+    };
+    if (isHub) {
+      headers["Calling-Connect-Mode"] = connectMode;
+      if (connectMode === "proxy" || connectMode === "via") {
+        if (targetInstance) headers["Calling-Target-Instance"] = targetInstance;
+      }
+    }
     const req = http.request(
       {
         host: HOST,
         port: PORT,
-        path: pathname,
+        path: pathWithAgent,
         method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(payload ? { "Content-Length": payload.length } : {}),
-        },
+        headers,
       },
       (res) => {
         const chunks = [];
@@ -42,7 +87,9 @@ function request(method, pathname, body, timeoutMs = 8000) {
         res.on("end", () => {
           const text = Buffer.concat(chunks).toString("utf8");
           try {
-            resolve(JSON.parse(text));
+            const parsed = JSON.parse(text);
+            rememberInstance(parsed);
+            resolve(parsed);
           } catch {
             resolve({ raw: text, status: res.statusCode });
           }
@@ -101,6 +148,65 @@ function launchUnreal(mode) {
   return { pid: child.pid, args };
 }
 
+async function waitForScene(want, ms) {
+  const until = Date.now() + ms;
+  let state = null;
+  while (Date.now() < until) {
+    state = (await probeState()) || state;
+    if (state?.scene === want) return state;
+    await sleep(400);
+  }
+  return state;
+}
+
+async function waitForNavTiles(ms) {
+  const until = Date.now() + ms;
+  let state = null;
+  while (Date.now() < until) {
+    state = (await probeState()) || state;
+    if (Number(state?.navTiles) > 0) return state;
+    await sleep(400);
+  }
+  return state;
+}
+
+/** Race Compose PvP lobby into the match (minPlayers=2). Same path as dl-rebuild.ps1. */
+async function completeComposerIntoMatch() {
+  await request("POST", "/director", { action: "host" });
+  let state = await probeState();
+  if (!state?.lobby?.localHost) {
+    throw new Error("composer localHost false after host");
+  }
+  await request("POST", "/director", { action: "ready" });
+  await sleep(200);
+  state = await probeState();
+  const hostSeat = (state?.lobby?.seatList || []).find((s) => s.host);
+  if (!hostSeat?.ready) {
+    throw new Error("composer host ready did not stick");
+  }
+  const joinB = await request("POST", "/hub", {
+    type: "join",
+    displayName: "bootB",
+    headless: true,
+    kind: "cursor",
+  });
+  const seatB = joinB.seatId;
+  if (!seatB) throw new Error("composer guest join failed");
+  await request("POST", "/hub", { type: "setTeam", seatId: seatB, team: "blue" });
+  await request("POST", "/hub", { type: "ready", seatId: seatB, ready: true });
+  await sleep(200);
+  state = await probeState();
+  if (Number(state?.lobby?.ready) < 2) {
+    throw new Error(`composer expected 2 ready, got ${state?.lobby?.ready}`);
+  }
+  await request("POST", "/director", { action: "go" });
+  state = await waitForScene("pvp", 30000);
+  if (state?.scene !== "pvp") {
+    throw new Error(`composer go did not reach pvp scene=${state?.scene}`);
+  }
+  return waitForNavTiles(45000);
+}
+
 async function boot(args) {
   const mode = (args.mode || "game").toLowerCase();
   const activity = (args.activity || "pvp").toLowerCase();
@@ -134,31 +240,53 @@ async function boot(args) {
       state = (await probeState()) || state;
     }
   }
-  if (activity && activity !== "none") {
-    try {
-      await request("POST", "/director", { action: activity });
-    } catch (err) {
-      return { ok: false, error: String(err.message || err), launched, state };
-    }
-    const until = Date.now() + 25000;
-    while (Date.now() < until) {
-      await sleep(1000);
-      state = (await probeState()) || state;
-      const scene = state?.scene;
-      if (scene === activity) break;
-      if (activity === "pvp" && (scene === "composer" || scene === "pvp")) break;
-      if (activity === "composer" && scene === "composer") break;
-      if (activity === "arena" && scene === "pvp") break;
-    }
+  if (!activity || activity === "none") {
+    return { ok: true, launched, ...spawnInfo, state };
   }
-  return { ok: true, launched, ...spawnInfo, state };
+  try {
+    if (activity === "composer") {
+      await request("POST", "/director", { action: "pvp" });
+      state = await waitForScene("composer", 45000);
+      return { ok: true, launched, ...spawnInfo, state };
+    }
+    if (activity === "arena") {
+      await request("POST", "/director", { action: "arena" });
+      state = await waitForScene("pvp", 60000);
+      if (state?.scene === "pvp") state = await waitForNavTiles(45000);
+      return { ok: true, launched, ...spawnInfo, state };
+    }
+    if (activity === "pvp") {
+      await request("POST", "/director", { action: "pvp" });
+      state = await waitForScene("composer", 45000);
+      if (state?.scene === "pvp") {
+        state = await waitForNavTiles(45000);
+        return { ok: true, launched, ...spawnInfo, state };
+      }
+      if (state?.scene !== "composer") {
+        return {
+          ok: false,
+          error: `expected composer after pvp, got ${state?.scene}`,
+          launched,
+          ...spawnInfo,
+          state,
+        };
+      }
+      state = await completeComposerIntoMatch();
+      return { ok: true, launched, ...spawnInfo, state };
+    }
+    await request("POST", "/director", { action: activity });
+    state = await waitForScene(activity, 45000);
+    return { ok: true, launched, ...spawnInfo, state };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err), launched, ...spawnInfo, state: await probeState() };
+  }
 }
 
 const tools = [
   {
     name: "state",
     description:
-      "Read a Calling pawn and scene. Pass seat to sample that hub seat's driven pawn (GET /state?seat=). Omit seat for the listen-server / last-joined pawn. PIE or -game must be running.",
+      "Read a Calling pawn and scene. Pass seat to sample that hub seat's driven pawn (GET /state?seat=). Omit seat for the listen-server / last-joined pawn. After appendBotBook, throw if botBook.followAlert / executionError / followed=false — do not wait for modeResult. PIE or -game must be running.",
     inputSchema: {
       type: "object",
       properties: {
@@ -169,7 +297,7 @@ const tools = [
   {
     name: "intent",
     description:
-      "No-lobby motor: drive the HTTP singleton pawn and abort its sequence/goto. Prefer hub plan/goto with a seat. Empty {} releases the stick.",
+      "No-lobby motor: drive the HTTP singleton pawn and abort its sequence/goto. Loopback only. Do not use when a lobby seat exists — hub appendBotBook. Empty {} releases the stick.",
     inputSchema: {
       type: "object",
       properties: {
@@ -201,7 +329,7 @@ const tools = [
   {
     name: "hold",
     description:
-      "No-lobby: queue one timed hold on the HTTP singleton (30 Hz). Prefer hub plan with a seat when a lobby exists.",
+      "No-lobby: queue one timed hold on the HTTP singleton (30 Hz). Loopback only. Do not use when a lobby seat exists — hub appendBotBook.",
     inputSchema: {
       type: "object",
       properties: {
@@ -236,7 +364,7 @@ const tools = [
   {
     name: "sequence",
     description:
-      "No-lobby: queue timed steps on the HTTP singleton. Prefer hub plan with a seat when a lobby exists.",
+      "No-lobby: queue timed steps on the HTTP singleton. Loopback only. Do not use when a lobby seat exists — hub appendBotBook.",
     inputSchema: {
       type: "object",
       properties: {
@@ -279,7 +407,7 @@ const tools = [
   {
     name: "goto",
     description:
-      "No-lobby Recast follow on the HTTP singleton pawn. Prefer hub type goto with seatId when a lobby exists. Cancelled by intent or sequence.",
+      "No-lobby Recast follow on the HTTP singleton pawn. Loopback only. Do not use when a lobby seat exists — hub appendBotBook (JIT puml goto, or catalog marker). Cancelled by intent or sequence.",
     inputSchema: {
       type: "object",
       properties: {
@@ -299,7 +427,7 @@ const tools = [
   {
     name: "director",
     description:
-      "I-menu overlay + composer HUD twins. action: open, close, toggle, director, keybinds, pvp/composer (Compose PvP), host, guest, ready, go/start, arena (solo skip), raid, practice, social. Remote join/ready/go/goto/mindControl are hub.",
+      "I-menu overlay + composer HUD twins. action: open, close, toggle, director, keybinds, pvp/composer (Compose PvP), host, guest, ready, go/start, arena (solo skip), raid, practice, social. Remote join/ready/go/appendBotBook/mindControl are hub.",
     inputSchema: {
       type: "object",
       properties: {
@@ -314,22 +442,31 @@ const tools = [
   {
     name: "hub",
     description:
-      "Session hub (same codec as ws://127.0.0.1:18766). Drive pawns here: join headless (kind cursor by default), mindControl, setTeam, ready, go, plan, goto, subscribe. Loopback POST /hub.",
+      "Session hub (same codec as ws://127.0.0.1:18766). This MCP sends agentId on every call. Anytime you drive a pawn, use appendBotBook / branchBotBook. join headless is an anchor only (kind cursor by default); then mindControl. connectMode=proxy on host 18765 forwards into the guest hub (same as POST 18767). GET /state stays local (replication probe). POST /hub.",
     inputSchema: {
       type: "object",
       properties: {
-        type: { type: "string", description: "join | subscribe | ready | go | mindControl | setTeam | plan | goto" },
+        type: { type: "string", description: "join | subscribe | ready | go | mindControl | setTeam | appendBotBook | branchBotBook | view | plan | goto" },
+        agentId: { type: "string", description: "Connecting agent UUID (this MCP fills it). Game instanceId is in every reply." },
         displayName: { type: "string" },
         headless: { type: "boolean" },
         kind: { type: "string", description: "cursor (default on this MCP) | remoteAgent | algorithmic" },
         seatId: { type: "string" },
+        connectMode: { type: "string", description: "local (this instance) or proxy (host 18765 forwards to guest ingress). Env CALLING_CONNECT_MODE." },
+        targetInstance: { type: "string", description: "Guest instanceId when connectMode=proxy. Optional two-box shortcut: omit if only one guest. Env CALLING_TARGET_INSTANCE." },
+        requestorId: { type: "string", description: "Input owner UUID (this MCP fills agentId as requestor if omitted)." },
         targetSeatId: { type: "string" },
         team: { type: "string", description: "red | blue | unassigned" },
         ready: { type: "boolean" },
+        botBook: { type: "string", description: "Catalog BotBook name (appendBotBook / branchBotBook)" },
+        puml: { type: "string", description: "JIT PlantUML body (restricted subset). xyz goto allowed only here." },
+        cause: { type: "string", description: "branchBotBook required: execution (bot failed the book) or situation (combat/personality/world). Aliases: failure/fail; combat/personality/strategic." },
+        afterId: { type: "string", description: "branchBotBook: node id to replace from" },
+        offset: { type: "number", description: "branchBotBook: remaining-walk offset" },
         x: { type: "number" },
         y: { type: "number" },
         z: { type: "number" },
-        replaceFrom: { type: "string", description: "now, afterCurrent, or remainder" },
+        replaceFrom: { type: "string", description: "now, afterCurrent, or remainder (loopback plan)" },
         steps: { type: "array", items: { type: "object" } },
       },
       required: ["type"],
@@ -338,7 +475,7 @@ const tools = [
   {
     name: "boot",
     description:
-      "If 18765 is down, spawn UnrealEditor (standalone -game by default, or editor+PIE). Then POST /director for activity (pvp default). Does not kill an existing editor.",
+      "If 18765 is down, spawn UnrealEditor (standalone -game by default, or editor+PIE). Then director activity: pvp (default) races Compose lobby into the match; composer stops in lobby; arena is solo skip.",
     inputSchema: {
       type: "object",
       properties: {
@@ -348,7 +485,7 @@ const tools = [
         },
         activity: {
           type: "string",
-          description: "pvp/composer (Compose PvP, default), arena (solo skip), raid, practice, social, or none",
+          description: "pvp (Compose then auto Go into match, default), composer (stop in lobby), arena (solo skip), raid, practice, social, or none",
         },
         waitSeconds: { type: "number", description: "HTTP wait after spawn (default 90)" },
       },
@@ -387,6 +524,16 @@ async function callTool(name, args) {
     const body = { ...a };
     if (String(body.type || "").toLowerCase() === "join" && !body.kind) {
       body.kind = "cursor";
+    }
+    if (!body.requestorId) {
+      body.requestorId = AGENT_ID;
+    }
+    if (!body.connectMode && CONNECT_MODE) {
+      body.connectMode = CONNECT_MODE;
+    }
+    if ((String(body.connectMode || "").toLowerCase() === "proxy" || String(body.connectMode || "").toLowerCase() === "via")
+      && !body.targetInstance && !body.targetInstanceId && TARGET_INSTANCE) {
+      body.targetInstance = TARGET_INSTANCE;
     }
     return request("POST", "/hub", body);
   }

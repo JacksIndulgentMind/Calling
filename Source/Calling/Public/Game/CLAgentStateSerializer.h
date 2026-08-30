@@ -6,7 +6,7 @@
 class UGameInstance;
 class ACLPlayerCharacter;
 class APlayerController;
-class UCLRemoteAgentPlaybook;
+class UCLRemoteAgentSeatMotor;
 
 struct CALLING_API FCLAgentStateSerializer
 {
@@ -14,7 +14,7 @@ struct CALLING_API FCLAgentStateSerializer
 		UGameInstance* GI,
 		ACLPlayerCharacter* Char,
 		APlayerController* LocalPC,
-		const UCLRemoteAgentPlaybook* Remote,
+		const UCLRemoteAgentSeatMotor* Remote,
 		const FGuid& AgentSeatId,
 		const FGuid& ProbeSeat);
 

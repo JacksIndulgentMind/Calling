@@ -53,6 +53,10 @@ public:
 	bool TryAirDive();
 
 	void NotifyLanded();
+	void SetDivePinGravity(bool bPin);
+	/** Per-ring air-steer mul while diving. Negative = use Tune.AirDiveSteer. Does not change AirControl. */
+	void SetDiveAirSteer(float Mul);
+	float GetDiveElapsed() const { return DiveElapsed; }
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Movement")
 	bool TryMantle();
@@ -106,6 +110,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Calling|Movement")
 	float EstimateSlideTravelCm() const;
 
+	bool CanCommitSlideInDir(const FVector& Dir) const;
+
 	UFUNCTION(BlueprintPure, Category = "Calling|Movement")
 	float GetDodgeAlpha() const;
 
@@ -133,7 +139,6 @@ protected:
 	void BeginSlide();
 	float SlideSpeedAtAlpha(float Alpha) const;
 	void UpdateCrouchTransition(float DeltaTime);
-	bool CanCommitSlideInDir(const FVector& Dir) const;
 	bool HasFloorAt(const FVector& Loc) const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Movement")
@@ -154,6 +159,8 @@ private:
 	bool bDashing = false;
 	bool bDodging = false;
 	bool bDiving = false;
+	bool bDivePinGravity = false;
+	float DiveAirSteerMul = -1.f;
 	float SlideTimeRemaining = 0.f;
 	float SlideElapsed = 0.f;
 	float SlideEntrySpeed = 0.f;

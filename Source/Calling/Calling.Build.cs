@@ -7,7 +7,7 @@ public class Calling : ModuleRules
 	public Calling(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		bUseUnity = false;
+		bUseUnity = false; // each Calling cpp is its own TU
 
 		PublicDependencyModuleNames.AddRange(new string[]
 		{

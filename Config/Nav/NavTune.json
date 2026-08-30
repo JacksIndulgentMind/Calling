@@ -1,10 +1,12 @@
 {
-  "jumpApexCm": 400,
+  "jumpApexCm": 1580,
   "coverHeightCm": 140,
   "maxStepHeightCm": 70,
   "agentRadiusCm": 42,
   "agentHeightCm": 192,
   "agentMaxSlopeDeg": 55,
+  "airDiveSearchMaxCm": 0,
+  "areaCost": { "airDive": 50, "longJump": 25 },
   "probe": {
     "maxCm": 1800,
     "jumpableHeadClearCm": 500,
@@ -34,13 +36,13 @@
     },
     {
       "name": "DropDown",
-      "jumpLength": 280,
-      "jumpDistanceFromEdge": 25,
-      "jumpMaxDepth": "survivingDrop",
+      "jumpLength": 600,
+      "jumpDistanceFromEdge": 15,
+      "jumpMaxDepth": "strainFall",
       "jumpHeight": 10,
-      "jumpEndsHeightTolerance": "survivingDrop",
-      "samplingSeparationFactor": 2,
-      "filterDistanceThreshold": 180,
+      "jumpEndsHeightTolerance": 500,
+      "samplingSeparationFactor": 1,
+      "filterDistanceThreshold": 120,
       "downArea": "default",
       "upArea": "null"
     },
@@ -79,6 +81,30 @@
       "filterDistanceThreshold": 160,
       "downArea": "longJump",
       "upArea": "longJump"
+    },
+    {
+      "name": "AirDiveDown",
+      "jumpLength": 1508,
+      "jumpDistanceFromEdge": 20,
+      "jumpMaxDepth": "apexFallAbs",
+      "jumpHeight": "jumpApex",
+      "jumpEndsHeightTolerance": 2500,
+      "samplingSeparationFactor": 1,
+      "filterDistanceThreshold": 120,
+      "downArea": "airDive",
+      "upArea": "airDive"
+    },
+    {
+      "name": "AirDiveOver",
+      "jumpLength": 1508,
+      "jumpDistanceFromEdge": 20,
+      "jumpMaxDepth": "apexFallAbs",
+      "jumpHeight": "jumpApex",
+      "jumpEndsHeightTolerance": 2500,
+      "samplingSeparationFactor": 1,
+      "filterDistanceThreshold": 120,
+      "downArea": "airDive",
+      "upArea": "airDive"
     }
   ]
 }

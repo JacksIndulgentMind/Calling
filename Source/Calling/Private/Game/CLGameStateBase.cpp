@@ -4,6 +4,7 @@
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLLobbyTypes.h"
+#include "Core/CLLog.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
@@ -23,7 +24,20 @@ void ACLGameStateBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ACLGameStateBase, RaidChamberIndex);
 	DOREPLIFETIME(ACLGameStateBase, TeamAScore);
 	DOREPLIFETIME(ACLGameStateBase, TeamBScore);
+	DOREPLIFETIME(ACLGameStateBase, TeamAKills);
+	DOREPLIFETIME(ACLGameStateBase, TeamBKills);
+	DOREPLIFETIME(ACLGameStateBase, LiveShrine);
+	DOREPLIFETIME(ACLGameStateBase, bShrineHeldRed);
+	DOREPLIFETIME(ACLGameStateBase, bShrineHeldBlue);
+	DOREPLIFETIME(ACLGameStateBase, ModeResult);
+	DOREPLIFETIME(ACLGameStateBase, WinningTeam);
+	DOREPLIFETIME(ACLGameStateBase, ModeFailReason);
+	DOREPLIFETIME(ACLGameStateBase, MatchEvents);
 	DOREPLIFETIME(ACLGameStateBase, SeatScores);
+	DOREPLIFETIME(ACLGameStateBase, LobbySeats);
+	DOREPLIFETIME(ACLGameStateBase, LobbyReady);
+	DOREPLIFETIME(ACLGameStateBase, LobbyMinPlayers);
+	DOREPLIFETIME(ACLGameStateBase, bLobbyStartQueued);
 }
 
 void ACLGameStateBase::SetSceneId(ECLSceneId InSceneId)
@@ -48,6 +62,18 @@ void ACLGameStateBase::SetRaidChamberIndex(int32 Index)
 	{
 		RaidChamberIndex = Index;
 	}
+}
+
+void ACLGameStateBase::SetLobbySnapshot(const TArray<FCLLobbySeatSnap>& Seats, int32 Ready, int32 MinPlayers, bool bQueued)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	LobbySeats = Seats;
+	LobbyReady = Ready;
+	LobbyMinPlayers = MinPlayers;
+	bLobbyStartQueued = bQueued;
 }
 
 bool ACLGameStateBase::CanPlayersDamageEachOther() const
@@ -140,6 +166,18 @@ void ACLGameStateBase::RegisterTakeOut(AController* Killer, APawn* Victim, const
 		TeamAScore += 1.f;
 	}
 
+	if (HasAuthority())
+	{
+		if (KillTeam == ECLPvpTeam::Red)
+		{
+			++TeamAKills;
+		}
+		else if (KillTeam == ECLPvpTeam::Blue)
+		{
+			++TeamBKills;
+		}
+	}
+
 	for (AController* Assist : Assists)
 	{
 		if (!Assist || Assist == Killer)
@@ -191,6 +229,103 @@ void ACLGameStateBase::RegisterTakeOut(AController* Killer, APawn* Victim, const
 		}
 	}
 	(void)Victim;
+}
+
+void ACLGameStateBase::AddTeamFinalBlow(ECLPvpTeam Team)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (Team == ECLPvpTeam::Red)
+	{
+		++TeamAKills;
+	}
+	else if (Team == ECLPvpTeam::Blue)
+	{
+		++TeamBKills;
+	}
+	FCLMatchEvent E;
+	E.Code = TEXT("kill");
+	E.Detail = Team == ECLPvpTeam::Red ? TEXT("red") : TEXT("blue");
+	E.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	AppendMatchEvent(E);
+}
+
+void ACLGameStateBase::SetLiveShrine(FName Id)
+{
+	if (HasAuthority())
+	{
+		LiveShrine = Id;
+	}
+}
+
+void ACLGameStateBase::SetShrineHeld(ECLPvpTeam Team, bool bHeld)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (Team == ECLPvpTeam::Red)
+	{
+		const bool bWas = bShrineHeldRed;
+		bShrineHeldRed = bHeld;
+		if (bHeld && !bWas)
+		{
+			FCLMatchEvent E;
+			E.Code = TEXT("shrine_held");
+			E.Detail = TEXT("red");
+			E.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+			AppendMatchEvent(E);
+		}
+	}
+	else if (Team == ECLPvpTeam::Blue)
+	{
+		const bool bWas = bShrineHeldBlue;
+		bShrineHeldBlue = bHeld;
+		if (bHeld && !bWas)
+		{
+			FCLMatchEvent E;
+			E.Code = TEXT("shrine_held");
+			E.Detail = TEXT("blue");
+			E.Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+			AppendMatchEvent(E);
+		}
+	}
+}
+
+void ACLGameStateBase::SetModeOutcome(const FString& Result, const FString& Winner, const FString& FailReason)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	ModeResult = Result;
+	WinningTeam = Winner;
+	ModeFailReason = FailReason;
+}
+
+void ACLGameStateBase::AppendMatchEvent(const FCLMatchEvent& Event)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	MatchEvents.Add(Event);
+	while (MatchEvents.Num() > 48)
+	{
+		MatchEvents.RemoveAt(0);
+	}
+	UE_LOG(LogCalling, Display, TEXT("MatchEvent code=%s seat=%s book=%s loc=(%.0f,%.0f) %s"),
+		*Event.Code, *Event.Seat, *Event.Book, Event.X, Event.Y, *Event.Detail);
+}
+
+void ACLGameStateBase::ClearMatchEvents()
+{
+	if (HasAuthority())
+	{
+		MatchEvents.Reset();
+	}
 }
 
 FString ACLGameStateBase::GetScoreLine() const

@@ -1,0 +1,77 @@
+@startuml ring_lap
+floating note
+trySuccessFor: 2.0
+end note
+start
+if (qualify navTiles > 0) then (yes)
+  :setFocus focus=enemy;
+  :goto marker=menhir_0_approach;
+  note right
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 55
+  end note
+  :slide;
+  note right
+    move: strafe
+    while: trackFocus, fire
+    success: sliding
+    fail.timeout: 2.0
+  end note
+  :goto marker=menhir_2_approach;
+  note right
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :dodge;
+  note right
+    move: strafe
+    while: trackFocus
+    fail.timeout: 1.6
+  end note
+  :goto marker=menhir_4_approach;
+  note right
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :dash;
+  note right
+    move: strafe
+    while: trackFocus
+    fail.timeout: 1.6
+  end note
+  :goto marker=menhir_6_approach;
+  note right
+    success: distXY 450
+    goodEnough: distXY 1000
+    fail.timeout: 40
+  end note
+  :jump;
+  note right
+    move: strafe
+    while: trackFocus
+    pulses: 3
+    pulseGap: 0.12
+    success: air
+    fail.timeout: 1.6
+  end note
+  :airDive;
+  note right
+    move: strafe
+    while: trackFocus
+    success: diving
+    fail.timeout: 2.4
+  end note
+  :slide;
+  note right
+    move: strafe
+    while: trackFocus
+    success: sliding
+    fail.timeout: 2.0
+  end note
+else (skip)
+endif
+stop
+@enduml

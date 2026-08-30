@@ -32,6 +32,10 @@ struct CALLING_API FCLMovementTune
 	UPROPERTY() bool bAllowSlideDodgeCancel = true;
 	UPROPERTY() bool bAllowSlideDashCancel = true;
 	UPROPERTY() int32 MaxJumps = 3;
+	UPROPERTY() float JumpZVelocity = 640.f;
+	UPROPERTY() float DoubleJumpZVelocity = 560.f;
+	UPROPERTY() float AirControl = 0.35f;
+	UPROPERTY() float GravityZ = 980.f;
 	UPROPERTY() float DashCooldownSeconds = 4.f;
 	UPROPERTY() float DashDistance = 950.f;
 	UPROPERTY() float DashDuration = 0.32f;

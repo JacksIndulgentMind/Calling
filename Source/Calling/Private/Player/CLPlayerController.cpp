@@ -7,8 +7,17 @@
 #include "Player/CLAbilityLoadoutComponent.h"
 #include "UI/CLMainMenuOverlay.h"
 #include "UI/CLCombatHudWidget.h"
+#include "UI/CLComposerMenu.h"
 #include "Game/CLGameModeBase.h"
+#include "Game/CLGameStateBase.h"
 #include "Game/CLLobbySubsystem.h"
+#include "Game/CLHubDriveTrace.h"
+#include "Game/CLAgentCodec.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Game/CLParticipantSeat.h"
+#include "Game/CLSessionSubsystem.h"
 #include "Game/CLInputBindSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -16,7 +25,8 @@
 #include "Core/CLTypes.h"
 #include "InputCoreTypes.h"
 #include "Misc/ConfigCacheIni.h"
-#include "Engine/GameInstance.h"
+#include "Net/UnrealNetwork.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Engine/GameViewportClient.h"
 #include "ShowFlags.h"
 
@@ -48,7 +58,86 @@ void ACLPlayerController::BeginPlay()
 
 	EnsureCombatHud();
 	EnsureMainMenu();
+	EnsureComposerMenu();
 	RestoreLitView();
+	BindInstanceIdentity();
+}
+
+void ACLPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ACLPlayerController, ReplicatedInstanceId);
+}
+
+void ACLPlayerController::BindInstanceIdentity()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+	UGameInstance* GI = GetGameInstance();
+	UCLInstanceIdentitySubsystem* Id = GI ? GI->GetSubsystem<UCLInstanceIdentitySubsystem>() : nullptr;
+	if (!Id)
+	{
+		return;
+	}
+	DeviceRequestorId = Id->GetDeviceRequestorId();
+	if (HasAuthority())
+	{
+		ReplicatedInstanceId = Id->GetInstanceId();
+	}
+	else
+	{
+		ServerReportInstanceId(Id->GetInstanceId());
+	}
+}
+
+void ACLPlayerController::ServerReportInstanceId_Implementation(FGuid Id)
+{
+	ReplicatedInstanceId = Id;
+}
+
+void ACLPlayerController::ServerBotBookEvent_Implementation(const FString& Code, const FString& Detail, const FString& Seat, const FString& Book, float X, float Y, bool bFailMatch)
+{
+	UWorld* World = GetWorld();
+	if (!World || !HasAuthority())
+	{
+		return;
+	}
+	FCLMatchEvent E;
+	E.Code = Code;
+	E.Detail = Detail;
+	E.Seat = Seat;
+	E.Book = Book;
+	E.X = X;
+	E.Y = Y;
+	E.Time = World->GetTimeSeconds();
+	if (ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>())
+	{
+		GS->AppendMatchEvent(E);
+	}
+	if (bFailMatch)
+	{
+		if (ACLPvpGameMode* Pvp = World->GetAuthGameMode<ACLPvpGameMode>())
+		{
+			Pvp->FailBook(Code);
+		}
+	}
+}
+
+void ACLPlayerController::StampLocalDeviceRequestor()
+{
+	if (!DeviceRequestorId.IsValid() || !IsLocalController())
+	{
+		return;
+	}
+	UGameInstance* GI = GetGameInstance();
+	UCLLobbySubsystem* Lobby = GI ? GI->GetSubsystem<UCLLobbySubsystem>() : nullptr;
+	UCLParticipantSeat* Seat = Lobby ? Lobby->FindSeatForController(this) : nullptr;
+	if (Seat)
+	{
+		Seat->SetRequestorId(DeviceRequestorId);
+	}
 }
 
 void ACLPlayerController::RestoreLitView()
@@ -283,9 +372,170 @@ void ACLPlayerController::NativeLookPitch(float Value)
 	CurrentLook.Y -= Value;
 }
 
+void ACLPlayerController::EnsureComposerMenu()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	ECLSceneId Scene = ECLSceneId::Social;
+	if (UWorld* World = GetWorld())
+	{
+		if (const ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>())
+		{
+			Scene = GS->GetSceneId();
+		}
+		else if (const ACLGameModeBase* GM = Cast<ACLGameModeBase>(World->GetAuthGameMode()))
+		{
+			Scene = GM->GetSceneId();
+		}
+	}
+
+	if (Scene != ECLSceneId::Composer)
+	{
+		if (ComposerMenuInstance)
+		{
+			ComposerMenuInstance->RemoveFromParent();
+			ComposerMenuInstance = nullptr;
+			if (!(MainMenuInstance && MainMenuInstance->IsOverlayVisible()))
+			{
+				ApplyMenuInputMode(false);
+				ResetIgnoreInputFlags();
+			}
+		}
+		return;
+	}
+
+	if (ComposerMenuInstance)
+	{
+		return;
+	}
+
+	ComposerMenuInstance = CreateWidget<UCLComposerMenu>(this, UCLComposerMenu::StaticClass());
+	if (!ComposerMenuInstance)
+	{
+		return;
+	}
+	ComposerMenuInstance->AddToViewport(25);
+	bShowMouseCursor = true;
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
+	FInputModeGameAndUI Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	Mode.SetHideCursorDuringCapture(false);
+	Mode.SetWidgetToFocus(ComposerMenuInstance->TakeWidget());
+	SetInputMode(Mode);
+}
+
+void ACLPlayerController::ServerComposerReadyToggle_Implementation()
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			if (UCLParticipantSeat* Seat = Lobby->FindSeatForController(this))
+			{
+				Lobby->SetReady(Seat->GetSeatId(), !Seat->IsReady());
+			}
+			else
+			{
+				Lobby->SetReadyForController(this, true);
+			}
+		}
+	}
+}
+
+void ACLPlayerController::ServerComposerTeam_Implementation(ECLPvpTeam Team)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->SetTeamForController(this, Team);
+		}
+	}
+}
+
+void ACLPlayerController::ServerComposerReady_Implementation(bool bReady)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->SetReadyForController(this, bReady);
+		}
+	}
+}
+
+void ACLPlayerController::NoteHubReceive(int32 ListenPort, const FString& Recv, const FString& IntendedTarget)
+{
+	LastHubListenPort = ListenPort;
+	LastHubRecv = Recv;
+	LastHubIntendedTarget = IntendedTarget;
+	const APawn* Body = GetPawn();
+	const FCLHubDriveSnap& Snap = CLHubDriveTrace::Last();
+	UE_LOG(LogCallingHub, Display,
+		TEXT("PC HubRecv name=%s local=%d listenPort=%d recv=%s instance=%s agent=%s requestor=%s intended=%s pawnLocal=%d hasPawn=%d ignoreMove=%d ignoreLook=%d loc=(%.0f,%.0f,%.0f)"),
+		*GetName(), IsLocalController() ? 1 : 0, ListenPort, *Recv,
+		*Snap.InstanceId, *Snap.AgentId, *Snap.RequestorId, *IntendedTarget,
+		Body && Body->IsLocallyControlled() ? 1 : 0, Body ? 1 : 0,
+		IsMoveInputIgnored() ? 1 : 0, IsLookInputIgnored() ? 1 : 0,
+		Body ? Body->GetActorLocation().X : 0.f, Body ? Body->GetActorLocation().Y : 0.f,
+		Body ? Body->GetActorLocation().Z : 0.f);
+}
+
+void ACLPlayerController::ClientHubDispatch_Implementation(const FString& Json, int32 CorrelationId)
+{
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
+	if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+	{
+		CLHubDriveTrace::NotePlayerController(this, Root);
+	}
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->HandleIncomingViaHub(Json, CorrelationId, this);
+		}
+	}
+}
+
+void ACLPlayerController::ServerHubDispatchResult_Implementation(int32 CorrelationId, const FString& Json)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->CompleteHubVia(CorrelationId, Json);
+		}
+	}
+}
+
 void ACLPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+
+	if (IsLocalController())
+	{
+		EnsureComposerMenu();
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+			{
+				if (Sessions->IsLoopbackJoinPending())
+				{
+					UWorld* World = GetWorld();
+					if (World && World->GetNetMode() == NM_Client)
+					{
+						ServerComposerReady(true);
+						Sessions->ClearLoopbackJoinPending();
+					}
+				}
+			}
+		}
+	}
 
 	PollMenuKeys();
 
@@ -319,6 +569,10 @@ void ACLPlayerController::PushInputToPawn()
 			}
 		}
 		Char->AccumulateInput(CurrentMove, CurrentLook, bSprint, bCrouch, bADS, bFire);
+		if (!CurrentMove.IsNearlyZero())
+		{
+			StampLocalDeviceRequestor();
+		}
 	}
 }
 

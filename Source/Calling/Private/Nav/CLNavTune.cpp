@@ -1,4 +1,5 @@
 #include "Nav/CLNavTune.h"
+#include "Nav/CLStrainLimits.h"
 #include "Core/CLLog.h"
 #include "Core/CLError.h"
 #include "Game/CLErrorBoundary.h"
@@ -35,10 +36,16 @@ namespace
 		};
 		Tune.Links.Reset();
 		Tune.Links.Add(Link(TEXT("CoverOver"), 200.f, 20.f, TEXT("8"), TEXT("coverHeight"), TEXT("12"), 120.f, TEXT("default"), TEXT("default")));
-		Tune.Links.Add(Link(TEXT("DropDown"), 280.f, 25.f, TEXT("survivingDrop"), TEXT("10"), TEXT("survivingDrop"), 180.f, TEXT("default"), TEXT("null")));
+		Tune.Links.Add(Link(TEXT("DropDown"), 600.f, 15.f, TEXT("strainFall"), TEXT("10"), TEXT("500"), 120.f, TEXT("default"), TEXT("null")));
 		Tune.Links.Add(Link(TEXT("JumpUp"), 280.f, 20.f, TEXT("-jumpApex"), TEXT("jumpApex"), TEXT("jumpApex"), 120.f, TEXT("null"), TEXT("default")));
 		Tune.Links.Add(Link(TEXT("JumpDown"), 400.f, 25.f, TEXT("survivingDrop"), TEXT("coverHeight"), TEXT("survivingDrop"), 180.f, TEXT("default"), TEXT("null")));
 		Tune.Links.Add(Link(TEXT("JumpOver"), 280.f, 20.f, TEXT("12"), TEXT("jumpApex"), TEXT("20"), 160.f, TEXT("longJump"), TEXT("longJump")));
+		FCLNavLinkTune AirDown = Link(TEXT("AirDiveDown"), 1508.f, 20.f, TEXT("apexFallAbs"), TEXT("jumpApex"), TEXT("2500"), 120.f, TEXT("airDive"), TEXT("airDive"));
+		AirDown.SamplingSeparationFactor = 1.f;
+		Tune.Links.Add(AirDown);
+		FCLNavLinkTune AirOver = Link(TEXT("AirDiveOver"), 1508.f, 20.f, TEXT("apexFallAbs"), TEXT("jumpApex"), TEXT("2500"), 120.f, TEXT("airDive"), TEXT("airDive"));
+		AirOver.SamplingSeparationFactor = 1.f;
+		Tune.Links.Add(AirOver);
 	}
 
 	FString JsonScalarString(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Key, const FString& Default)
@@ -102,6 +109,12 @@ namespace
 		Tune.AgentRadiusCm = JsonNum(Root, TEXT("agentRadiusCm"), Tune.AgentRadiusCm);
 		Tune.AgentHeightCm = JsonNum(Root, TEXT("agentHeightCm"), Tune.AgentHeightCm);
 		Tune.AgentMaxSlopeDeg = JsonNum(Root, TEXT("agentMaxSlopeDeg"), Tune.AgentMaxSlopeDeg);
+		Tune.AirDiveSearchMaxCm = JsonNum(Root, TEXT("airDiveSearchMaxCm"), Tune.AirDiveSearchMaxCm);
+		if (const TSharedPtr<FJsonObject> Costs = Root->HasField(TEXT("areaCost")) ? Root->GetObjectField(TEXT("areaCost")) : nullptr)
+		{
+			Tune.AreaCostAirDive = JsonNum(Costs, TEXT("airDive"), Tune.AreaCostAirDive);
+			Tune.AreaCostLongJump = JsonNum(Costs, TEXT("longJump"), Tune.AreaCostLongJump);
+		}
 
 		if (const TSharedPtr<FJsonObject> Probe = Root->HasField(TEXT("probe")) ? Root->GetObjectField(TEXT("probe")) : nullptr)
 		{
@@ -161,6 +174,10 @@ float CLNavTune::ResolveScalar(const FString& TokenOrNumber, float Fallback, con
 	{
 		return SurvivingDropCm;
 	}
+	if (TokenOrNumber.Equals(TEXT("strainFall"), ESearchCase::IgnoreCase))
+	{
+		return CLStrainLimits::Get().MaxFallBeforeCriticalCm;
+	}
 	if (TokenOrNumber.Equals(TEXT("jumpApex"), ESearchCase::IgnoreCase))
 	{
 		return Tune.JumpApexCm;
@@ -173,9 +190,18 @@ float CLNavTune::ResolveScalar(const FString& TokenOrNumber, float Fallback, con
 	{
 		return Tune.CoverHeightCm;
 	}
+	if (TokenOrNumber.Equals(TEXT("apexFallAbs"), ESearchCase::IgnoreCase))
+	{
+		return FMath::Abs(Tune.JumpApexCm - CLStrainLimits::Get().MaxFallBeforeCriticalCm);
+	}
 	if (TokenOrNumber.IsNumeric())
 	{
 		return FCString::Atof(*TokenOrNumber);
 	}
 	return Fallback;
+}
+
+bool CLNavTune::IsAirDiveLink(FName Name)
+{
+	return Name.ToString().StartsWith(TEXT("AirDive"), ESearchCase::IgnoreCase);
 }

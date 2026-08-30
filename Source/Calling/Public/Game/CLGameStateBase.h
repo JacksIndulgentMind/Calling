@@ -3,11 +3,39 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
 #include "Core/CLTypes.h"
+#include "Game/CLLobbyTypes.h"
 #include "CLGameStateBase.generated.h"
 
 class UCLActivityStateComponent;
 class AController;
 class APawn;
+
+USTRUCT(BlueprintType)
+struct CALLING_API FCLMatchEvent
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Code;
+
+	UPROPERTY()
+	FString Seat;
+
+	UPROPERTY()
+	FString Book;
+
+	UPROPERTY()
+	FString Detail;
+
+	UPROPERTY()
+	float X = 0.f;
+
+	UPROPERTY()
+	float Y = 0.f;
+
+	UPROPERTY()
+	float Time = 0.f;
+};
 
 USTRUCT(BlueprintType)
 struct CALLING_API FCLSeatScore
@@ -66,6 +94,44 @@ public:
 	FString GetScoreLine() const;
 	float GetTeamAScore() const { return TeamAScore; }
 	float GetTeamBScore() const { return TeamBScore; }
+	UFUNCTION(BlueprintPure, Category = "Calling|Score")
+	int32 GetTeamAKills() const { return TeamAKills; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Score")
+	int32 GetTeamBKills() const { return TeamBKills; }
+
+	void AddTeamFinalBlow(ECLPvpTeam Team);
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	FName GetLiveShrine() const { return LiveShrine; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	FString GetModeResult() const { return ModeResult; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	FString GetWinningTeam() const { return WinningTeam; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	FString GetModeFailReason() const { return ModeFailReason; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	bool GetShrineHeldRed() const { return bShrineHeldRed; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Mode")
+	bool GetShrineHeldBlue() const { return bShrineHeldBlue; }
+
+	void SetLiveShrine(FName Id);
+	void SetShrineHeld(ECLPvpTeam Team, bool bHeld);
+	void SetModeOutcome(const FString& Result, const FString& Winner, const FString& FailReason);
+	void AppendMatchEvent(const FCLMatchEvent& Event);
+	void ClearMatchEvents();
+	const TArray<FCLMatchEvent>& GetMatchEvents() const { return MatchEvents; }
+
+	void SetLobbySnapshot(const TArray<FCLLobbySeatSnap>& Seats, int32 Ready, int32 MinPlayers, bool bQueued);
+	const TArray<FCLLobbySeatSnap>& GetLobbySeats() const { return LobbySeats; }
+	int32 GetLobbyReady() const { return LobbyReady; }
+	int32 GetLobbyMinPlayers() const { return LobbyMinPlayers; }
+	bool IsLobbyStartQueued() const { return bLobbyStartQueued; }
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Calling")
@@ -87,7 +153,46 @@ protected:
 	float TeamBScore = 0.f;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
+	int32 TeamAKills = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
+	int32 TeamBKills = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FName LiveShrine;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	bool bShrineHeldRed = false;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	bool bShrineHeldBlue = false;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FString ModeResult = TEXT("in_progress");
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FString WinningTeam;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FString ModeFailReason;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	TArray<FCLMatchEvent> MatchEvents;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
 	TArray<FCLSeatScore> SeatScores;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Lobby")
+	TArray<FCLLobbySeatSnap> LobbySeats;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Lobby")
+	int32 LobbyReady = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Lobby")
+	int32 LobbyMinPlayers = 2;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Lobby")
+	bool bLobbyStartQueued = false;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };

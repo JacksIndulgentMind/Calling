@@ -62,7 +62,7 @@ struct CALLING_API FCLLookCommand
 };
 
 /**
- * One tick of pawn intent. Cursor HTTP, Recast /goto, and in-game playbooks
+ * One tick of pawn intent. Cursor HTTP, Recast /goto, and BotBooks
  * all apply this through ACLPlayerCharacter::ApplyAgentIntent. Holdables latch;
  * look and pulse flags are consumed.
  */

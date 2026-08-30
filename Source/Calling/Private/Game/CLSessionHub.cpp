@@ -1,13 +1,17 @@
 #include "Game/CLSessionHub.h"
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLHubCommandRegistry.h"
+#include "Game/CLHubDriveTrace.h"
+#include "Game/CLHubIngress.h"
+#include "Game/CLInstanceIdentity.h"
 #include "Game/CLAgentCodec.h"
 #include "Game/CLAgentBridgeSubsystem.h"
 #include "Game/CLParticipantSeat.h"
-#include "Game/CLControllerPlaybook.h"
+#include "Game/CLSeatMotor.h"
 #include "Core/CLLog.h"
 #include "Game/CLErrorBoundary.h"
 #include "Core/CLError.h"
+#include "Game/CLLoopbackJoin.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 #include "IPAddress.h"
@@ -16,7 +20,6 @@
 #include "Interfaces/IPv4/IPv4Endpoint.h"
 #include "Misc/Base64.h"
 #include "Misc/SecureHash.h"
-#include "Misc/ConfigCacheIni.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -42,9 +45,10 @@ namespace
 void UCLSessionHub::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	int32 PortIni = Port;
-	GConfig->GetInt(TEXT("/Script/Calling.CLLobbySettings"), TEXT("SessionHubPort"), PortIni, GGameIni);
-	Port = FMath::Clamp(PortIni, 1024, 65535);
+	Port = CLLoopbackJoin::SessionHubPort();
+#if !UE_BUILD_SHIPPING
+	StartHost();
+#endif
 }
 
 void UCLSessionHub::Deinitialize()
@@ -84,6 +88,7 @@ void UCLSessionHub::StartHost()
 			ECLErrorKind::NonDeterministic,
 			TEXT("session_hub_bind"),
 			FString::Printf(TEXT("WebSocket hub failed to bind 0.0.0.0:%d"), Port)));
+		CLLoopbackJoin::AppendLog(FString::Printf(TEXT("ws bind fail %d"), Port));
 		return;
 	}
 	int32 NewSize = 0;
@@ -159,7 +164,7 @@ void UCLSessionHub::CloseClient(int32 Index)
 	Clients.RemoveAt(Index);
 }
 
-bool UCLSessionHub::ReadHttpHeader(const TArray<uint8>& Buffer, FString& OutKey)
+bool UCLSessionHub::ReadUpgrade(const TArray<uint8>& Buffer, FString& OutKey, FString& OutMode, FString& OutTarget, FString& OutQuery)
 {
 	const FString Text = Utf8ToF(Buffer.GetData(), Buffer.Num());
 	const int32 End = Text.Find(TEXT("\r\n\r\n"));
@@ -168,17 +173,52 @@ bool UCLSessionHub::ReadHttpHeader(const TArray<uint8>& Buffer, FString& OutKey)
 		return false;
 	}
 	OutKey.Reset();
+	OutMode.Reset();
+	OutTarget.Reset();
+	OutQuery.Reset();
 	TArray<FString> Lines;
 	Text.Left(End).ParseIntoArrayLines(Lines);
-	for (const FString& Line : Lines)
+	for (int32 i = 0; i < Lines.Num(); ++i)
 	{
+		const FString& Line = Lines[i];
+		if (i == 0)
+		{
+			const int32 Q = Line.Find(TEXT("?"));
+			const int32 Sp = Line.Find(TEXT(" HTTP"), ESearchCase::IgnoreCase);
+			if (Q != INDEX_NONE)
+			{
+				const int32 Stop = Sp == INDEX_NONE ? Line.Len() : Sp;
+				if (Stop > Q + 1)
+				{
+					OutQuery = Line.Mid(Q + 1, Stop - Q - 1);
+				}
+			}
+			continue;
+		}
 		if (Line.StartsWith(TEXT("Sec-WebSocket-Key:"), ESearchCase::IgnoreCase))
 		{
 			OutKey = Line.Mid(FCString::Strlen(TEXT("Sec-WebSocket-Key:"))).TrimStartAndEnd();
-			return !OutKey.IsEmpty();
+		}
+		else if (Line.StartsWith(TEXT("Calling-Connect-Mode:"), ESearchCase::IgnoreCase)
+			|| Line.StartsWith(TEXT("X-Calling-Connect-Mode:"), ESearchCase::IgnoreCase))
+		{
+			const int32 Colon = Line.Find(TEXT(":"));
+			OutMode = Line.Mid(Colon + 1).TrimStartAndEnd();
+		}
+		else if (Line.StartsWith(TEXT("Calling-Target-Instance:"), ESearchCase::IgnoreCase)
+			|| Line.StartsWith(TEXT("X-Calling-Target-Instance:"), ESearchCase::IgnoreCase))
+		{
+			const int32 Colon = Line.Find(TEXT(":"));
+			OutTarget = Line.Mid(Colon + 1).TrimStartAndEnd();
 		}
 	}
-	return false;
+	return !OutKey.IsEmpty();
+}
+
+bool UCLSessionHub::ReadHttpHeader(const TArray<uint8>& Buffer, FString& OutKey)
+{
+	FString Mode, Target, Query;
+	return ReadUpgrade(Buffer, OutKey, Mode, Target, Query);
 }
 
 FString UCLSessionHub::MakeAcceptKey(const FString& ClientKey)
@@ -194,10 +234,35 @@ bool UCLSessionHub::TryUpgrade(int32 Index)
 {
 	FClient& Client = Clients[Index];
 	FString Key;
-	if (!ReadHttpHeader(Client.Buffer, Key))
+	FString Mode;
+	FString Target;
+	FString Query;
+	if (!ReadUpgrade(Client.Buffer, Key, Mode, Target, Query))
 	{
 		return Client.Buffer.Num() < MaxWsBuffer;
 	}
+	FString QueryMode;
+	FString QueryTarget;
+	TArray<FString> Pairs;
+	Query.ParseIntoArray(Pairs, TEXT("&"), true);
+	for (const FString& Pair : Pairs)
+	{
+		FString K, V;
+		if (Pair.Split(TEXT("="), &K, &V))
+		{
+			if (K.Equals(TEXT("connectMode"), ESearchCase::IgnoreCase))
+			{
+				QueryMode = V;
+			}
+			else if (K.Equals(TEXT("targetInstance"), ESearchCase::IgnoreCase))
+			{
+				QueryTarget = V;
+			}
+		}
+	}
+	const FCLHubConnect Connect = CLHubIngress::Parse(nullptr, Mode, Target, QueryMode, QueryTarget);
+	Client.bProxy = Connect.bProxy;
+	Client.TargetInstance = Connect.TargetInstance;
 	const FString Accept = MakeAcceptKey(Key);
 	const FString Response = FString::Printf(
 		TEXT("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n"),
@@ -309,9 +374,38 @@ void UCLSessionHub::HandleText(int32 Index, const FString& Text)
 		SendText(Index, TEXT("{\"ok\":false,\"error\":\"no_lobby\"}"));
 		return;
 	}
-	const TSharedRef<FJsonObject> Out = FCLHubCommandRegistry::Dispatch(Lobby, Root, &Clients[Index].SeatId);
-	FString Json = CLAgentCodec::JsonToString(Out);
-	SendText(Index, Json);
+	if (UCLInstanceIdentitySubsystem* Id = GetGameInstance()->GetSubsystem<UCLInstanceIdentitySubsystem>())
+	{
+		Id->NoteJson(Root);
+		if (Id->GetLastAgentId().IsValid())
+		{
+			Clients[Index].AgentId = Id->GetLastAgentId();
+		}
+	}
+	CLHubDriveTrace::StampListen(Root, Port, TEXT("ws"));
+	FCLHubConnect Connect = CLHubIngress::Parse(Root, FString(), FString());
+	if (Clients[Index].bProxy)
+	{
+		Connect.bProxy = true;
+		if (!Connect.TargetInstance.IsValid())
+		{
+			Connect.TargetInstance = Clients[Index].TargetInstance;
+		}
+	}
+	if (Connect.bProxy)
+	{
+		if (Lobby->TryRouteHubProxy(Root, Connect.TargetInstance, Connect.ViaSeat, [this, Index](FString Json)
+		{
+			SendText(Index, Json);
+		}))
+		{
+			return;
+		}
+	}
+	Lobby->IngressLocalHub(Root, &Clients[Index].SeatId, [this, Index](FString Json)
+	{
+		SendText(Index, Json);
+	});
 }
 
 void UCLSessionHub::PushSnapshots(ECLHubSnapshotReason Reason, const FGuid& OnlySeat)
@@ -342,7 +436,7 @@ void UCLSessionHub::PushSnapshots(ECLHubSnapshotReason Reason, const FGuid& Only
 			continue;
 		}
 		const UCLParticipantSeat* Seat = Lobby->FindSeat(Clients[i].SeatId);
-		if (!Seat || !Seat->GetPlaybook() || !Seat->GetPlaybook()->WantsHubSnapshot(Reason))
+		if (!Seat || !Seat->GetSeatMotor() || !Seat->GetSeatMotor()->WantsHubSnapshot(Reason))
 		{
 			continue;
 		}
