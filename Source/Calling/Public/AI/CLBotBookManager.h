@@ -73,6 +73,7 @@ protected:
 		TArray<FQueuedBook> Queue;
 		TArray<FName> Fallbacks;
 		FName OnRespawn;
+		FName OnStop;
 		bool bJit = false;
 		FName ActiveName;
 		int32 FallbackIndex = 0;
@@ -98,6 +99,7 @@ protected:
 	bool EnqueueBook(FRuntime& Rt, FName CatalogName, TSharedPtr<FCLBotBook> Jit, FString& OutError);
 	bool BeginNow(UCLParticipantSeat* Seat, FRuntime& Rt, const FCLBotBook& Book, FString& OutError);
 	bool StartQueued(UCLParticipantSeat* Seat, FRuntime& Rt, FString& OutError);
+	bool ContinueAfterExhausted(UCLParticipantSeat* Seat, FRuntime& Rt);
 	bool PushBook(FRuntime& Rt, const FCLBotBook& Book, FString& OutError);
 	bool AdvanceAfterLeaf(FRuntime& Rt, ECLBotOutcome Outcome);
 	bool EvalPredicate(const FCLBotPredicate& Pred, UCLParticipantSeat* Seat, const FFrame* Frame, ECLBotOutcome Last) const;

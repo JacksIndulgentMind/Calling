@@ -146,6 +146,7 @@ namespace
 				}
 				OutDive.Add(Dive);
 			}
+			// Follow Recast’s walk polyline. Do not filter points because a rise is hard.
 			return;
 		}
 		if (NavPath && NavPath->PathPoints.Num() >= 2)
@@ -281,8 +282,8 @@ namespace
 
 		const FVector Steer = SteerWaypoint(D, Char);
 		D.SteerAt = Steer;
-		const FVector ToTarget = (D.SteerAt - Loc).GetSafeNormal2D();
-		if (ToTarget.IsNearlyZero())
+		FVector WalkDir = (D.SteerAt - Loc).GetSafeNormal2D();
+		if (WalkDir.IsNearlyZero())
 		{
 			return;
 		}
@@ -310,21 +311,23 @@ namespace
 			}
 		}
 
-		// CombatMovement interprets Move as control-yaw local (Y=forward, X=right). Wish toward
-		// the Recast waypoint in that basis so look slew does not walk us in circles.
-		FVector2D MoveXY = FVector2D::ZeroVector;
+		auto WishFromWorld = [Char](const FVector& WorldXY) -> FVector2D
 		{
 			const FRotator Yaw(0.f, Char->GetControlRotation().Yaw, 0.f);
 			const FVector Forward = FRotationMatrix(Yaw).GetUnitAxis(EAxis::X);
 			const FVector Right = FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y);
-			MoveXY.X = FVector::DotProduct(ToTarget, Right);
-			MoveXY.Y = FVector::DotProduct(ToTarget, Forward);
-			const float Mag = MoveXY.Size();
+			FVector2D Move(FVector::DotProduct(WorldXY, Right), FVector::DotProduct(WorldXY, Forward));
+			const float Mag = Move.Size();
 			if (Mag > KINDA_SMALL_NUMBER)
 			{
-				MoveXY /= Mag;
+				Move /= Mag;
 			}
-		}
+			return Move;
+		};
+
+		// CombatMovement interprets Move as control-yaw local (Y=forward, X=right). Wish toward
+		// the Recast waypoint in that basis so look slew does not walk us in circles.
+		FVector2D MoveXY = WishFromWorld(WalkDir);
 
 		bool bJump = false;
 		D.bMoveBlocked = false;
@@ -334,21 +337,20 @@ namespace
 		{
 			const FCLNavProbeTune& Probe = CLNavTune::Get().Probe;
 			const float HalfH = Char->GetCapsuleComponent() ? Char->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 96.f;
-			const FVector Waist = Loc - ToTarget * Probe.StartBackupCm;
-			const FVector Head = Loc + FVector(0.f, 0.f, Probe.HeadLiftCm) - ToTarget * Probe.StartBackupCm;
-			const FCLAgentBlockHit Fwd = CLAgentNavProbe::ProbeBlock(World, Char, Waist, ToTarget, Loc.Z - HalfH);
-			const FCLAgentBlockHit HeadHit = CLAgentNavProbe::ProbeBlock(World, Char, Head, ToTarget, Loc.Z - HalfH);
-			const float Drop = CLAgentNavProbe::FloorDropCm(World, Char, Loc, HalfH, ToTarget, 90.f);
+			const FVector Waist = Loc - WalkDir * Probe.StartBackupCm;
+			const FCLAgentBlockHit Fwd = CLAgentNavProbe::ProbeBlock(World, Char, Waist, WalkDir, Loc.Z - HalfH);
+			const float Drop = CLAgentNavProbe::FloorDropCm(World, Char, Loc, HalfH, WalkDir, 90.f);
 			const bool bOnGround = !Char->GetCombatMovement() || Char->GetCombatMovement()->IsMovingOnGround();
 			const bool bJumpUp = Fwd.Kind == ECLFwdKind::JumpUp && Fwd.Dist < Probe.JumpFaceCm;
-			const bool bJumpCover = Fwd.Kind == ECLFwdKind::Cover && Fwd.Dist < Probe.JumpFaceCm && HeadHit.Dist >= Probe.JumpableHeadClearCm;
+			const bool bJumpCover = Fwd.Kind == ECLFwdKind::Cover && Fwd.Dist < Probe.JumpFaceCm
+				&& Fwd.RiseCm > Probe.LipDropMinCm && Fwd.RiseCm <= CLNavTune::Get().CoverHeightCm;
 			const bool bJumpDown = Fwd.Kind == ECLFwdKind::JumpDown && Fwd.Dist < Probe.JumpFaceCm;
 			const bool bHasLanding = Fwd.Kind == ECLFwdKind::Drop || Fwd.Kind == ECLFwdKind::JumpDown;
 			const int32 JumpsLeft = Char->GetCombatMovement() ? Char->GetCombatMovement()->GetJumpsRemaining() : 0;
 			D.FwdKind = FName(CLAgentNavProbe::FwdKindName(Fwd.Kind));
 			D.FwdDist = Fwd.Dist;
 			// Recast polyline already stays on mesh / DropDown / AirDive links. The 90 cm void
-			// probe false-stops on spawn-pad corners and terrace lips → look-only spin.
+			// probe false-stops on pad corners and terrace lips → look-only spin.
 			if (!D.bNavPath && Drop >= Probe.FloorProbeMaxCm && !bHasLanding)
 			{
 				const bool bWalkOffLip = Drop > Probe.LipDropMinCm && Drop < 600.f;
@@ -357,16 +359,65 @@ namespace
 					D.bMoveBlocked = true;
 				}
 			}
-			if (Fwd.Kind == ECLFwdKind::Wall && Fwd.Dist < 80.f)
+			const bool bWillJump = D.JumpCooldown <= 0.f && (bJumpCover || bJumpDown || bJumpUp)
+				&& (bOnGround || (bJumpUp && JumpsLeft > 0));
+			const bool bFaceTooClose = Fwd.Dist < 80.f
+				&& (Fwd.Kind == ECLFwdKind::Wall || Fwd.Kind == ECLFwdKind::Cover || Fwd.Kind == ECLFwdKind::JumpUp);
+			if (bFaceTooClose && !bWillJump)
 			{
-				D.bMoveBlocked = true;
+				// Tangent + peel along the hit normal. Left/Right from a WalkDir-backed
+				// origin can start beside the same face and pick the into-obstacle side
+				// (ToSteer alignment), so CMC crawls and loc_still fires.
+				FVector N = FVector(Fwd.Normal.X, Fwd.Normal.Y, 0.f).GetSafeNormal();
+				if (N.IsNearlyZero())
+				{
+					N = -WalkDir;
+				}
+				FVector Tangent = WalkDir - N * FVector::DotProduct(WalkDir, N);
+				if (Tangent.SizeSquared() < KINDA_SMALL_NUMBER)
+				{
+					const FVector Left(-WalkDir.Y, WalkDir.X, 0.f);
+					const FVector Right(WalkDir.Y, -WalkDir.X, 0.f);
+					const FCLAgentBlockHit LHit = CLAgentNavProbe::ProbeBlock(World, Char, Loc, Left, Loc.Z - HalfH);
+					const FCLAgentBlockHit RHit = CLAgentNavProbe::ProbeBlock(World, Char, Loc, Right, Loc.Z - HalfH);
+					auto Clearance = [](const FCLAgentBlockHit& H)
+					{
+						if (H.Kind == ECLFwdKind::Wall || H.Kind == ECLFwdKind::Cover || H.Kind == ECLFwdKind::JumpUp)
+						{
+							return H.Dist;
+						}
+						return 10000.f;
+					};
+					Tangent = (Clearance(RHit) >= Clearance(LHit)) ? Right : Left;
+				}
+				WalkDir = (Tangent.GetSafeNormal2D() + N * 0.35f).GetSafeNormal2D();
+				if (!WalkDir.IsNearlyZero())
+				{
+					MoveXY = WishFromWorld(WalkDir);
+					D.SteerReason = FName(TEXT("wallSlide"));
+					D.bMoveBlocked = false;
+				}
+				else
+				{
+					D.bMoveBlocked = true;
+				}
 			}
 			if (D.bMoveBlocked)
 			{
 				MoveXY = FVector2D::ZeroVector;
+				if (D.bNavPath && D.RepathLeft > 0 && D.StuckSeconds > 0.2f)
+				{
+					--D.RepathLeft;
+					D.StuckSeconds = 0.f;
+					D.LastWpDist = -1.f;
+					FString Error;
+					if (D.Start(World, Char, D.Goal, Error, true) && D.Path.IsValidIndex(D.Index))
+					{
+						return;
+					}
+				}
 			}
-			if (D.JumpCooldown <= 0.f && (bJumpCover || bJumpDown || bJumpUp)
-				&& (bOnGround || (bJumpUp && JumpsLeft > 0)))
+			if (bWillJump)
 			{
 				bJump = true;
 				D.JumpCooldown = 0.45f;
@@ -396,7 +447,7 @@ namespace
 					D.PathAirDive.IsValidIndex(D.Index) ? D.PathAirDive[D.Index] : -1,
 					*D.SteerReason.ToString(), D.bLaunchOk ? 1 : 0, D.DistLip, D.DistXYToWp, D.DeltaZToWp,
 					Wp.X, Wp.Y, Wp.Z, D.SteerAt.X, D.SteerAt.Y, D.SteerAt.Z,
-					ToTarget.Rotation().Yaw, Char->GetControlRotation().Yaw,
+					WalkDir.Rotation().Yaw, Char->GetControlRotation().Yaw,
 					D.LastMoveXY.X, D.LastMoveXY.Y, D.bMoveBlocked ? 1 : 0,
 					*D.FwdKind.ToString(), D.FwdDist, D.StuckSeconds,
 					Char->IsLocallyControlled() ? 1 : 0, Char->GetController() ? 1 : 0,
@@ -407,7 +458,7 @@ namespace
 		// Face the waypoint while moving. Do not slew look while planted — that is the spawn spin.
 		if (!MoveXY.IsNearlyZero())
 		{
-			Char->SetLookGoalYawPitch(true, ToTarget.Rotation().Yaw, true, HeadshotPitch);
+			Char->SetLookGoalYawPitch(true, WalkDir.Rotation().Yaw, true, HeadshotPitch);
 		}
 
 		FCLAgentIntent Intent;
@@ -436,6 +487,16 @@ namespace
 			{
 				return;
 			}
+		}
+		// Recast can flag the current poly as AirDive when DistXY is already inside
+		// GotoWaypointRadius. Launch would "land" in place; TickWalk will not skip-advance.
+		if (FVector::Dist2D(From, To) <= GotoWaypointRadius)
+		{
+			UE_LOG(LogCallingGoto, Display,
+				TEXT("goto SKIP_LAUNCH at-wp idx=%d distXY=%.0f to=(%.0f,%.0f,%.0f)"),
+				D.Index, FVector::Dist2D(From, To), To.X, To.Y, To.Z);
+			D.PathAirDive[D.Index] = 0;
+			return;
 		}
 		FString LaunchWhy;
 		if (const UCLCombatMovementComponent* Move = Char->GetCombatMovement())

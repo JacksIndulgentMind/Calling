@@ -71,6 +71,8 @@ struct FCLBotBook
 	TArray<FCLBotStmt> Body;
 	TArray<FName> Fallbacks;
 	FName OnRespawn = NAME_None;
+	/** Catalog to start when this book hits stop with nothing queued. Not a stack `ref` (no cycle). */
+	FName OnStop = NAME_None;
 	float DefaultTrySuccessFor = 2.5f;
 	bool bAllowXyzGoto = false;
 	bool bJit = false;

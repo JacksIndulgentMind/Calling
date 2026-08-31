@@ -451,6 +451,10 @@ void ACLPlayerCharacter::NotifyRespawned()
 	bTakenOut = false;
 	DamageTimes.Reset();
 	LastDamageInstigator.Reset();
+	if (WeaponMotor)
+	{
+		WeaponMotor->NotePredictedLiveGrenade(false);
+	}
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(RespawnTimer);
@@ -471,6 +475,112 @@ void ACLPlayerCharacter::NotifyRespawned()
 			}
 		}
 	}
+}
+
+namespace
+{
+	constexpr float ShotStartMaxDistCm = 300.f;
+}
+
+bool ACLPlayerCharacter::IsPlausibleShotStart(const FVector& Start) const
+{
+	if (!IsCombatAlive())
+	{
+		return false;
+	}
+	if (FVector::DistSquared(Start, GetActorLocation()) <= FMath::Square(ShotStartMaxDistCm))
+	{
+		return true;
+	}
+	FVector Eye = FVector::ZeroVector;
+	FRotator Unused = FRotator::ZeroRotator;
+	GetActorEyesViewPoint(Eye, Unused);
+	if (FVector::DistSquared(Start, Eye) <= FMath::Square(ShotStartMaxDistCm))
+	{
+		return true;
+	}
+	if (WeaponMotor)
+	{
+		const FVector Barrel = WeaponMotor->GetBarrelLocation();
+		if (FVector::DistSquared(Start, Barrel) <= FMath::Square(ShotStartMaxDistCm))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+FVector ACLPlayerCharacter::ClampShotStart(const FVector& Start) const
+{
+	if (!WeaponMotor)
+	{
+		return Start;
+	}
+	const FVector Barrel = WeaponMotor->GetBarrelLocation();
+	if (Barrel.IsNearlyZero())
+	{
+		return Start;
+	}
+	return Barrel;
+}
+
+bool ACLPlayerCharacter::ServerHitscanFire_Validate(FVector Start, FRotator View, bool bIsAds)
+{
+	(void)View;
+	(void)bIsAds;
+	return IsPlausibleShotStart(Start);
+}
+
+void ACLPlayerCharacter::ServerHitscanFire_Implementation(FVector Start, FRotator View, bool bIsAds)
+{
+	if (!IsCombatAlive() || !WeaponMotor)
+	{
+		return;
+	}
+	WeaponMotor->AuthorityFireHitscan(ClampShotStart(Start), View, bIsAds);
+}
+
+bool ACLPlayerCharacter::ServerGrenadeFire_Validate(FVector Start, FVector Direction)
+{
+	(void)Direction;
+	return IsPlausibleShotStart(Start);
+}
+
+void ACLPlayerCharacter::ServerGrenadeFire_Implementation(FVector Start, FVector Direction)
+{
+	if (!IsCombatAlive() || !WeaponMotor)
+	{
+		return;
+	}
+	const FVector Dir = Direction.GetSafeNormal();
+	if (Dir.IsNearlyZero())
+	{
+		return;
+	}
+	WeaponMotor->AuthoritySpawnGrenade(ClampShotStart(Start), Dir);
+}
+
+bool ACLPlayerCharacter::ServerDetonateGrenade_Validate()
+{
+	return IsCombatAlive();
+}
+
+void ACLPlayerCharacter::ServerDetonateGrenade_Implementation()
+{
+	if (!IsCombatAlive() || !WeaponMotor)
+	{
+		return;
+	}
+	WeaponMotor->AuthorityDetonateGrenade();
+}
+
+void ACLPlayerCharacter::MulticastHitscanFX_Implementation(FVector Start, FVector Dir)
+{
+	if (IsLocallyControlled() || !WeaponMotor)
+	{
+		return;
+	}
+	WeaponMotor->PlayHitscanFX(Start, Dir);
 }
 
 void ACLPlayerCharacter::PlayKnifeSlash()

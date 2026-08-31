@@ -116,6 +116,21 @@ public:
 	void PlayKnifeSlash();
 	void NotifyRespawned();
 
+	/** Owning-client hitscan: server traces + damage. Host listen already has authority. */
+	UFUNCTION(Server, Unreliable, WithValidation)
+	void ServerHitscanFire(FVector Start, FRotator View, bool bIsAds);
+
+	/** Owning-client grenade: server spawns the replicated actor. */
+	UFUNCTION(Server, Unreliable, WithValidation)
+	void ServerGrenadeFire(FVector Start, FVector Direction);
+
+	UFUNCTION(Server, Unreliable, WithValidation)
+	void ServerDetonateGrenade();
+
+	/** SimulatedProxy / listen-host tracers. Owning client already spawned in FireShot. */
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastHitscanFX(FVector Start, FVector Dir);
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Calling")
 	TObjectPtr<UCLCombatMovementComponent> CombatMovement;
@@ -187,6 +202,9 @@ protected:
 
 	void RequestTakeOutRespawn();
 	void TickKnifeSlash(float DeltaSeconds);
+
+	bool IsPlausibleShotStart(const FVector& Start) const;
+	FVector ClampShotStart(const FVector& Start) const;
 
 	bool bTakenOut = false;
 	TMap<TWeakObjectPtr<AController>, float> DamageTimes;

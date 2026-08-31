@@ -307,7 +307,8 @@ void FCLNavAbilityExec::TickJumpLaunch(float DeltaSeconds, ACLPlayerCharacter* C
 		&& CLNavAbility::ReadyToAirDive(Tune, Move->GetMaxAcceleration(), SpeedXY, Loc, Goal);
 
 	FaceGoal(Char, Loc);
-	if (!FacingGoal(Char, Loc) && !bDiveSeen)
+	// 180° at agent yaw 420 deg/s is ~0.43s. After that, jump anyway.
+	if (!FacingGoal(Char, Loc) && !bDiveSeen && Elapsed < 0.45f)
 	{
 		FCLAgentIntent WaitLook;
 		Char->ApplyAgentIntent(WaitLook);

@@ -21,7 +21,9 @@ enum class ECLFwdKind : uint8
 struct FCLAgentBlockHit
 {
 	float Dist = 1800.f;
+	float RiseCm = 0.f;
 	ECLFwdKind Kind = ECLFwdKind::Open;
+	FVector Normal = FVector::ZeroVector;
 };
 
 namespace CLAgentNavProbe

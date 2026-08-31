@@ -17,6 +17,19 @@ Two Unreal processes on one machine: **listen server** + **client** over loopbac
 | `UCLTravelCoordinator::RestoreBodiesAfterTravel` | Skips seats with `BoundController` (net humans keep their pawns). First human in roster is host; other humans are guests. |
 | `ACLGreyboxFloors::Layout` | `ReplicatedUsing = OnRep_Layout`. Missing `Replicated*` fatals the guest on join. |
 
+## Combat net (guns)
+
+Listen-server FPS: owning client predicts recoil, ammo, and tracers; **server** traces and applies damage; **NetMulticast** shows the shot to everyone else. `ApplyDamage` is authority-only — owning-client traces must not mutate replicated HP.
+
+| Piece | Role |
+|-------|------|
+| `FireShot` (owning client) | Cadence, ammo, recoil, local tracer. Guest does not `ApplyDamage`. |
+| `ServerHitscanFire` | `WithValidation`: combat-alive and `Start` within ~300 cm of pawn loc / eye / muzzle. Server clamps start to barrel, traces, `ApplyDamage`. |
+| `MulticastHitscanFX` | Unreliable. SimulatedProxy and listen-host spawn the tracer. Owning client already spawned in `FireShot` — skip if `IsLocallyControlled()`. |
+| `ServerGrenadeFire` / `ServerDetonateGrenade` | Same start Validate. Spawn the grenade on authority with `bReplicates` + movement (not casings/tracers). Detonate the authority copy so radius hits server `ApplyDamage`. |
+
+Cadence and ammo stay client-predicted. Melee/abilities already go through `ApplyDamage` (no-op on the client). Do not invent a second fire graph. Do not patch Engine.
+
 Parked: named pipe / AF_UNIX NetDriver; shared file as the replication channel; custom NetDriver over WS; dedicated/headless host.
 
 ## Why composer listen (not two Social hosts)

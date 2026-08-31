@@ -23,6 +23,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	/** Server only. Client traces must not mutate replicated health. */
 	UFUNCTION(BlueprintCallable, Category = "Calling|Combat")
 	float ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision);
 

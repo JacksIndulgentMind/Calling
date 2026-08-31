@@ -316,6 +316,32 @@ bool UCLBotBookManager::BeginNow(UCLParticipantSeat* Seat, FRuntime& Rt, const F
 	return true;
 }
 
+bool UCLBotBookManager::ContinueAfterExhausted(UCLParticipantSeat* Seat, FRuntime& Rt)
+{
+	FString Err;
+	if (StartQueued(Seat, Rt, Err))
+	{
+		return true;
+	}
+	if (!Rt.OnStop.IsNone())
+	{
+		if (const FCLBotBook* Book = FindBook(Rt.OnStop))
+		{
+			return BeginNow(Seat, Rt, *Book, Err);
+		}
+	}
+	ACLPlayerCharacter* Char = Seat ? Cast<ACLPlayerCharacter>(Seat->GetDrivenPawn()) : nullptr;
+	ACLGameStateBase* GS = GetWorld() ? GetWorld()->GetGameState<ACLGameStateBase>() : nullptr;
+	const bool bMatchLive = GS && GS->GetModeResult().Equals(TEXT("in_progress"), ESearchCase::IgnoreCase);
+	if (Char && Char->IsCombatAlive() && bMatchLive && !Rt.OnRespawn.IsNone())
+	{
+		NoteFollowAlert(Seat, TEXT("botbook_idle"),
+			TEXT("book exhausted while match in_progress (onRespawn set, no onStop/queue)"));
+	}
+	ClearSeat(Seat->GetSeatId());
+	return false;
+}
+
 bool UCLBotBookManager::StartQueued(UCLParticipantSeat* Seat, FRuntime& Rt, FString& OutError)
 {
 	if (Rt.Queue.Num() == 0)
@@ -344,7 +370,8 @@ bool UCLBotBookManager::StartQueued(UCLParticipantSeat* Seat, FRuntime& Rt, FStr
 bool UCLBotBookManager::HasRuntime(const FGuid& SeatId) const
 {
 	const TSharedPtr<FRuntime>* Found = Runtimes.Find(SeatId);
-	return Found && Found->IsValid() && ((*Found)->Stack.Num() > 0 || (*Found)->Queue.Num() > 0);
+	return Found && Found->IsValid() && ((*Found)->Stack.Num() > 0 || (*Found)->Queue.Num() > 0
+		|| !(*Found)->OnStop.IsNone());
 }
 
 void UCLBotBookManager::ClearSeat(const FGuid& SeatId)
@@ -388,6 +415,10 @@ bool UCLBotBookManager::PushBook(FRuntime& Rt, const FCLBotBook& Book, FString& 
 	if (Rt.OnRespawn.IsNone())
 	{
 		Rt.OnRespawn = Book.OnRespawn;
+	}
+	if (Rt.OnStop.IsNone())
+	{
+		Rt.OnStop = Book.OnStop;
 	}
 	return true;
 }
@@ -634,7 +665,18 @@ bool UCLBotBookManager::EvalPredicate(const FCLBotPredicate& Pred, UCLParticipan
 	}
 	if (Name == TEXT("hasmarker"))
 	{
-		return ACLTaskMarker::FindById(World, FName(*Pred.Value)) != nullptr;
+		FName Want(*Pred.Value);
+		if (Want == FName(TEXT("live_shrine")) || Want == FName(TEXT("liveShrine")))
+		{
+			if (ACLGameStateBase* GS = World ? World->GetGameState<ACLGameStateBase>() : nullptr)
+			{
+				if (!GS->GetLiveShrine().IsNone())
+				{
+					Want = GS->GetLiveShrine();
+				}
+			}
+		}
+		return ACLTaskMarker::FindById(World, Want) != nullptr;
 	}
 	if (Name == TEXT("z"))
 	{
@@ -659,6 +701,24 @@ bool UCLBotBookManager::EvalPredicate(const FCLBotPredicate& Pred, UCLParticipan
 			(void)Frame;
 		}
 		return Cmp(DistXY(Char->GetActorLocation(), Goal));
+	}
+	if (Name == TEXT("enemydistxy"))
+	{
+		// Missing / dead enemy is far so `< N` takes the occupy side, not a stall.
+		const float Far = TNumericLimits<float>::Max();
+		if (!Char || !Seat)
+		{
+			return Cmp(Far);
+		}
+		UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr;
+		const FGuid OtherId = EnemySeat(Seat, Lobby);
+		APawn* OtherPawn = Lobby && OtherId.IsValid() ? Lobby->GetDrivenPawn(OtherId) : nullptr;
+		const ACLPlayerCharacter* OtherChar = Cast<ACLPlayerCharacter>(OtherPawn);
+		if (!OtherChar || !OtherChar->IsCombatAlive())
+		{
+			return Cmp(Far);
+		}
+		return Cmp(DistXY(Char->GetActorLocation(), OtherChar->GetActorLocation()));
 	}
 	if (Name == TEXT("true") || Pred.Value.Equals(TEXT("true"), ESearchCase::IgnoreCase))
 	{
@@ -687,18 +747,29 @@ bool UCLBotBookManager::StartLeaf(FRuntime& Rt, UCLParticipantSeat* Seat, FStrin
 	Ctx.FocusSeat = Rt.FocusSeat;
 	if (const FString* Marker = Stmt->Leaf.Params.Find(TEXT("marker")))
 	{
-		Ctx.MarkerId = FName(**Marker);
+		FName MarkerId(**Marker);
+		if (MarkerId == FName(TEXT("live_shrine")) || MarkerId == FName(TEXT("liveShrine")))
+		{
+			if (ACLGameStateBase* GS = Ctx.World ? Ctx.World->GetGameState<ACLGameStateBase>() : nullptr)
+			{
+				if (!GS->GetLiveShrine().IsNone())
+				{
+					MarkerId = GS->GetLiveShrine();
+				}
+			}
+		}
+		Ctx.MarkerId = MarkerId;
 		if (ACLTaskMarker* Mark = ACLTaskMarker::FindById(Ctx.World, Ctx.MarkerId))
 		{
 			Ctx.Goal = Mark->GetActorLocation();
 		}
 		else
 		{
-			UE_LOG(LogCalling, Warning, TEXT("BotBook missing marker %s"), **Marker);
+			UE_LOG(LogCalling, Warning, TEXT("BotBook missing marker %s"), *MarkerId.ToString());
 			if (Stmt->Leaf.Verb == FName(TEXT("goto")))
 			{
 				NoteFollowAlert(Seat, TEXT("botbook_missing_marker"),
-					FString::Printf(TEXT("goto marker=%s not in world"), **Marker));
+					FString::Printf(TEXT("goto marker=%s not in world"), *MarkerId.ToString()));
 				return false;
 			}
 		}
@@ -745,6 +816,8 @@ bool UCLBotBookManager::StartLeaf(FRuntime& Rt, UCLParticipantSeat* Seat, FStrin
 	Top.GoodEnoughHold = 0.f;
 	Top.bSawGoodEnough = false;
 	Top.GotoNoStickHold = 0.f;
+	Top.StillAnchor = FVector::ZeroVector;
+	Top.PawnStillSeconds = 0.f;
 	Top.Verb->Start(Ctx);
 	if (Stmt->Leaf.Verb == FName(TEXT("goto")) && Char
 		&& DistXY(Char->GetActorLocation(), Ctx.Goal) > 300.f
@@ -831,7 +904,7 @@ ECLBotOutcome UCLBotBookManager::TickLeaf(FRuntime& Rt, float DeltaSeconds, UCLP
 	if (bGotoVerb && Char)
 	{
 		const UCLCombatMovementComponent* MoveComp = Char->GetCombatMovement();
-		const bool bFlight = (MoveComp && (!MoveComp->IsMovingOnGround() || MoveComp->IsDiving()))
+		const bool bFlight = (MoveComp && MoveComp->IsDiving())
 			|| (Ctx.Motor && Ctx.Motor->GetGotoDriver().bFlight);
 		const FVector Loc = Char->GetActorLocation();
 		const float Dist = DistXY(Loc, Ctx.Goal);
@@ -839,7 +912,7 @@ ECLBotOutcome UCLBotBookManager::TickLeaf(FRuntime& Rt, float DeltaSeconds, UCLP
 		{
 			Top.StillAnchor = Loc;
 		}
-		if (DistXY(Loc, Top.StillAnchor) > 80.f)
+		if (FVector::Dist(Loc, Top.StillAnchor) > 80.f || Char->GetVelocity().Size() > 80.f)
 		{
 			Top.StillAnchor = Loc;
 			Top.PawnStillSeconds = 0.f;
@@ -850,17 +923,49 @@ ECLBotOutcome UCLBotBookManager::TickLeaf(FRuntime& Rt, float DeltaSeconds, UCLP
 		}
 		const FVector2D IntentStick = Char->GetAgentMove();
 		const FVector2D RecastStick = Ctx.Motor ? Ctx.Motor->GetGotoDriver().LastMoveXY : FVector2D::ZeroVector;
-		const bool bFar = Dist > 300.f;
+		float SettleCm = 300.f;
+		if (Stmt->Leaf.GoodEnough.Name.Equals(TEXT("distXY"), ESearchCase::IgnoreCase))
+		{
+			SettleCm = FCString::Atof(*Stmt->Leaf.GoodEnough.Value);
+		}
+		else if (Stmt->Leaf.Success.Name.Equals(TEXT("distXY"), ESearchCase::IgnoreCase))
+		{
+			SettleCm = FCString::Atof(*Stmt->Leaf.Success.Value);
+		}
+		const bool bFar = Dist > SettleCm;
 		const bool bZeroIntent = IntentStick.Size() < 0.05f;
 		const bool bZeroRecast = RecastStick.Size() < 0.05f;
-			if (bFar && !bFlight)
-			{
+		if (!Char->IsCombatAlive())
+		{
+			Top.StillAnchor = FVector::ZeroVector;
+			Top.PawnStillSeconds = 0.f;
+			Top.GotoNoStickHold = 0.f;
+		}
+		else if (bFar && !bFlight)
+		{
 				const float WpStuck = Ctx.Motor ? Ctx.Motor->GetGotoDriver().StuckSeconds : 0.f;
 				if (Top.PawnStillSeconds >= 0.5f)
 				{
+					const FCLAgentGotoDriver& G = Ctx.Motor ? Ctx.Motor->GetGotoDriver() : FCLAgentGotoDriver();
+					const bool bAir = MoveComp && !MoveComp->IsMovingOnGround();
+					const bool bDive = MoveComp && MoveComp->IsDiving();
+					float GoodEnoughCm = -1.f;
+					if (Stmt->Leaf.GoodEnough.Name.Equals(TEXT("distXY"), ESearchCase::IgnoreCase))
+					{
+						GoodEnoughCm = FCString::Atof(*Stmt->Leaf.GoodEnough.Value);
+					}
+					const FVector Wp = G.Path.IsValidIndex(G.Index) ? G.Path[G.Index] : G.Goal;
+					const float VelXY = Char->GetVelocity().Size2D();
 					NoteFollowAlert(Seat, TEXT("botbook_goto_loc_still"),
-						FString::Printf(TEXT("pawn still %.1fs goalDist=%.0f wpStuck=%.1fs"),
-							Top.PawnStillSeconds, Dist, WpStuck),
+						FString::Printf(
+							TEXT("pawn still %.1fs goalDist=%.0f wpStuck=%.1fs z=%.0f velXY=%.0f air=%d dive=%d flight=%d fwd=%s/%.0f reason=%s move=(%.2f,%.2f) blocked=%d ge=%.0f inGe=%d idx=%d/%d wp=(%.0f,%.0f,%.0f) repathLeft=%d look=%.0f ctrl=%.0f"),
+							Top.PawnStillSeconds, Dist, WpStuck,
+							Loc.Z, VelXY, bAir ? 1 : 0, bDive ? 1 : 0, bFlight ? 1 : 0,
+							*G.FwdKind.ToString(), G.FwdDist, *G.SteerReason.ToString(),
+							G.LastMoveXY.X, G.LastMoveXY.Y, G.bMoveBlocked ? 1 : 0,
+							GoodEnoughCm, (GoodEnoughCm > 0.f && Dist <= GoodEnoughCm) ? 1 : 0,
+							G.Index, G.Path.Num(), Wp.X, Wp.Y, Wp.Z, G.RepathLeft,
+							Char->GetControlRotation().Yaw, Char->GetActorRotation().Yaw),
 						false);
 				}
 				if (Stmt->Leaf.WhileVerbs.Num() > 0 && bZeroIntent && !bZeroRecast)
@@ -1077,10 +1182,8 @@ bool UCLBotBookManager::TickSeat(float DeltaSeconds, UCLParticipantSeat* Seat)
 	FRuntime& Rt = *Found->Get();
 	if (Rt.Stack.Num() == 0)
 	{
-		FString QueueErr;
-		if (!StartQueued(Seat, Rt, QueueErr))
+		if (!ContinueAfterExhausted(Seat, Rt))
 		{
-			ClearSeat(Seat->GetSeatId());
 			return false;
 		}
 	}
@@ -1220,13 +1323,7 @@ bool UCLBotBookManager::TickSeat(float DeltaSeconds, UCLParticipantSeat* Seat)
 	}
 	if (Rt.Stack.Num() == 0)
 	{
-		FString QueueErr;
-		if (StartQueued(Seat, Rt, QueueErr))
-		{
-			return true;
-		}
-		ClearSeat(Seat->GetSeatId());
-		return false;
+		return ContinueAfterExhausted(Seat, Rt);
 	}
 	return true;
 }

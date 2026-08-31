@@ -12,6 +12,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "CollisionQueryParams.h"
+#include "UObject/ConstructorHelpers.h"
 
 ACLWeaponProjectile::ACLWeaponProjectile()
 {
@@ -28,6 +29,12 @@ ACLWeaponProjectile::ACLWeaponProjectile()
 	Mesh->SetupAttachment(Sphere);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->SetCastShadow(false);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (SphereMesh.Succeeded())
+	{
+		Mesh->SetStaticMesh(SphereMesh.Object);
+	}
+	Mesh->SetWorldScale3D(FVector(0.16f));
 }
 
 void ACLWeaponProjectile::IgnoreInstigator()
@@ -116,6 +123,10 @@ void ACLWeaponProjectile::InitGrenade(APawn* InInstigator, const FVector& Direct
 	Velocity = Direction.GetSafeNormal() * (Speed > 0.f ? Speed : 2200.f);
 	IgnoreInstigator();
 
+	SetReplicates(true);
+	SetReplicateMovement(true);
+	bAlwaysRelevant = true;
+
 	if (Sphere)
 	{
 		Sphere->SetSphereRadius(10.f);
@@ -136,6 +147,10 @@ void ACLWeaponProjectile::InitGrenade(APawn* InInstigator, const FVector& Direct
 void ACLWeaponProjectile::Detonate()
 {
 	if (bDetonated)
+	{
+		return;
+	}
+	if (!HasAuthority())
 	{
 		return;
 	}
@@ -183,6 +198,10 @@ bool ACLWeaponProjectile::CheckProximity() const
 void ACLWeaponProjectile::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (GetIsReplicated() && !HasAuthority())
+	{
+		return;
+	}
 	if (bDetonated)
 	{
 		return;

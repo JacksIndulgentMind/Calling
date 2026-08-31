@@ -1,63 +1,38 @@
 @startuml shrine_clash_fight
 floating note
+onRespawn: shrine_clash_fight
+onStop: shrine_clash_fight
 trySuccessFor: 0.5
 end note
 start
 if (qualify navTiles > 0) then (yes)
   :setFocus focus=enemy;
-	:goto marker=court_center;
-	note right
-		while: trackFocus, fire
-		success: distXY 350
-		goodEnough: distXY 700
-		fail.timeout: 35
-	end note
-	:fire;
-	note right
-		while: trackFocus, fire
-		success: z > 99999
-		fail.timeout: 12
-	end note
-	:goto marker=shrine_well;
+  :goto marker=live_shrine;
   note right
-    while: trackFocus, fire
+    while: trackFocus, fire, maintainADS
     success: distXY 180
     goodEnough: distXY 320
-    fail.timeout: 25
-  end note
-  :goto marker=court_center;
-  note right
-    while: trackFocus, fire
-    success: distXY 350
-    goodEnough: distXY 700
-    fail.timeout: 35
+    fail.timeout: 45
   end note
   :fire;
   note right
-    while: trackFocus, fire
+    while: trackFocus, fire, maintainADS
     success: z > 99999
-    fail.timeout: 12
+    fail.timeout: 8
   end note
-  :goto marker=shrine_tree;
+  :goto marker=hide_center_lee;
   note right
-    while: trackFocus, fire
+    while: trackFocus, maintainADS
     success: distXY 180
-    goodEnough: distXY 320
-    fail.timeout: 25
+    goodEnough: distXY 280
+    fail.timeout: 35
   end note
-  :goto marker=shrine_heel;
+  :ref peek_fire;
+  :fire;
   note right
-    while: trackFocus, fire
-    success: distXY 180
-    goodEnough: distXY 320
-    fail.timeout: 25
-  end note
-  :goto marker=shrine_cairn;
-  note right
-    while: trackFocus, fire
-    success: distXY 180
-    goodEnough: distXY 320
-    fail.timeout: 25
+    while: trackFocus, fire, maintainADS
+    success: z > 99999
+    fail.timeout: 8
   end note
 else (skip)
 endif

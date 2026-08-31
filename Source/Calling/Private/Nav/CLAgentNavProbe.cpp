@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Components/CapsuleComponent.h"
 #include "CollisionQueryParams.h"
+#include "CollisionShape.h"
 #include "NavigationSystem.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "Math/RotationMatrix.h"
@@ -106,14 +107,15 @@ FCLAgentBlockHit CLAgentNavProbe::ProbeBlock(UWorld* World, const AActor* Ignore
 		{
 			const float Gap = bSawAir ? (Ahead - AirStart) : 0.f;
 			Out.Kind = (Gap > P.WalkOffGapMaxCm) ? ECLFwdKind::JumpDown : ECLFwdKind::Drop;
-			return Out;
+			break;
 		}
 		if (Rel < -P.LipDropMinCm)
 		{
 			if ((-Rel) > JumpApexCm)
 			{
 				Out.Kind = ECLFwdKind::Wall;
-				return Out;
+				Out.Normal = -Walk;
+				break;
 			}
 			bool bHopOver = false;
 			for (float Peek = Ahead + P.SampleStepCm; Peek <= Ahead + P.CoverDepthCm + 0.1f; Peek += P.SampleStepCm)
@@ -127,29 +129,44 @@ FCLAgentBlockHit CLAgentNavProbe::ProbeBlock(UWorld* World, const AActor* Ignore
 					break;
 				}
 			}
+			Out.RiseCm = -Rel;
 			Out.Kind = bHopOver ? ECLFwdKind::Cover : ECLFwdKind::JumpUp;
-			return Out;
+			break;
 		}
+		Out.RiseCm = -Rel;
 		Out.Kind = ECLFwdKind::Cover;
-		return Out;
+		break;
 	}
 
-	if (bSawAir)
+	if (bSawAir && Out.Kind == ECLFwdKind::Open)
 	{
 		Out.Dist = AirStart;
 		Out.Kind = ECLFwdKind::Wall;
-		return Out;
+		Out.Normal = -Walk;
 	}
 
+	// Floor samples are a thin column. Recast and CMC use AgentRadius — a vertical
+	// face the capsule is kissing can sit beside that column. A far floor Cover
+	// (e.g. 680 cm) must not hide a nearer capsule Wall, or wall-slide never runs.
 	FHitResult Hit;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(CLAgentWall), false, Ignore);
-	if (World->LineTraceSingleByChannel(Hit, Start, Start + Walk * P.MaxCm, ECC_WorldStatic, Params)
-		&& Hit.bBlockingHit
-		&& Hit.ImpactNormal.Z > P.WalkableNormalZ
-		&& SlopeAlongIngress(Walk, Hit.ImpactNormal) > P.UpSlopeMin)
+	const float Rad = FMath::Max(1.f, CLNavTune::Get().AgentRadiusCm);
+	const FCollisionShape Sphere = FCollisionShape::MakeSphere(Rad);
+	const bool bHit = World->SweepSingleByChannel(
+		Hit, Start, Start + Walk * P.MaxCm, FQuat::Identity, ECC_WorldStatic, Sphere, Params);
+	if (bHit && (Hit.bBlockingHit || Hit.bStartPenetrating))
 	{
-		Out.Dist = Hit.Distance;
-		Out.Kind = ECLFwdKind::Walk;
+		const float SweepDist = Hit.bStartPenetrating ? 0.f : Hit.Distance;
+		const bool bWalkSlope = !Hit.bStartPenetrating
+			&& Hit.ImpactNormal.Z > P.WalkableNormalZ
+			&& SlopeAlongIngress(Walk, Hit.ImpactNormal) > P.UpSlopeMin;
+		const bool bNearerFace = SweepDist + 40.f < Out.Dist;
+		if (bNearerFace || Out.Kind == ECLFwdKind::Open)
+		{
+			Out.Dist = SweepDist;
+			Out.Normal = Hit.ImpactNormal;
+			Out.Kind = bWalkSlope ? ECLFwdKind::Walk : ECLFwdKind::Wall;
+		}
 	}
 	return Out;
 }
