@@ -34,6 +34,11 @@ void UCLHealthShieldComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 
 float UCLHealthShieldComponent::ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision)
 {
+	const AActor* Owner = GetOwner();
+	if (Owner && !Owner->HasAuthority())
+	{
+		return 0.f;
+	}
 	if (!bAlive || Damage <= 0.f || bInvulnerable)
 	{
 		return 0.f;

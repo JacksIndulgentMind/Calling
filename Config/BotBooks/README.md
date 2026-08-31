@@ -19,3 +19,4 @@ Durable files **must** `goto` by marker id. JIT hub trees may use x,y,z.
 | `pillar_dive` | `goto marker=pillar_pad` (practice void gap). |
 | `ring_lap` | Ring walk + bare `:airDive;` pulse (not a landing). |
 | `cover_then_peek` / `peek_fire` / patrols | Cover demo; no air-dive. |
+| `shrine_clash_fight` | PvP shrine clash: `live_shrine` ADS+fire + 8s occupy, then lee peek/fire. Same book both seats. `onStop` / `onRespawn` restart. |

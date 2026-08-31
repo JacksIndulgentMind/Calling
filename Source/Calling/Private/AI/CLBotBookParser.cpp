@@ -335,6 +335,10 @@ namespace
 			{
 				Book.OnRespawn = FName(*Trim(L.Mid(10)));
 			}
+			else if (StartsIgnore(L, TEXT("onstop:")))
+			{
+				Book.OnStop = FName(*Trim(L.Mid(7)));
+			}
 			else if (StartsIgnore(L, TEXT("trysuccessfor:")))
 			{
 				Book.DefaultTrySuccessFor = FCString::Atof(*Trim(L.Mid(14)));

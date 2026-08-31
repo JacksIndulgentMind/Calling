@@ -76,6 +76,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Calling|Weapon")
 	void SetWantsFire(bool bFire);
 
+	/** Authority hitscan using an already-spread view. Guest FireHitscan RPCs here. */
+	FRotator AuthorityFireHitscan(const FVector& Start, FRotator ViewRot, bool bIsAds);
+
+	void AuthoritySpawnGrenade(const FVector& Start, const FVector& Direction);
+	void AuthorityDetonateGrenade();
+	void PlayHitscanFX(const FVector& Start, const FVector& Direction);
+	void NotePredictedLiveGrenade(bool bLive);
+
 	UFUNCTION(BlueprintCallable, Category = "Calling|Weapon")
 	void StartReload();
 
@@ -213,6 +221,8 @@ protected:
 
 	UPROPERTY()
 	TWeakObjectPtr<ACLWeaponProjectile> LiveGrenade;
+
+	bool bPredictLiveGrenade = false;
 
 	UPROPERTY()
 	FCLWeaponMotorTune Tune;

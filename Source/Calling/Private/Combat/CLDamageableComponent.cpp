@@ -70,6 +70,11 @@ float UCLDamageableComponent::GetMaxShield() const
 
 float UCLDamageableComponent::ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision)
 {
+	const AActor* Owner = GetOwner();
+	if (Owner && !Owner->HasAuthority())
+	{
+		return 0.f;
+	}
 	if (Damage <= 0.f || !IsAlive())
 	{
 		return 0.f;

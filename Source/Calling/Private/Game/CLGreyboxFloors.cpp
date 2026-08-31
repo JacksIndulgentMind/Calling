@@ -532,14 +532,24 @@ void ACLGreyboxFloors::AddPlatform(const FVector& CenterCm, float SizeXMeters, f
 		FRotator::ZeroRotator);
 }
 
-void ACLGreyboxFloors::AddBox(const FVector& CenterCm, const FVector& SizeCm, const FRotator& Rotation)
+void ACLGreyboxFloors::AddBox(const FVector& CenterCm, const FVector& SizeCm, const FRotator& Rotation, bool bExcludeFromNav, bool bVaultableCover)
 {
 	const FName CompName(*FString::Printf(TEXT("Floor_%d"), Platforms.Num()));
 	UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(this, CompName);
 	Mesh->SetupAttachment(RootComponent);
 	Mesh->SetMobility(EComponentMobility::Static);
-	Mesh->SetCanEverAffectNavigation(true);
-	Mesh->bFillCollisionUnderneathForNavmesh = true;
+	// Cover is collision + probe (vault or wall-slide), not a Recast floor. Baking
+	// walkable on the lid puts goto waypoints where the pawn cannot stand.
+	Mesh->SetCanEverAffectNavigation(!bExcludeFromNav);
+	Mesh->bFillCollisionUnderneathForNavmesh = !bExcludeFromNav;
+	if (bExcludeFromNav)
+	{
+		Mesh->ComponentTags.Add(FName(TEXT("CLCoverObstacle")));
+	}
+	if (bVaultableCover)
+	{
+		Mesh->ComponentTags.Add(FName(TEXT("CLVaultableCover")));
+	}
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	Mesh->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
 	Mesh->SetCastShadow(false);
@@ -555,7 +565,10 @@ void ACLGreyboxFloors::AddBox(const FVector& CenterCm, const FVector& SizeCm, co
 	const FVector Scale(SizeCm.X / 100.f, SizeCm.Y / 100.f, SizeCm.Z / 100.f);
 	Mesh->SetRelativeTransform(FTransform(Rotation, CenterCm, Scale));
 	Mesh->RegisterComponent();
-	FNavigationSystem::UpdateComponentData(*Mesh);
+	if (!bExcludeFromNav)
+	{
+		FNavigationSystem::UpdateComponentData(*Mesh);
+	}
 	Platforms.Add(Mesh);
 }
 
@@ -604,7 +617,9 @@ void ACLGreyboxFloors::StampModule(FName Id, const FVector& CenterCm, const FRot
 	{
 		Size = FVector(80.f, 500.f, 220.f);
 	}
-	AddBox(CenterCm, Size, Rot);
+	const bool bCoverObstacle = (Key == TEXT("cover_half") || Key == TEXT("cover_full"));
+	const bool bVaultableCover = (Key == TEXT("cover_half"));
+	AddBox(CenterCm, Size, Rot, bCoverObstacle, bVaultableCover);
 }
 
 void ACLGreyboxFloors::StampCornerShrines(const FCLPvpThreeLaneRecipe& Recipe, float PitZ)
@@ -892,7 +907,7 @@ void ACLGreyboxFloors::BuildPvpThreeLane()
 	}
 
 	// Short inner hide for the hold pawn (not a 5 m cover_half slab).
-	AddBox(FVector(0.f, 320.f, PitZ + HalfCoverZ * 0.5f), FVector(80.f, 180.f, HalfCoverZ), FRotator::ZeroRotator);
+	AddBox(FVector(0.f, 320.f, PitZ + HalfCoverZ * 0.5f), FVector(80.f, 180.f, HalfCoverZ), FRotator::ZeroRotator, true);
 
 	StampCornerShrines(R, PitZ);
 
@@ -1179,7 +1194,8 @@ void ACLGreyboxFloors::RebuildNavigation()
 	// Octree ignores geometry until Recast exists. Push cubes after Create.
 	for (UStaticMeshComponent* Mesh : Platforms)
 	{
-		if (Mesh)
+		if (Mesh && !Mesh->ComponentHasTag(FName(TEXT("CLCoverObstacle")))
+			&& !Mesh->ComponentHasTag(FName(TEXT("CLVaultableCover"))))
 		{
 			Mesh->SetCanEverAffectNavigation(true);
 			FNavigationSystem::UpdateComponentData(*Mesh);

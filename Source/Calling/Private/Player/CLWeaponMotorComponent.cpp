@@ -381,7 +381,41 @@ void UCLWeaponMotorComponent::SwapToSlot(ECLWeaponSlot Slot)
 bool UCLWeaponMotorComponent::HasLiveGrenade() const
 {
 	const ACLWeaponProjectile* Nade = LiveGrenade.Get();
-	return Nade && Nade->IsLiveGrenade();
+	if (Nade && Nade->IsLiveGrenade())
+	{
+		return true;
+	}
+	return bPredictLiveGrenade;
+}
+
+void UCLWeaponMotorComponent::NotePredictedLiveGrenade(bool bLive)
+{
+	bPredictLiveGrenade = bLive;
+}
+
+void UCLWeaponMotorComponent::PlayHitscanFX(const FVector& Start, const FVector& Direction)
+{
+	SpawnTracer(Start, Direction);
+}
+
+void UCLWeaponMotorComponent::AuthoritySpawnGrenade(const FVector& Start, const FVector& Direction)
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+	{
+		return;
+	}
+	SpawnGrenade(Start, Direction);
+}
+
+void UCLWeaponMotorComponent::AuthorityDetonateGrenade()
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+	{
+		return;
+	}
+	DetonateLiveGrenade();
 }
 
 bool UCLWeaponMotorComponent::HasProxDetonate() const
@@ -397,10 +431,12 @@ bool UCLWeaponMotorComponent::DetonateLiveGrenade()
 		{
 			Nade->Detonate();
 			LiveGrenade.Reset();
+			bPredictLiveGrenade = false;
 			return true;
 		}
 	}
 	LiveGrenade.Reset();
+	bPredictLiveGrenade = false;
 	return false;
 }
 
@@ -559,6 +595,27 @@ FRotator UCLWeaponMotorComponent::FireHitscan(const FVector& Start, FRotator Vie
 	ViewRot.Yaw += Radius * FMath::Cos(Theta);
 	ViewRot.Pitch += Radius * FMath::Sin(Theta);
 
+	if (Owner->HasAuthority())
+	{
+		return AuthorityFireHitscan(Start, ViewRot, IsADS());
+	}
+	if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(Owner))
+	{
+		if (Char->IsLocallyControlled())
+		{
+			Char->ServerHitscanFire(Start, ViewRot, IsADS());
+		}
+	}
+	return ViewRot;
+}
+
+FRotator UCLWeaponMotorComponent::AuthorityFireHitscan(const FVector& Start, FRotator ViewRot, bool bIsAds)
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority() || !GetWorld())
+	{
+		return ViewRot;
+	}
 	FCLHitscanRequest Req;
 	Req.Start = Start;
 	Req.View = ViewRot;
@@ -570,7 +627,7 @@ FRotator UCLWeaponMotorComponent::FireHitscan(const FVector& Start, FRotator Vie
 	Req.AimAssistMagnetism = Tune.AimAssistMagnetism;
 	Req.bInstantKillOnPrecision = EquippedClass.bInstantKillOnPrecision;
 	Req.bRequireAdsForInstakill = true;
-	Req.bIsAds = IsADS();
+	Req.bIsAds = bIsAds;
 	Req.Behavior = Behavior;
 	AController* Instigator = nullptr;
 	if (APawn* PawnOwner = Cast<APawn>(Owner))
@@ -579,6 +636,10 @@ FRotator UCLWeaponMotorComponent::FireHitscan(const FVector& Start, FRotator Vie
 	}
 	FRotator ShotRot = ViewRot;
 	CLHitscanService::Fire(GetWorld(), Owner, Instigator, Req, &ShotRot);
+	if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(Owner))
+	{
+		Char->MulticastHitscanFX(Start, ShotRot.Vector());
+	}
 	return ShotRot;
 }
 
@@ -685,7 +746,19 @@ void UCLWeaponMotorComponent::TryFire(float DeltaTime)
 		{
 			return;
 		}
-		DetonateLiveGrenade();
+		AActor* Owner = GetOwner();
+		if (Owner && Owner->HasAuthority())
+		{
+			DetonateLiveGrenade();
+		}
+		else if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(Owner))
+		{
+			if (Char->IsLocallyControlled())
+			{
+				Char->ServerDetonateGrenade();
+				bPredictLiveGrenade = false;
+			}
+		}
 		bAwaitingFireRelease = true;
 		if (UWorld* World = GetWorld())
 		{
@@ -756,7 +829,19 @@ void UCLWeaponMotorComponent::FireShot()
 
 	if (UsesGrenadeProjectile())
 	{
-		SpawnGrenade(Start, Aim);
+		AActor* Owner = GetOwner();
+		if (Owner && Owner->HasAuthority())
+		{
+			SpawnGrenade(Start, Aim);
+		}
+		else if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(Owner))
+		{
+			if (Char->IsLocallyControlled())
+			{
+				Char->ServerGrenadeFire(Start, Aim);
+				bPredictLiveGrenade = true;
+			}
+		}
 		return;
 	}
 

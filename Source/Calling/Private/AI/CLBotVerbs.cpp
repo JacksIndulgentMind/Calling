@@ -70,12 +70,17 @@ void CLApplyBotWhile(FCLBotVerbContext& Ctx, bool bIncludeMove)
 		Intent.Move = MoveFromLeaf(*Ctx.Leaf);
 		Intent.bSprint = true;
 	}
+	const bool bLaunchOwnsLook = Ctx.Motor && Ctx.Motor->GetGotoDriver().bFlight;
 	for (const FName& W : Ctx.Leaf->WhileVerbs)
 	{
 		const FString S = W.ToString().ToLower();
 		if (S == TEXT("trackfocus") || S == TEXT("setfocus"))
 		{
-			Ctx.Char->SetLookTrackSeat(ResolveFocusSeat(Ctx));
+			// Recast Launch FaceGoal must win until land. while: look must not retarget during bFlight.
+			if (!bLaunchOwnsLook)
+			{
+				Ctx.Char->SetLookTrackSeat(ResolveFocusSeat(Ctx));
+			}
 		}
 		else if (S == TEXT("maintainads"))
 		{

@@ -80,7 +80,7 @@ public:
 	void RescueFallenPawns() const;
 
 	void AddPlatform(const FVector& CenterCm, float SizeXMeters, float SizeYMeters, float SizeZCm = 20.f);
-	void AddBox(const FVector& CenterCm, const FVector& SizeCm, const FRotator& Rotation);
+	void AddBox(const FVector& CenterCm, const FVector& SizeCm, const FRotator& Rotation, bool bExcludeFromNav = false, bool bVaultableCover = false);
 	/** 5 m × 5 m catalog: floor, ramp_low, ramp_mid, ramp_steep, rail, cover_half, cover_full. */
 	void StampModule(FName Id, const FVector& CenterCm, const FRotator& Rotation = FRotator::ZeroRotator);
 	void StampFillFloor(const FVector& CenterCm, float SizeXMeters, float SizeYMeters, float SlabZCm);
