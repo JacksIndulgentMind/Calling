@@ -390,7 +390,11 @@ namespace
 					};
 					Tangent = (Clearance(RHit) >= Clearance(LHit)) ? Right : Left;
 				}
-				WalkDir = (Tangent.GetSafeNormal2D() + N * 0.35f).GetSafeNormal2D();
+				// Flush/embedded (Dist ~0) must back off the face; a 0.35 peel crawls
+				// along the wall at velXY=0 and loc_still fires. Scale peel to AgentRadius.
+				const float Rad = FMath::Max(1.f, CLNavTune::Get().AgentRadiusCm);
+				const float Peel = FMath::Lerp(1.2f, 0.35f, FMath::Clamp(Fwd.Dist / Rad, 0.f, 1.f));
+				WalkDir = (Tangent.GetSafeNormal2D() + N * Peel).GetSafeNormal2D();
 				if (!WalkDir.IsNearlyZero())
 				{
 					MoveXY = WishFromWorld(WalkDir);
