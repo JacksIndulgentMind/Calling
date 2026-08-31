@@ -145,39 +145,34 @@ bool UCLGameModeCatalog::LoadModesDir()
 		}
 		FCLGameModeDef Mode;
 		Mode.Id = JsonName(Root, TEXT("id"));
-		Mode.Kind = JsonName(Root, TEXT("kind"));
 		JsonNameArray(Root, TEXT("requireTags"), Mode.RequireTags);
-		const TSharedPtr<FJsonObject>* Combat = nullptr;
-		if (Root->TryGetObjectField(TEXT("combat"), Combat) && Combat && Combat->IsValid())
+		const TArray<TSharedPtr<FJsonValue>>* Encounters = nullptr;
+		if (!Root->TryGetArrayField(TEXT("encounters"), Encounters) || !Encounters || Encounters->Num() == 0)
 		{
-			if ((*Combat)->HasField(TEXT("teamFinalBlows")))
+			UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+				ECLErrorKind::Logic, TEXT("game_mode_missing_encounters"), Path));
+			continue;
+		}
+		bool bEncountersOk = true;
+		for (const TSharedPtr<FJsonValue>& V : *Encounters)
+		{
+			FString EncErr;
+			TSharedPtr<ICLEncounterRules> Enc = CLParseEncounter(V.IsValid() ? V->AsObject() : nullptr, EncErr);
+			if (!Enc.IsValid())
 			{
-				Mode.TeamFinalBlows = static_cast<int32>((*Combat)->GetNumberField(TEXT("teamFinalBlows")));
+				UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+					ECLErrorKind::Logic, TEXT("game_mode_encounter"),
+					FString::Printf(TEXT("%s: %s"), *Path, *EncErr)));
+				bEncountersOk = false;
+				break;
 			}
+			Mode.Encounters.Add(MoveTemp(Enc));
 		}
-		const TSharedPtr<FJsonObject>* Space = nullptr;
-		if (Root->TryGetObjectField(TEXT("space"), Space) && Space && Space->IsValid())
+		if (!bEncountersOk || Mode.Id.IsNone())
 		{
-			Mode.OccupyTag = JsonName(*Space, TEXT("occupyTag"));
-			if ((*Space)->HasField(TEXT("rotateSeconds")))
-			{
-				Mode.RotateSeconds = static_cast<float>((*Space)->GetNumberField(TEXT("rotateSeconds")));
-			}
+			continue;
 		}
-		const TSharedPtr<FJsonObject>* Win = nullptr;
-		if (Root->TryGetObjectField(TEXT("win"), Win) && Win && Win->IsValid())
-		{
-			(*Win)->TryGetBoolField(TEXT("stealIfTenWithoutShrine"), Mode.bStealIfTenWithoutShrine);
-			(*Win)->TryGetBoolField(TEXT("failIfEitherTeamKillsZero"), Mode.bFailIfEitherTeamKillsZero);
-		}
-		if (Root->HasField(TEXT("failTimeoutSeconds")))
-		{
-			Mode.FailTimeoutSeconds = static_cast<float>(Root->GetNumberField(TEXT("failTimeoutSeconds")));
-		}
-		if (!Mode.Id.IsNone())
-		{
-			Modes.Add(Mode.Id, MoveTemp(Mode));
-		}
+		Modes.Add(Mode.Id, MoveTemp(Mode));
 	}
 	return Modes.Num() > 0;
 }
@@ -202,6 +197,30 @@ const FCLMapCatalogEntry* UCLGameModeCatalog::FindMapByUmap(const FString& Umap)
 const FCLGameModeDef* UCLGameModeCatalog::FindMode(FName Id) const
 {
 	return Modes.Find(Id);
+}
+
+const FCLShrineClashEncounter* FCLGameModeDef::FindShrineClash() const
+{
+	for (const TSharedPtr<ICLEncounterRules>& Enc : Encounters)
+	{
+		if (Enc.IsValid() && Enc->GetType() == FName(TEXT("shrineClash")))
+		{
+			return static_cast<const FCLShrineClashEncounter*>(Enc.Get());
+		}
+	}
+	return nullptr;
+}
+
+void FCLGameModeDef::CollectWaveHold(TArray<const FCLWaveHoldEncounter*>& Out) const
+{
+	Out.Reset();
+	for (const TSharedPtr<ICLEncounterRules>& Enc : Encounters)
+	{
+		if (Enc.IsValid() && Enc->GetType() == FName(TEXT("waveHold")))
+		{
+			Out.Add(static_cast<const FCLWaveHoldEncounter*>(Enc.Get()));
+		}
+	}
 }
 
 void UCLGameModeCatalog::ApplyMarkerTags(UWorld* World, FName MapId) const

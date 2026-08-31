@@ -35,7 +35,7 @@ Every **Tick** (NetHz, 20):
 | Walk / sprint / slide / dash / dodge / dive hang+slam / JumpZ / AirControl | `FCLMovementTune` ← `DefaultCalling.ini` `CLMovementFeelSettings` | envelopes, *-to ticks, `CLNavAbilityValidate` |
 | Recast agent + short jump links + `airDiveSearchMaxCm` | `Config/Nav/NavTune.json` | baked links via `CLNavLinkPolicy` |
 | **Strain** | `Config/Strain/AugmentedHumanoid.json` | Recast AirDiveDown/Over depth, Launch search XY, later fall damage. `maxFallBeforeCriticalCm` = **3000** (30 m). |
-| Map rescue Z | greybox `SurvivingDropCm` | JumpDown depth; rescue yank. Stays below strain so a 30 m dive is not yanked. |
+| Map rescue Z | lowest walkable greybox Z minus a buffer | JumpDown surviving drop (`spawn Z − rescue Z`); rescue yank of **player-controlled** pawns. Must not use elevated spawn Z as the floor (that yanks chamber NPCs onto the alcove). |
 | Locks | `AirControl=0.35`, `BaseStrafeSpeed=380` | validator asserts; do not retune |
 
 On nav rebuild, `CLNavAbilityValidate` checks feel locks and that AirDive **JumpHeight** is at least triple apex. It does **not** cap or disable AirDive for large JumpLength / search radius. Jump-gen knobs come from NavTune with no Calling ceilings. [RecastLinks.md](RecastLinks.md). The validator does **not** rewrite NavTune.json.
@@ -166,6 +166,6 @@ C++: `CLNavAbilityEnvelope` derives the torus (`FCLLaunchRecipe`) from `FCLMovem
 
 `airDive-to` Success/GoodEnough on `distXY` also requires **on ground, not diving, and standing on the goal floor** (capsule center ~40–220 cm above a floor-top marker). Same floor check applies to jump / slide / dash / dodge `-to` leaves. That rejects the pit under a menhir lintel. Menhir `menhir_N` markers sit on the **lintel top**, not the court floor; `menhir_N_approach` stays on the pit slab.
 
-Practice greybox `PracticePillar` + catalog `pillar_dive` (`goto marker=pillar_pad`) is the void-gap demo. PvP 3-lane stamps a south **edge pad** (`edge_lip` / `edge_pad`): island Z is apex-survivable below the lip; XY is locked inside x0. Canary bake reports `findPathMeshOk=true` (JumpLength **1508**, JumpMaxDepth **1420**). Catalog `edge_pad` is Recast `:goto` only (AirDive off-mesh). **Standing on the island 0.45 s recalls to the lip** (`UCLGreyboxRescue`); falling below the island (Z < pad − 500) uses the same lip teleport. Court-floor `slide_end` / `dash_end` are for catalog `slide_court` / `dash_court`.
+Practice greybox `PracticePillar` + catalog `pillar_dive` (`goto marker=pillar_pad`) is the void-gap demo. PvP 3-lane stamps a south **edge pad** (`edge_lip` / `edge_pad`): island Z is apex-survivable below the lip; XY is locked inside x0. Canary bake reports `findPathMeshOk=true` (JumpLength **1508**, JumpMaxDepth **1420**). Catalog `edge_pad` is Recast `:goto` only (AirDive off-mesh). **Standing on the island 0.45 s recalls to the lip** (`UCLGreyboxRescue`); falling below the island (Z < pad − 500) uses the same lip teleport. Raid has no edge pad — player void recall is layout spawn / west overlook; rescue min Z is walkable floor − buffer (not overlook spawn Z). Court-floor `slide_end` / `dash_end` are for catalog `slide_court` / `dash_court`.
 
 Neural-net “brain” is reserved; do not name types `brain`.

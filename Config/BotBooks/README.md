@@ -20,3 +20,5 @@ Durable files **must** `goto` by marker id. JIT hub trees may use x,y,z.
 | `ring_lap` | Ring walk + bare `:airDive;` pulse (not a landing). |
 | `cover_then_peek` / `peek_fire` / patrols | Cover demo; no air-dive. |
 | `shrine_clash_fight` | PvP shrine clash: `live_shrine` ADS+fire + 8s occupy, then lee peek/fire. Same book both seats. `onStop` / `onRespawn` restart. |
+| `patrol_to_live_occupy` | Raid adds/bosses: Recast `goto live_occupy` with `trackFocus, fire`, then `occupy_flank_orbit`. |
+| `occupy_flank_orbit` | Clockwise `goto live_orbit` crumbs (first pick flank). Settle bands are inside one crumb chord so pad-center is not already Success. `onStop` restarts the lap. |

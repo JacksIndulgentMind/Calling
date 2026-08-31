@@ -1,0 +1,18 @@
+@startuml patrol_to_live_occupy
+floating note
+onRespawn: patrol_to_live_occupy
+onStop: occupy_flank_orbit
+trySuccessFor: 2.0
+end note
+start
+:setFocus focus=enemy;
+:goto marker=live_occupy;
+note right
+  while: trackFocus, fire
+  success: distXY 320
+  goodEnough: distXY 900
+  fail.timeout: 60
+end note
+:ref occupy_flank_orbit;
+stop
+@enduml

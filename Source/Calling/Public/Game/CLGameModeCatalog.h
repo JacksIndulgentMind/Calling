@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Core/CLError.h"
+#include "Game/CLEncounterRules.h"
 #include "CLGameModeCatalog.generated.h"
 
 class ACLTaskMarker;
@@ -20,14 +21,11 @@ struct FCLMapCatalogEntry
 struct FCLGameModeDef
 {
 	FName Id;
-	FName Kind;
 	TArray<FName> RequireTags;
-	int32 TeamFinalBlows = 10;
-	FName OccupyTag;
-	float RotateSeconds = 45.f;
-	bool bStealIfTenWithoutShrine = true;
-	bool bFailIfEitherTeamKillsZero = true;
-	float FailTimeoutSeconds = 480.f;
+	TArray<TSharedPtr<ICLEncounterRules>> Encounters;
+
+	const FCLShrineClashEncounter* FindShrineClash() const;
+	void CollectWaveHold(TArray<const FCLWaveHoldEncounter*>& Out) const;
 };
 
 /** JSON maps + game modes. Unreal AGameMode stays the scene host. */

@@ -2,30 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "AI/CLAIPersonalityData.h"
+#include "Game/CLEncounterRules.h"
 #include "CLEncounterDirector.generated.h"
 
-class ACLCombatAIController;
+class UCLParticipantSeat;
+class UCLStatusEffectComponent;
+class ACLCombatPawn;
+class ACLGreyboxFloors;
 
-USTRUCT(BlueprintType)
-struct CALLING_API FCLEncounterSpawnRequest
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Raid")
-	FVector Location = FVector::ZeroVector;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Raid")
-	FCLAIPersonalityWeight Personality;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Raid")
-	bool bElite = false;
-};
-
-/**
- * Per-chamber RNG: composition, density, spawn points, personalities.
- * Difficulty via intellect / numbers / terrain — not sponge HP.
- */
 UCLASS(ClassGroup = (Calling), meta = (BlueprintSpawnableComponent))
 class CALLING_API UCLEncounterDirector : public UActorComponent
 {
@@ -34,29 +18,51 @@ class CALLING_API UCLEncounterDirector : public UActorComponent
 public:
 	UCLEncounterDirector();
 
-	UFUNCTION(BlueprintCallable, Category = "Calling|Raid")
-	void BuildAndSpawnChamber(int32 ChamberIndex);
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	UFUNCTION(BlueprintCallable, Category = "Calling|Raid")
+	void BindWaveHold(const TArray<const FCLWaveHoldEncounter*>& Encounters);
+	void BeginFirstEncounter();
 	void ClearSpawned();
+	bool IsFinished() const { return bFinished; }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Raid")
-	TObjectPtr<UCLAIPersonalityData> PersonalityTable;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Raid")
-	TSubclassOf<APawn> GruntPawnClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Raid")
-	TSubclassOf<APawn> ElitePawnClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Raid")
-	float ArenaHalfExtent = 5000.f; // ~100m
+	float ArenaHalfExtent = 5000.f;
 
 protected:
-	TArray<FCLEncounterSpawnRequest> BuildPlan(int32 ChamberIndex) const;
-	FCLAIPersonalityWeight RollDefaultPersonality() const;
-	APawn* SpawnOne(const FCLEncounterSpawnRequest& Request);
+	struct FSpawnedNpc
+	{
+		TWeakObjectPtr<APawn> Pawn;
+		TObjectPtr<UCLParticipantSeat> Seat;
+	};
+
+	void StartEncounter(int32 Index);
+	void StartPhase(int32 PhaseIndex);
+	void SpawnWave();
+	bool HasNavTiles() const;
+	FName RollBot(const FCLSpawnerDef& Spawner) const;
+	bool FindClearSpawnLocation(const FVector& Origin, const FCLSpawnerDef& Spawner, FVector& OutStand, FString& OutReason) const;
+	APawn* SpawnBot(FName BotId, const FVector& Location);
+	void FailSpawn(const TCHAR* Code, const FString& Detail);
+	void TickNpcs(float DeltaSeconds);
+	void SweepDead();
+	void CompletePhase();
+	void CompleteEncounter();
+	void ApplyOffVolume(const FCLWaveHoldPhase& Phase);
+	UCLStatusEffectComponent* EnsureStatus(APawn* Pawn) const;
+
+	TArray<const FCLWaveHoldEncounter*> WaveHolds;
+	int32 EncounterIndex = 0;
+	int32 PhaseIndex = 0;
+	int32 WavesDone = 0;
+	int32 WavesSpawned = 0;
+	float WaveTimer = 0.f;
+	bool bRunning = false;
+	bool bFinished = false;
+	bool bWaveInFlight = false;
+	bool bAwaitingNav = false;
 
 	UPROPERTY()
-	TArray<TObjectPtr<APawn>> SpawnedPawns;
+	TArray<TObjectPtr<UCLParticipantSeat>> NpcSeats;
+
+	TArray<FSpawnedNpc> Spawned;
 };

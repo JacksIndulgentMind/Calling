@@ -1,22 +1,21 @@
 {
   "id": "shrine_clash",
-  "kind": "pvp",
   "requireTags": [
     "spawn.player.red",
     "spawn.player.blue",
     "space.shrine",
     "space.center"
   ],
-  "combat": {
-    "teamFinalBlows": 10
-  },
-  "space": {
-    "occupyTag": "space.shrine",
-    "rotateSeconds": 45
-  },
-  "win": {
-    "stealIfTenWithoutShrine": true,
-    "failIfEitherTeamKillsZero": true
-  },
-  "failTimeoutSeconds": 480
+  "encounters": [
+    {
+      "id": "shrine_clash",
+      "type": "shrineClash",
+      "teamFinalBlows": 10,
+      "occupyTag": "space.shrine",
+      "rotateSeconds": 45,
+      "stealIfTenWithoutShrine": true,
+      "failIfEitherTeamKillsZero": true,
+      "failTimeoutSeconds": 480
+    }
+  ]
 }

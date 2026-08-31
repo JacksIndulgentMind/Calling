@@ -286,7 +286,7 @@ const tools = [
   {
     name: "state",
     description:
-      "Read a Calling pawn and scene. Pass seat to sample that hub seat's driven pawn (GET /state?seat=). Omit seat for the listen-server / last-joined pawn. After appendBotBook, throw if botBook.followAlert / executionError / followed=false — do not wait for modeResult. PIE or -game must be running.",
+      "Read a Calling pawn and scene. Pass seat to sample that hub seat's driven pawn (GET /state?seat=). Omit seat for the listen-server / last-joined pawn. After appendBotBook, throw if botBook.followAlert / executionError / followed=false — do not wait for modeResult. If health/shield dropped, dump lastHit (any kind) and lastShot (hitscan/ability, killer loc) before guessing. If alive=false or lastDeath.valid, dump lastDeath (kind/source/killerName) and events code=death before chasing loc_still (a dead goto does not fire it). modeResult=fail with modeFailReason raid_spawn_unclear / raid_spawn_collide is a spawn-volume miss — dump events and stop; do not skip the add. Raid/debug stroll fail-fasts on lastDeath; PvP circle-run WaitAlive. PIE or -game must be running.",
     inputSchema: {
       type: "object",
       properties: {

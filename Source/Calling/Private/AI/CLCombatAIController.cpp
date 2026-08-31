@@ -15,6 +15,10 @@ ACLCombatAIController::ACLCombatAIController()
 void ACLCombatAIController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+	if (bBotBookDriven)
+	{
+		return;
+	}
 	AcquireNearestPlayer();
 }
 
@@ -65,6 +69,10 @@ void ACLCombatAIController::AcquireNearestPlayer()
 void ACLCombatAIController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (bBotBookDriven)
+	{
+		return;
+	}
 	AcquireTimer -= DeltaTime;
 	if (AcquireTimer <= 0.f)
 	{

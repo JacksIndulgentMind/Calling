@@ -50,9 +50,11 @@ After PvP: `navTiles > 0`. Red ~`(-6380,0,98)`, Blue ~`(6380,0,98)`. **Cover fir
 
 **Recover, do not fail-fast on combat.** `branchBotBook` with `cause` (`execution` if the bot failed the book; `situation` for combat/world) or append a new JIT tree on stall; rewrite from live `/state`. Z-collapse still stops that seat. Fail only after retries.
 
-**Do fail-fast on a book that is not executing.** `botBook.followAlert` / `executionError` / loc glued at spawn with a live `goto` is not a take-out — throw `command_not_followed` on the first sample. Do not sit on `modeResult`.
+**Do fail-fast on a book that is not executing.** `botBook.followAlert` / `executionError` / **living** loc glued at spawn with a live `goto` is not a take-out — throw `command_not_followed` on the first sample. Do not sit on `modeResult`. Frozen loc with `alive=false` is `lastDeath` — still `WaitAlive` here.
 
 Recording check: A 1P tracers from the barrel + casings; B 3P gun + body flinch; A hip screen punch vs ADS reticle walk.
+
+Raid Obelisk is **not** this script (`Scripts/dl-rebuild.ps1 -Activity raid`; nav skill **Raid Obelisk**). Raid/debug strolls fail-fast on `/state.lastDeath.valid`. This PvP verify does not.
 
 **Compose stays a gunfight.** Deaths make the demo harder; that is the mechanic. Do **not** mute fire, skip laps, or fail-fast on a take-out. `WaitAlive` and continue. Recover, do not make them immortal.
 

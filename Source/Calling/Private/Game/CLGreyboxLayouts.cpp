@@ -162,49 +162,12 @@ namespace
 		}
 	};
 
-	class FRaidCourtLayout final : public ICLGreyboxLayout
+	class FRaidObeliskLayout final : public ICLGreyboxLayout
 	{
 	public:
 		virtual void Build(ACLGreyboxFloors& Floors) override
 		{
-			Floors.AddPlatform(FVector(0.f, 0.f, 0.f), 50.f, 50.f);
-			Floors.AddPlatform(FVector(1200.f, 1200.f, 0.f), 4.f, 4.f);
-			Floors.AddPlatform(FVector(-1400.f, 800.f, 0.f), 4.f, 4.f);
-			Floors.AddPlatform(FVector(400.f, -1500.f, 0.f), 4.f, 4.f);
-		}
-	};
-
-	class FRaidApproachLayout final : public ICLGreyboxLayout
-	{
-	public:
-		virtual void Build(ACLGreyboxFloors& Floors) override
-		{
-			Floors.AddPlatform(FVector(0.f, 0.f, 0.f), 80.f, 10.f);
-			Floors.AddPlatform(FVector(-1000.f, 1200.f, 0.f), 8.f, 8.f);
-			Floors.AddPlatform(FVector(2000.f, -1200.f, 0.f), 8.f, 8.f);
-			Floors.AddPlatform(FVector(0.f, 800.f, 0.f), 6.f, 6.f);
-		}
-	};
-
-	class FRaidArenaLayout final : public ICLGreyboxLayout
-	{
-	public:
-		virtual void Build(ACLGreyboxFloors& Floors) override
-		{
-			Floors.AddPlatform(FVector(0.f, 0.f, 0.f), 40.f, 40.f);
-			Floors.AddPlatform(FVector(1800.f, 1800.f, 0.f), 6.f, 6.f);
-			Floors.AddPlatform(FVector(-1800.f, 1800.f, 0.f), 6.f, 6.f);
-			Floors.AddPlatform(FVector(1800.f, -1800.f, 0.f), 6.f, 6.f);
-			Floors.AddPlatform(FVector(-1800.f, -1800.f, 0.f), 6.f, 6.f);
-		}
-	};
-
-	class FRaidPitLayout final : public ICLGreyboxLayout
-	{
-	public:
-		virtual void Build(ACLGreyboxFloors& Floors) override
-		{
-			Floors.AddPlatform(FVector(0.f, 0.f, 0.f), 20.f, 20.f);
+			CLBuildRaidObelisk(Floors);
 		}
 	};
 
@@ -226,10 +189,12 @@ TUniquePtr<ICLGreyboxLayout> CLMakeGreyboxLayout(ECLGreyboxLayout Id)
 	case ECLGreyboxLayout::SocialSquare: return MakeUnique<FSocialSquareLayout>();
 	case ECLGreyboxLayout::PvpThreeLane: return MakeUnique<FPvpThreeLaneLayout>();
 	case ECLGreyboxLayout::PvpExtracted: return MakeUnique<FPvpExtractedLayout>();
-	case ECLGreyboxLayout::RaidCourt: return MakeUnique<FRaidCourtLayout>();
-	case ECLGreyboxLayout::RaidApproach: return MakeUnique<FRaidApproachLayout>();
-	case ECLGreyboxLayout::RaidArena: return MakeUnique<FRaidArenaLayout>();
-	case ECLGreyboxLayout::RaidPit: return MakeUnique<FRaidPitLayout>();
+	case ECLGreyboxLayout::RaidCourt:
+	case ECLGreyboxLayout::RaidApproach:
+	case ECLGreyboxLayout::RaidArena:
+	case ECLGreyboxLayout::RaidPit:
+	case ECLGreyboxLayout::RaidObelisk:
+		return MakeUnique<FRaidObeliskLayout>();
 	case ECLGreyboxLayout::PracticePillar: return MakeUnique<FPracticePillarLayout>();
 	default: return MakeUnique<FSocialSquareLayout>();
 	}

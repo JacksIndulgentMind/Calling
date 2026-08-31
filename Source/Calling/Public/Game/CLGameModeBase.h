@@ -169,6 +169,7 @@ public:
 	ACLRaidGameMode();
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void StartPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void HandleLobbyGo() override;
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Raid")
@@ -180,6 +181,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Calling|Raid")
 	void AdvanceOrFinishRaid();
 
+	void NotifyEncounterBegin(int32 EncounterIndex);
+	void NotifyEncounterComplete(int32 EncounterIndex, FName OpensMarker);
+	void FailBook(const FString& Reason);
+
+protected:
+	void BindObeliskRaid();
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Calling|Raid")
 	TObjectPtr<UCLEncounterDirector> EncounterDirector;
@@ -187,8 +195,8 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Calling|Raid")
 	int32 ChamberCount = 4;
 
-	int32 InferChamberIndexFromMap() const;
-	static ECLGreyboxLayout GreyboxLayoutForChamber(int32 ChamberIndex);
+	FName CatalogMapId = FName(TEXT("raid_obelisk"));
+	bool bModeFinished = false;
 };
 
 UCLASS()

@@ -20,6 +20,8 @@ public:
 	void ApplyAgentLookCommand(const FCLLookCommand& Look);
 	void ApplyAgentLookFromStep(const FGuid& TrackSeatId, const FCLLookCommand& Look);
 	void SetLookTrackSeat(const FGuid& SeatId);
+	void SetTrackReactOverride(float Seconds);
+	float GetTrackReactSeconds() const;
 	FGuid GetLookTrackSeat() const { return LookTrackSeatId; }
 	bool IsLookTracking() const { return bLookTrack; }
 	void ClearAgentLook();
@@ -33,6 +35,7 @@ protected:
 	TOptional<float> LookGoalPitch;
 	bool bLookTrack = false;
 	FGuid LookTrackSeatId;
+	float TrackReactOverride = -1.f;
 	bool bLookStickyValid = false;
 	FVector LookSticky = FVector::ZeroVector;
 	float LookTrackReactRemaining = 0.f;

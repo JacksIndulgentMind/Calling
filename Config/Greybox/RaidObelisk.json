@@ -1,0 +1,61 @@
+{
+  "id": "raid_obelisk",
+  "moduleMeters": 5,
+  "chamberM": 40,
+  "gapM": 12,
+  "airM": 100,
+  "wallH": 8,
+  "wallSlopeDeg": 5,
+  "obeliskHeightM": 90,
+  "obeliskInsetM": 5,
+  "orbitCount": 4,
+  "chambers": [
+    {
+      "id": "ch1",
+      "pattern": "triangle",
+      "rings": [
+        { "id": "ch1_ring_I", "diameterM": 5 },
+        { "id": "ch1_ring_II", "diameterM": 5 },
+        { "id": "ch1_ring_III", "diameterM": 5 }
+      ],
+      "main": { "id": "ch1_main", "diameterM": 10 },
+      "portal": "ch1_portal",
+      "door": "door_ch1"
+    },
+    {
+      "id": "ch2",
+      "pattern": "square",
+      "rings": [
+        { "id": "ch2_ring_I", "diameterM": 5 },
+        { "id": "ch2_ring_II", "diameterM": 5 },
+        { "id": "ch2_ring_III", "diameterM": 5 }
+      ],
+      "main": { "id": "ch2_main", "diameterM": 10 },
+      "portal": "ch2_portal",
+      "door": "door_ch2"
+    },
+    {
+      "id": "ch3",
+      "pattern": "line",
+      "rings": [
+        { "id": "ch3_ring_I", "diameterM": 4 },
+        { "id": "ch3_ring_II", "diameterM": 6 },
+        { "id": "ch3_ring_III", "diameterM": 8 }
+      ],
+      "main": { "id": "ch3_main", "diameterM": 12 },
+      "portal": "ch3_portal",
+      "door": "door_ch3"
+    },
+    {
+      "id": "ch4",
+      "pattern": "pyramid",
+      "rings": [
+        { "id": "ch4_ring_I", "diameterM": 5 },
+        { "id": "ch4_ring_II", "diameterM": 5 },
+        { "id": "ch4_ring_III", "diameterM": 5 }
+      ],
+      "main": { "id": "ch4_main", "diameterM": 10, "elevateCm": 300 },
+      "portal": "ch4_portal"
+    }
+  ]
+}

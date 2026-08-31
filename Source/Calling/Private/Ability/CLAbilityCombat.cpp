@@ -1,6 +1,7 @@
 #include "Ability/CLAbilityCombat.h"
 #include "Combat/CLDamageableComponent.h"
 #include "Player/CLHealthShieldComponent.h"
+#include "Player/CLPlayerCharacter.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -16,13 +17,17 @@ namespace CLAbilityCombat
 			return 0.f;
 		}
 		AController* Inst = Instigator ? Instigator->GetController() : nullptr;
+		if (ACLPlayerCharacter::AreCombatAllies(Instigator, Target))
+		{
+			return 0.f;
+		}
 		if (UCLDamageableComponent* Dmg = Target->FindComponentByClass<UCLDamageableComponent>())
 		{
-			return Dmg->ApplyDamage(Damage, Inst, false);
+			return Dmg->ApplyDamage(Damage, Inst, false, FName(TEXT("ability")), FName(TEXT("ability")));
 		}
 		if (UCLHealthShieldComponent* HS = Target->FindComponentByClass<UCLHealthShieldComponent>())
 		{
-			return HS->ApplyDamage(Damage, Inst, false);
+			return HS->ApplyDamage(Damage, Inst, false, FName(TEXT("ability")), FName(TEXT("ability")));
 		}
 		return 0.f;
 	}
@@ -41,7 +46,7 @@ namespace CLAbilityCombat
 		for (TActorIterator<AActor> It(World); It; ++It)
 		{
 			AActor* Other = *It;
-			if (!Other || Other == Instigator || !HasDamageTarget(Other))
+			if (!Other || Other == Instigator || !HasDamageTarget(Other) || ACLPlayerCharacter::AreCombatAllies(Instigator, Other))
 			{
 				continue;
 			}
@@ -63,7 +68,7 @@ namespace CLAbilityCombat
 		for (TActorIterator<AActor> It(From->GetWorld()); It; ++It)
 		{
 			AActor* Other = *It;
-			if (!Other || Other == From || !HasDamageTarget(Other))
+			if (!Other || Other == From || !HasDamageTarget(Other) || ACLPlayerCharacter::AreCombatAllies(From, Other))
 			{
 				continue;
 			}

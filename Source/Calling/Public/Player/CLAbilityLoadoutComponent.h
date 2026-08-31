@@ -43,6 +43,7 @@ public:
 	ECLClassId GetClassId() const { return ClassId; }
 
 	UCLAbility* GetSlot(ECLAbilitySlot Slot) const;
+	void ScaleCooldowns(float Scale);
 
 protected:
 	bool TryActivate(ECLAbilitySlot Slot);

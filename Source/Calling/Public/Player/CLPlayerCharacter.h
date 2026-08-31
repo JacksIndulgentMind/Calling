@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Core/CLTypes.h"
+#include "Game/CLLobbyTypes.h"
+#include "Game/CLGameStateBase.h"
 #include "Input/CLAgentIntent.h"
 #include "TimerManager.h"
 #include "CLPlayerCharacter.generated.h"
@@ -112,7 +114,17 @@ public:
 	void ConsumeSimInput(FVector2D MoveXY, FVector2D LookDelta, bool bSprint, bool bCrouch, bool bADS, bool bFire);
 
 	bool IsCombatAlive() const;
+	ECLPvpTeam GetCombatTeam() const { return CombatTeam; }
+	void SetCombatTeam(ECLPvpTeam Team) { CombatTeam = Team; }
+	static ECLPvpTeam CombatTeamOf(const AActor* Actor);
+	static bool AreCombatAllies(const AActor* A, const AActor* B);
 	void NoteIncomingDamage(AController* InstigatorController, float Applied);
+	void RecordHit(AController* InstigatorController, FName Kind, FName Source, float Applied);
+	const FCLHitRecord& GetLastHit() const { return LastHit; }
+	const FCLHitRecord& GetLastShot() const { return LastShot; }
+	const FCLHitRecord& GetLastDeath() const { return LastDeath; }
+	void SetBotDefId(FName Id) { BotDefId = Id; }
+	FName GetBotDefId() const { return BotDefId; }
 	void PlayKnifeSlash();
 	void NotifyRespawned();
 
@@ -165,6 +177,9 @@ protected:
 	UPROPERTY()
 	bool bUseNpcLoadout = false;
 
+	UPROPERTY()
+	ECLPvpTeam CombatTeam = ECLPvpTeam::Unassigned;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Calling")
 	TObjectPtr<USpringArmComponent> CameraBoom;
 
@@ -209,6 +224,10 @@ protected:
 	bool bTakenOut = false;
 	TMap<TWeakObjectPtr<AController>, float> DamageTimes;
 	TWeakObjectPtr<AController> LastDamageInstigator;
+	FCLHitRecord LastHit;
+	FCLHitRecord LastShot;
+	FCLHitRecord LastDeath;
+	FName BotDefId;
 	FTimerHandle RespawnTimer;
 
 	UPROPERTY()

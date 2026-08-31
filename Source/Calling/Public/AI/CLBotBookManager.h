@@ -74,6 +74,8 @@ protected:
 		TArray<FName> Fallbacks;
 		FName OnRespawn;
 		FName OnStop;
+		int32 LiveOrbitIndex = -1;
+		FName LiveOrbitOccupy;
 		bool bJit = false;
 		FName ActiveName;
 		int32 FallbackIndex = 0;

@@ -40,6 +40,28 @@ namespace
 		}
 	}
 
+	TSharedRef<FJsonObject> HitToJson(const FCLHitRecord& Hit)
+	{
+		TSharedRef<FJsonObject> Obj = MakeShared<FJsonObject>();
+		Obj->SetBoolField(TEXT("valid"), Hit.bValid);
+		Obj->SetStringField(TEXT("kind"), Hit.Kind);
+		Obj->SetStringField(TEXT("source"), Hit.Source);
+		Obj->SetStringField(TEXT("killer"), Hit.Killer);
+		Obj->SetStringField(TEXT("killerName"), Hit.KillerName);
+		Obj->SetStringField(TEXT("victim"), Hit.Victim);
+		Obj->SetNumberField(TEXT("amount"), Hit.Amount);
+		Obj->SetNumberField(TEXT("health"), Hit.Health);
+		Obj->SetNumberField(TEXT("shield"), Hit.Shield);
+		Obj->SetNumberField(TEXT("x"), Hit.X);
+		Obj->SetNumberField(TEXT("y"), Hit.Y);
+		Obj->SetNumberField(TEXT("z"), Hit.Z);
+		Obj->SetNumberField(TEXT("killerX"), Hit.KillerX);
+		Obj->SetNumberField(TEXT("killerY"), Hit.KillerY);
+		Obj->SetNumberField(TEXT("killerZ"), Hit.KillerZ);
+		Obj->SetNumberField(TEXT("t"), Hit.Time);
+		return Obj;
+	}
+
 	void FillMatchMode(TSharedRef<FJsonObject> Root, UWorld* World)
 	{
 		if (!World)
@@ -57,11 +79,18 @@ namespace
 		Root->SetNumberField(TEXT("teamBKills"), GS->GetTeamBKills());
 		Root->SetStringField(TEXT("scoreLine"), GS->GetScoreLine());
 		Root->SetStringField(TEXT("liveShrine"), GS->GetLiveShrine().ToString());
+		Root->SetStringField(TEXT("liveOccupy"), GS->GetLiveShrine().ToString());
+		Root->SetStringField(TEXT("encounterId"), GS->GetEncounterId().ToString());
+		Root->SetStringField(TEXT("phaseId"), GS->GetPhaseId().ToString());
+		Root->SetNumberField(TEXT("wavesDone"), GS->GetWavesDone());
 		Root->SetBoolField(TEXT("shrineHeldRed"), GS->GetShrineHeldRed());
 		Root->SetBoolField(TEXT("shrineHeldBlue"), GS->GetShrineHeldBlue());
 		Root->SetStringField(TEXT("modeResult"), GS->GetModeResult());
 		Root->SetStringField(TEXT("winningTeam"), GS->GetWinningTeam());
 		Root->SetStringField(TEXT("modeFailReason"), GS->GetModeFailReason());
+		Root->SetObjectField(TEXT("lastHit"), HitToJson(GS->GetLastHit()));
+		Root->SetObjectField(TEXT("lastShot"), HitToJson(GS->GetLastShot()));
+		Root->SetObjectField(TEXT("lastDeath"), HitToJson(GS->GetLastDeath()));
 		TArray<TSharedPtr<FJsonValue>> EvArr;
 		for (const FCLMatchEvent& E : GS->GetMatchEvents())
 		{
@@ -94,6 +123,12 @@ namespace
 		Root->SetNumberField(TEXT("pitch"), FRotator::NormalizeAxis(Control.Pitch));
 		Root->SetNumberField(TEXT("vz"), Char->GetVelocity().Z);
 		Root->SetBoolField(TEXT("alive"), Char->IsCombatAlive());
+		Root->SetObjectField(TEXT("hit"), HitToJson(Char->GetLastHit()));
+		Root->SetObjectField(TEXT("shot"), HitToJson(Char->GetLastShot()));
+		if (Char->GetLastDeath().bValid)
+		{
+			Root->SetObjectField(TEXT("death"), HitToJson(Char->GetLastDeath()));
+		}
 		CLAgentNavProbe::FillStateJson(Root, World, Char);
 		if (const UCLCombatMovementComponent* Move = Char->GetCombatMovement())
 		{

@@ -37,6 +37,7 @@ FCLLobbyInvoice FCLLobbyInvoice::MakeRaid(int32 ChamberIndex, int32 MinPlayers, 
 {
 	FCLLobbyInvoice Invoice;
 	Invoice.Activity = ECLSceneId::Raid;
+	Invoice.GameModeId = FName(TEXT("obelisk_raid"));
 	Invoice.MinPlayers = FMath::Max(1, MinPlayers);
 	Invoice.MaxPlayers = FMath::Max(Invoice.MinPlayers, MaxPlayers);
 	Invoice.Access = ECLLobbyAccess::Closed;

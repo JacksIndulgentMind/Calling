@@ -25,7 +25,8 @@ enum class ECLGreyboxLayout : uint8
 	RaidPit UMETA(DisplayName = "Raid 04 (pit)"),
 	SocialSquare UMETA(DisplayName = "Social (100 m square)"),
 	PvpThreeLane UMETA(DisplayName = "PvP (3-lane ravine courtyard)"),
-	PracticePillar UMETA(DisplayName = "Practice (pillar air-dive)")
+	PracticePillar UMETA(DisplayName = "Practice (pillar air-dive)"),
+	RaidObelisk UMETA(DisplayName = "Raid (obelisk chain)")
 };
 
 /**
@@ -53,7 +54,7 @@ public:
 	/** Blue (east) spawn. Valid for PvpThreeLane. */
 	FVector GetBluePlayerStartLocation() const;
 
-	/** Z below which RescueFallenPawns teleports. Pit maps sit lower than spawn. */
+	/** Z below which RescueFallenPawns teleports. Walkable-floor bottom minus a buffer — not spawn Z (an elevated alcove must not yank floor pawns onto the player). */
 	float GetRescueMinZ() const;
 	/** Court lip stand after an island dive. Empty if this layout has no edge pad. */
 	FVector GetEdgeRecallLocation() const;
@@ -88,6 +89,8 @@ public:
 	void BuildPvpThreeLane();
 	void BuildPracticePillar();
 	void StampTaskMarkers();
+	void RegisterDoor(FName Id);
+	void OpenDoor(FName Id);
 	/** Recast from NavTune.json (agent + jump links). Surviving drop is spawn Z minus rescue Z. */
 	void RebuildNavigation();
 
@@ -139,6 +142,9 @@ protected:
 	TArray<TObjectPtr<UStaticMeshComponent>> Platforms;
 
 	UPROPERTY()
+	TMap<FName, TObjectPtr<UStaticMeshComponent>> DoorBlocks;
+
+	UPROPERTY()
 	TObjectPtr<UStaticMesh> CubeMesh;
 
 	UPROPERTY()
@@ -149,5 +155,6 @@ protected:
 
 	ECLGreyboxLayout BuiltLayout = ECLGreyboxLayout::SocialSquare;
 	bool bHasBuilt = false;
+	float CachedWalkableMinZ = TNumericLimits<float>::Max();
 	FTimerHandle NavRebuildTimer;
 };

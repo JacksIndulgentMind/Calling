@@ -103,6 +103,22 @@ void UCLLookController::SetLookTrackSeat(const FGuid& SeatId)
 	LookTrackReactRemaining = 0.f;
 }
 
+void UCLLookController::SetTrackReactOverride(float Seconds)
+{
+	TrackReactOverride = Seconds;
+}
+
+float UCLLookController::GetTrackReactSeconds() const
+{
+	if (TrackReactOverride >= 0.f)
+	{
+		return TrackReactOverride;
+	}
+	FCLAgentLookTune Tune;
+	Tune.LoadFromIni();
+	return Tune.TrackReactSeconds;
+}
+
 void UCLLookController::ApplyAgentLookFromStep(const FGuid& TrackSeatId, const FCLLookCommand& Look)
 {
 	if (TrackSeatId.IsValid())
@@ -210,7 +226,7 @@ void UCLLookController::TickAgentLook(float DeltaSeconds)
 			}
 			else if (FVector::Dist(Loc, LookSticky) > Tune.TrackMoveEpsilonCm && LookTrackReactRemaining <= 0.f)
 			{
-				LookTrackReactRemaining = Tune.TrackReactSeconds;
+				LookTrackReactRemaining = GetTrackReactSeconds();
 			}
 			if (LookTrackReactRemaining > 0.f)
 			{

@@ -1,0 +1,14 @@
+{
+  "id": "raid_grunt",
+  "role": "mob",
+  "intellect": {
+    "changeResponseSeconds": 0.35,
+    "botBook": "patrol_to_live_occupy",
+    "botBookSkill": 1,
+    "bulkApperception": false
+  },
+  "abilityStack": {
+    "kit": "vanguard",
+    "cooldownScale": 1.0
+  }
+}

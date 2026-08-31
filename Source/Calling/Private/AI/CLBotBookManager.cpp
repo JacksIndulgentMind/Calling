@@ -68,6 +68,63 @@ namespace
 		return FVector::Dist2D(A, B);
 	}
 
+	bool IsLiveOccupyAlias(FName Id)
+	{
+		return Id == FName(TEXT("live_occupy")) || Id == FName(TEXT("liveOccupy"))
+			|| Id == FName(TEXT("live_shrine")) || Id == FName(TEXT("liveShrine"));
+	}
+
+	bool IsLiveOrbitAlias(FName Id)
+	{
+		return Id == FName(TEXT("live_orbit")) || Id == FName(TEXT("liveOrbit"));
+	}
+
+	FName LiveOccupyId(UWorld* World)
+	{
+		if (ACLGameStateBase* GS = World ? World->GetGameState<ACLGameStateBase>() : nullptr)
+		{
+			return GS->GetLiveShrine();
+		}
+		return NAME_None;
+	}
+
+	void CollectOrbitCrumbs(UWorld* World, FName Occupy, TArray<ACLTaskMarker*>& Out)
+	{
+		Out.Reset();
+		if (!World || Occupy.IsNone())
+		{
+			return;
+		}
+		for (int32 i = 0; i < 32; ++i)
+		{
+			const FName Id(*FString::Printf(TEXT("%s_orbit_%d"), *Occupy.ToString(), i));
+			if (ACLTaskMarker* M = ACLTaskMarker::FindById(World, Id))
+			{
+				Out.Add(M);
+			}
+			else
+			{
+				break;
+			}
+		}
+	}
+
+	ACLTaskMarker* PeekOrbitCrumb(UWorld* World, FName Occupy, int32 Index)
+	{
+		TArray<ACLTaskMarker*> Crumbs;
+		if (Occupy.IsNone())
+		{
+			Occupy = LiveOccupyId(World);
+		}
+		CollectOrbitCrumbs(World, Occupy, Crumbs);
+		if (Crumbs.Num() == 0)
+		{
+			return nullptr;
+		}
+		const int32 Idx = Index >= 0 ? Index % Crumbs.Num() : 0;
+		return Crumbs[Idx];
+	}
+
 	bool OutcomeIn(ECLBotOutcome Last, const TArray<FString>& Names)
 	{
 		const FString Cur = CLBotOutcomeName(Last);
@@ -666,7 +723,7 @@ bool UCLBotBookManager::EvalPredicate(const FCLBotPredicate& Pred, UCLParticipan
 	if (Name == TEXT("hasmarker"))
 	{
 		FName Want(*Pred.Value);
-		if (Want == FName(TEXT("live_shrine")) || Want == FName(TEXT("liveShrine")))
+		if (IsLiveOccupyAlias(Want))
 		{
 			if (ACLGameStateBase* GS = World ? World->GetGameState<ACLGameStateBase>() : nullptr)
 			{
@@ -675,6 +732,12 @@ bool UCLBotBookManager::EvalPredicate(const FCLBotPredicate& Pred, UCLParticipan
 					Want = GS->GetLiveShrine();
 				}
 			}
+		}
+		if (IsLiveOrbitAlias(Want))
+		{
+			TArray<ACLTaskMarker*> Crumbs;
+			CollectOrbitCrumbs(World, LiveOccupyId(World), Crumbs);
+			return Crumbs.Num() > 0;
 		}
 		return ACLTaskMarker::FindById(World, Want) != nullptr;
 	}
@@ -748,7 +811,7 @@ bool UCLBotBookManager::StartLeaf(FRuntime& Rt, UCLParticipantSeat* Seat, FStrin
 	if (const FString* Marker = Stmt->Leaf.Params.Find(TEXT("marker")))
 	{
 		FName MarkerId(**Marker);
-		if (MarkerId == FName(TEXT("live_shrine")) || MarkerId == FName(TEXT("liveShrine")))
+		if (IsLiveOccupyAlias(MarkerId))
 		{
 			if (ACLGameStateBase* GS = Ctx.World ? Ctx.World->GetGameState<ACLGameStateBase>() : nullptr)
 			{
@@ -758,6 +821,68 @@ bool UCLBotBookManager::StartLeaf(FRuntime& Rt, UCLParticipantSeat* Seat, FStrin
 				}
 			}
 		}
+		if (IsLiveOrbitAlias(MarkerId))
+		{
+			const FName Occupy = LiveOccupyId(Ctx.World);
+			if (Occupy != Rt.LiveOrbitOccupy)
+			{
+				Rt.LiveOrbitOccupy = Occupy;
+				Rt.LiveOrbitIndex = -1;
+			}
+			TArray<ACLTaskMarker*> Crumbs;
+			CollectOrbitCrumbs(Ctx.World, Occupy, Crumbs);
+			ACLTaskMarker* Pick = nullptr;
+			if (Crumbs.Num() > 0)
+			{
+				if (Rt.LiveOrbitIndex < 0)
+				{
+					int32 Best = 0;
+					float BestDist = -1.f;
+					UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr;
+					APawn* FocusPawn = nullptr;
+					if (Lobby && Rt.FocusSeat.IsValid())
+					{
+						FocusPawn = Lobby->GetDrivenPawn(Rt.FocusSeat);
+					}
+					if (FocusPawn)
+					{
+						for (int32 i = 0; i < Crumbs.Num(); ++i)
+						{
+							const float D = DistXY(Crumbs[i]->GetActorLocation(), FocusPawn->GetActorLocation());
+							if (D > BestDist)
+							{
+								BestDist = D;
+								Best = i;
+							}
+						}
+					}
+					Rt.LiveOrbitIndex = Best;
+				}
+				else
+				{
+					Rt.LiveOrbitIndex = (Rt.LiveOrbitIndex + 1) % Crumbs.Num();
+				}
+				Pick = Crumbs[Rt.LiveOrbitIndex];
+				MarkerId = Pick->Id;
+			}
+			Ctx.MarkerId = MarkerId;
+			if (Pick)
+			{
+				Ctx.Goal = Pick->GetActorLocation();
+			}
+			else
+			{
+				UE_LOG(LogCalling, Warning, TEXT("BotBook missing live_orbit for %s"), *Occupy.ToString());
+				if (Stmt->Leaf.Verb == FName(TEXT("goto")))
+				{
+					NoteFollowAlert(Seat, TEXT("botbook_missing_marker"),
+						FString::Printf(TEXT("goto live_orbit occupy=%s"), *Occupy.ToString()));
+					return false;
+				}
+			}
+		}
+		else
+		{
 		Ctx.MarkerId = MarkerId;
 		if (ACLTaskMarker* Mark = ACLTaskMarker::FindById(Ctx.World, Ctx.MarkerId))
 		{
@@ -772,6 +897,7 @@ bool UCLBotBookManager::StartLeaf(FRuntime& Rt, UCLParticipantSeat* Seat, FStrin
 					FString::Printf(TEXT("goto marker=%s not in world"), *MarkerId.ToString()));
 				return false;
 			}
+		}
 		}
 	}
 	else if (Stmt->Leaf.Params.Contains(TEXT("x")) || Stmt->Leaf.Params.Contains(TEXT("y")) || Stmt->Leaf.Params.Contains(TEXT("z")))
@@ -880,7 +1006,23 @@ ECLBotOutcome UCLBotBookManager::TickLeaf(FRuntime& Rt, float DeltaSeconds, UCLP
 	}
 	else if (const FString* Marker = Stmt->Leaf.Params.Find(TEXT("marker")))
 	{
-		if (ACLTaskMarker* Mark = ACLTaskMarker::FindById(Ctx.World, FName(**Marker)))
+		FName MarkerId(**Marker);
+		if (IsLiveOccupyAlias(MarkerId))
+		{
+			MarkerId = LiveOccupyId(Ctx.World);
+			if (ACLTaskMarker* Mark = ACLTaskMarker::FindById(Ctx.World, MarkerId))
+			{
+				Ctx.Goal = Mark->GetActorLocation();
+			}
+		}
+		else if (IsLiveOrbitAlias(MarkerId))
+		{
+			if (ACLTaskMarker* Pick = PeekOrbitCrumb(Ctx.World, Rt.LiveOrbitOccupy, Rt.LiveOrbitIndex))
+			{
+				Ctx.Goal = Pick->GetActorLocation();
+			}
+		}
+		else if (ACLTaskMarker* Mark = ACLTaskMarker::FindById(Ctx.World, MarkerId))
 		{
 			Ctx.Goal = Mark->GetActorLocation();
 		}
@@ -1614,6 +1756,10 @@ void UCLBotBookManager::NoteMatchEvent(UCLParticipantSeat* Seat, const TCHAR* Co
 		if (ACLPvpGameMode* Pvp = World->GetAuthGameMode<ACLPvpGameMode>())
 		{
 			Pvp->FailBook(FString(Code));
+		}
+		else if (ACLRaidGameMode* Raid = World->GetAuthGameMode<ACLRaidGameMode>())
+		{
+			Raid->FailBook(FString(Code));
 		}
 	}
 }
