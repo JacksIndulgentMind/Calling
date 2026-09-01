@@ -2,60 +2,195 @@
   "tables": [
     {
       "id": "world_common",
+      "source": {
+        "kind": "world",
+        "activityId": "any",
+        "activityName": "World drop",
+        "nodeName": "Activity complete"
+      },
+      "variant": { "id": "world", "statBandScale": 0.7, "branded": false },
       "rolls": [
-        { "itemKind": "weapon", "weight": 70, "rarity": "common", "slots": ["Primary", "Special"] },
-        { "itemKind": "armor", "weight": 30, "rarity": "common" }
+        { "itemKind": "weapon", "pool": "world", "weight": 2, "rarity": "common" },
+        { "itemKind": "armor", "weight": 30, "rarity": "common" },
+        { "itemKind": "empty", "weight": 68 }
+      ]
+    },
+    {
+      "id": "world_any",
+      "source": {
+        "kind": "world",
+        "activityId": "any",
+        "activityName": "World drop",
+        "nodeName": "Any activity"
+      },
+      "variant": { "id": "world", "statBandScale": 0.7, "branded": false },
+      "rolls": [
+        { "itemKind": "weapon", "pool": "world", "weight": 1, "rarity": "rare" },
+        { "itemKind": "empty", "weight": 499 }
       ]
     },
     {
       "id": "pvp_match_complete",
+      "source": {
+        "kind": "pvp_complete",
+        "activityId": "pvp",
+        "activityName": "PvP",
+        "nodeName": "Match complete"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
       "rolls": [
-        { "itemKind": "weapon", "weight": 55, "rarity": "uncommon", "slots": ["Primary", "Special"] },
-        { "itemKind": "armor", "weight": 35, "rarity": "uncommon" },
-        { "itemKind": "weapon", "weight": 10, "rarity": "rare", "slots": ["Primary", "Special"] }
+        { "itemKind": "weapon", "makeId": "nox_k10", "weight": 25, "rarity": "uncommon" },
+        { "itemKind": "weapon", "makeId": "brass_nine", "weight": 20, "rarity": "uncommon" },
+        { "itemKind": "weapon", "makeId": "helion_street", "weight": 10, "rarity": "rare" },
+        { "itemKind": "armor", "weight": 35, "rarity": "uncommon" }
       ]
     },
     {
       "id": "raid_chamber_1",
+      "source": {
+        "kind": "raid_boss",
+        "activityId": "obelisk_raid",
+        "activityName": "Obelisk",
+        "encounterId": "chamber_1",
+        "encounterName": "Chamber 1",
+        "nodeId": "boss",
+        "nodeName": "Boss team"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
       "rolls": [
-        { "itemKind": "weapon", "weight": 50, "rarity": "uncommon", "slots": ["Primary", "Special"] },
-        { "itemKind": "armor", "weight": 35, "rarity": "uncommon" },
-        { "itemKind": "weapon", "weight": 15, "rarity": "rare", "slots": ["Primary", "Special"] }
+        { "itemKind": "weapon", "makeId": "nox_l9", "weight": 30, "rarity": "uncommon" },
+        { "itemKind": "weapon", "makeId": "vesper_nine", "weight": 20, "rarity": "uncommon" },
+        { "itemKind": "weapon", "makeId": "wether_pump", "weight": 15, "rarity": "rare" },
+        { "itemKind": "armor", "weight": 35, "rarity": "uncommon" }
       ]
     },
     {
       "id": "raid_chamber_2",
+      "source": {
+        "kind": "raid_boss",
+        "activityId": "obelisk_raid",
+        "activityName": "Obelisk",
+        "encounterId": "chamber_2",
+        "encounterName": "Chamber 2",
+        "nodeId": "boss",
+        "nodeName": "Boss team"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
       "rolls": [
-        { "itemKind": "weapon", "weight": 40, "rarity": "rare", "slots": ["Primary", "Special"] },
-        { "itemKind": "armor", "weight": 35, "rarity": "rare" },
-        { "itemKind": "weapon", "weight": 25, "rarity": "epic", "slots": ["Primary", "Special"] }
+        { "itemKind": "weapon", "makeId": "greyhill_op", "weight": 25, "rarity": "rare" },
+        { "itemKind": "weapon", "makeId": "kessler_23", "weight": 20, "rarity": "rare" },
+        { "itemKind": "weapon", "makeId": "helion_c4", "weight": 20, "rarity": "epic" },
+        { "itemKind": "armor", "weight": 35, "rarity": "rare" }
       ]
     },
     {
       "id": "raid_chamber_3",
+      "source": {
+        "kind": "raid_boss",
+        "activityId": "obelisk_raid",
+        "activityName": "Obelisk",
+        "encounterId": "chamber_3",
+        "encounterName": "Chamber 3",
+        "nodeId": "boss",
+        "nodeName": "Boss team"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
       "rolls": [
-        { "itemKind": "weapon", "weight": 35, "rarity": "rare", "slots": ["Primary", "Special"] },
-        { "itemKind": "armor", "weight": 30, "rarity": "epic" },
-        { "itemKind": "weapon", "weight": 35, "rarity": "epic", "slots": ["Primary", "Special"] }
+        { "itemKind": "weapon", "makeId": "fabrique_five", "weight": 20, "rarity": "rare" },
+        { "itemKind": "weapon", "makeId": "dune_eagle", "weight": 15, "rarity": "epic" },
+        { "itemKind": "weapon", "makeId": "mare_tide", "weight": 20, "rarity": "epic" },
+        { "itemKind": "armor", "weight": 30, "rarity": "epic" }
       ]
     },
     {
       "id": "raid_chamber_4",
+      "source": {
+        "kind": "raid_boss",
+        "activityId": "obelisk_raid",
+        "activityName": "Obelisk",
+        "encounterId": "chamber_4",
+        "encounterName": "Chamber 4",
+        "nodeId": "boss",
+        "nodeName": "Boss team"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
       "rolls": [
-        { "itemKind": "weapon", "weight": 40, "rarity": "epic", "slots": ["Primary", "Special"] },
-        { "itemKind": "armor", "weight": 30, "rarity": "epic" },
-        { "itemKind": "weapon", "weight": 25, "rarity": "legendary", "slots": ["Special"] },
-        { "itemKind": "weapon", "weight": 5, "rarity": "exotic", "slots": ["Primary", "Special"] }
+        { "itemKind": "weapon", "makeId": "anvil_iron", "weight": 20, "rarity": "epic" },
+        { "itemKind": "weapon", "makeId": "osprey_nine", "weight": 20, "rarity": "legendary" },
+        { "itemKind": "weapon", "makeId": "branta_fifty", "weight": 10, "rarity": "exotic" },
+        { "itemKind": "armor", "weight": 30, "rarity": "epic" }
+      ]
+    },
+    {
+      "id": "vendor_ashen",
+      "factionId": "ashen",
+      "source": {
+        "kind": "faction_vendor",
+        "activityId": "ashen",
+        "activityName": "Vendor",
+        "nodeName": "Ashen"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
+      "rolls": [
+        { "itemKind": "weapon", "makeId": "coil_mouth", "weight": 40, "rarity": "rare" },
+        { "itemKind": "weapon", "makeId": "ridge_seventy", "weight": 30, "rarity": "epic" },
+        { "itemKind": "weapon", "makeId": "solstice_68", "weight": 30, "rarity": "epic" }
+      ]
+    },
+    {
+      "id": "vendor_veil",
+      "factionId": "veil",
+      "source": {
+        "kind": "faction_vendor",
+        "activityId": "veil",
+        "activityName": "Vendor",
+        "nodeName": "Veil"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
+      "rolls": [
+        { "itemKind": "weapon", "makeId": "rime_chop", "weight": 40, "rarity": "rare" },
+        { "itemKind": "weapon", "makeId": "ingram_eleven", "weight": 30, "rarity": "uncommon" },
+        { "itemKind": "weapon", "makeId": "rime_four", "weight": 30, "rarity": "epic" }
+      ]
+    },
+    {
+      "id": "vendor_quiet",
+      "factionId": "quiet",
+      "source": {
+        "kind": "faction_vendor",
+        "activityId": "quiet",
+        "activityName": "Vendor",
+        "nodeName": "Quiet"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
+      "rolls": [
+        { "itemKind": "weapon", "makeId": "kessler_mp", "weight": 40, "rarity": "rare" },
+        { "itemKind": "weapon", "makeId": "kessler_seven", "weight": 30, "rarity": "epic" },
+        { "itemKind": "weapon", "makeId": "fabrique_ninety", "weight": 30, "rarity": "epic" }
       ]
     },
     {
       "id": "practice_debug",
+      "source": {
+        "kind": "world",
+        "activityId": "practice",
+        "activityName": "Practice",
+        "nodeName": "Debug"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
       "rolls": [
         { "itemKind": "weapon", "weight": 100, "rarity": "rare", "slots": ["Primary", "Special"] }
       ]
     },
     {
       "id": "gl_prox_debug",
+      "source": {
+        "kind": "world",
+        "activityId": "practice",
+        "activityName": "Practice",
+        "nodeName": "GL debug"
+      },
+      "variant": { "id": "prestige", "statBandScale": 1.0, "branded": true },
       "rolls": [
         { "itemKind": "weapon", "weight": 100, "rarity": "rare", "slots": ["Special"], "classId": "grenade_rifle", "forceBehavior": "prox_detonate" }
       ]

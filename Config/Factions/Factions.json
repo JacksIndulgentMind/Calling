@@ -1,0 +1,25 @@
+{
+  "factions": [
+    {
+      "id": "ashen",
+      "displayName": "Ashen",
+      "kind": "paramilitary",
+      "vendorTableId": "vendor_ashen",
+      "uniformSlots": ["formal", "space_military", "planetary_camo"]
+    },
+    {
+      "id": "veil",
+      "displayName": "Veil",
+      "kind": "criminal",
+      "vendorTableId": "vendor_veil",
+      "uniformSlots": ["formal", "space_military", "planetary_camo"]
+    },
+    {
+      "id": "quiet",
+      "displayName": "Quiet",
+      "kind": "criminal",
+      "vendorTableId": "vendor_quiet",
+      "uniformSlots": ["formal", "space_military", "planetary_camo"]
+    }
+  ]
+}

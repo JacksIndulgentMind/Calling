@@ -129,6 +129,12 @@ public:
 	FName GetSightId() const;
 
 	UFUNCTION(BlueprintPure, Category = "Calling|Weapon")
+	FName GetClassBandId() const;
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Weapon")
+	ECLWeaponStock GetEquippedStock() const { return EquippedClass.Stock; }
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Weapon")
 	FName GetProjectileId() const { return EquippedClass.ProjectileId; }
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Weapon")
@@ -200,6 +206,8 @@ protected:
 	FCLWeaponRuntimeOverlay Overlay;
 
 	TSharedPtr<ICLWeaponFireMode> FireMode;
+
+	mutable FCLWeaponClassDef ResolveScratch;
 
 	bool bWantsADS = false;
 	bool bWantsFire = false;

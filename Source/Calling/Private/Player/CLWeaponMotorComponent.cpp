@@ -54,12 +54,38 @@ const FCLWeaponClassDef* UCLWeaponMotorComponent::ResolveClassDef(const FCLItemI
 			{
 				if (const UCLLootRulesService* Loot = CLGI->GetLootRulesService())
 				{
-					return Loot->FindWeaponClass(Item.DefinitionId);
+					if (Loot->ComposeEquippedClass(Item.DefinitionId, ResolveScratch))
+					{
+						return &ResolveScratch;
+					}
 				}
 			}
 		}
 	}
 	return nullptr;
+}
+
+FName UCLWeaponMotorComponent::GetClassBandId() const
+{
+	if (!EquippedClass.BandId.IsNone())
+	{
+		return EquippedClass.BandId;
+	}
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UCLGameInstance* CLGI = Cast<UCLGameInstance>(World->GetGameInstance()))
+		{
+			if (const UCLLootRulesService* Loot = CLGI->GetLootRulesService())
+			{
+				if (const FCLWeaponMakeDef* Make = Loot->FindWeaponMake(EquippedClass.Id))
+				{
+					return Make->ClassId;
+				}
+				return UCLLootRulesService::CanonicalWeaponClassId(EquippedClass.Id);
+			}
+		}
+	}
+	return EquippedClass.Id;
 }
 
 void UCLWeaponMotorComponent::StoreActiveAmmo()
@@ -148,6 +174,7 @@ void UCLWeaponMotorComponent::EquipItem(const FCLItemInstance& Item, const FCLWe
 	{
 		EquippedClass = FCLWeaponClassDef();
 		EquippedClass.Id = Item.DefinitionId;
+		EquippedClass.BandId = UCLLootRulesService::CanonicalWeaponClassId(Item.DefinitionId);
 		EquippedClass.DisplayName = Item.DisplayName;
 		EquippedClass.Slot = Item.Weapon.Slot;
 		EquippedClass.BaseStats = Item.BaseStats;

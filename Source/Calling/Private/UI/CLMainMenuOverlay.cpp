@@ -1,6 +1,7 @@
 ﻿#include "UI/CLMainMenuOverlay.h"
 #include "UI/CLDirectorPanel.h"
 #include "UI/CLKeybindEditor.h"
+#include "UI/CLArmoryWidget.h"
 #include "Game/CLErrorBoundary.h"
 #include "Core/CLError.h"
 #include "Game/CLSessionSubsystem.h"
@@ -78,6 +79,7 @@ UCLMainMenuOverlay::UCLMainMenuOverlay(const FObjectInitializer& ObjectInitializ
 {
 	DirectorPanel = CreateDefaultSubobject<UCLDirectorPanel>(TEXT("DirectorPanel"));
 	KeybindEditor = CreateDefaultSubobject<UCLKeybindEditor>(TEXT("KeybindEditor"));
+	ArmoryWidget = CreateDefaultSubobject<UCLArmoryWidget>(TEXT("ArmoryWidget"));
 }
 
 TSharedRef<SWidget> UCLMainMenuOverlay::RebuildWidget()
@@ -149,10 +151,11 @@ void UCLMainMenuOverlay::BuildWidgetTree()
 		DimSlot->SetOffsets(FMargin(0.f));
 	}
 
-	USizeBox* PanelSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelSize"));
-	PanelSize->SetWidthOverride(720.f);
-	PanelSize->SetHeightOverride(620.f);
-	if (UCanvasPanelSlot* PanelSlot = RootCanvas->AddChildToCanvas(PanelSize))
+	USizeBox* PanelSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelSize"));
+	PanelSize = PanelSizeBox;
+	PanelSizeBox->SetWidthOverride(720.f);
+	PanelSizeBox->SetHeightOverride(620.f);
+	if (UCanvasPanelSlot* PanelSlot = RootCanvas->AddChildToCanvas(PanelSizeBox))
 	{
 		PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
 		PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
@@ -162,12 +165,13 @@ void UCLMainMenuOverlay::BuildWidgetTree()
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
 	Panel->SetBrushColor(FLinearColor(0.06f, 0.07f, 0.1f, 0.96f));
 	Panel->SetPadding(FMargin(24.f, 20.f));
-	PanelSize->AddChild(Panel);
+	PanelSizeBox->AddChild(Panel);
 
 	UVerticalBox* RootCol = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RootCol"));
 	Panel->AddChild(RootCol);
 
-	AddPadded(RootCol, MakeLabel(WidgetTree, TEXT("Title"), TEXT("Director"), 26), 12.f);
+	TitleLabel = MakeLabel(WidgetTree, TEXT("Title"), TEXT("Director"), 26);
+	AddPadded(RootCol, TitleLabel, 12.f);
 
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Tabs"));
 	UButton* DirectorTab = MakeTextButton(WidgetTree, TEXT("DirectorTab"), TEXT("Director"));
@@ -176,6 +180,8 @@ void UCLMainMenuOverlay::BuildWidgetTree()
 	LobbyTab->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleLobbyTabClicked);
 	UButton* KeybindsTab = MakeTextButton(WidgetTree, TEXT("KeybindsTab"), TEXT("Keybinds"));
 	KeybindsTab->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleKeybindsTabClicked);
+	UButton* ArmoryTab = MakeTextButton(WidgetTree, TEXT("ArmoryTab"), TEXT("Armory"));
+	ArmoryTab->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleArmoryTabClicked);
 	if (UHorizontalBoxSlot* T0 = Tabs->AddChildToHorizontalBox(DirectorTab))
 	{
 		T0->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
@@ -184,12 +190,17 @@ void UCLMainMenuOverlay::BuildWidgetTree()
 	{
 		T1->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	}
-	Tabs->AddChildToHorizontalBox(KeybindsTab);
+	if (UHorizontalBoxSlot* T2 = Tabs->AddChildToHorizontalBox(KeybindsTab))
+	{
+		T2->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	}
+	Tabs->AddChildToHorizontalBox(ArmoryTab);
 	AddPadded(RootCol, Tabs, 16.f);
 
 	BuildDirectorPanel(RootCol);
 	BuildLobbyPanel(RootCol);
 	BuildKeybindEditor(RootCol);
+	BuildArmoryPanel(RootCol);
 }
 
 void UCLMainMenuOverlay::BuildDirectorPanel(UVerticalBox* RootCol)
@@ -524,6 +535,29 @@ void UCLMainMenuOverlay::BuildKeybindEditor(UVerticalBox* RootCol)
 	}
 }
 
+void UCLMainMenuOverlay::BuildArmoryPanel(UVerticalBox* RootCol)
+{
+	ArmoryBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ArmoryBox"));
+	ArmoryBox->SetVisibility(ESlateVisibility::Collapsed);
+	AddPadded(ArmoryBox, MakeLabel(WidgetTree, TEXT("ArmoryHint"),
+		TEXT("What you can get — not the vault. World drops are rare and unbranded. Prestige and vendors are the full object."), 12), 8.f);
+	if (ArmoryWidget)
+	{
+		ArmoryWidget->Build(WidgetTree, ArmoryBox);
+	}
+	AddPadded(RootCol, ArmoryBox, 0.f);
+}
+
+void UCLMainMenuOverlay::SetCompactPanel(bool bCompact)
+{
+	if (!PanelSize)
+	{
+		return;
+	}
+	PanelSize->SetWidthOverride(bCompact ? 720.f : 1280.f);
+	PanelSize->SetHeightOverride(bCompact ? 620.f : 760.f);
+}
+
 void UCLMainMenuOverlay::ToggleOverlay()
 {
 	if (bVisible)
@@ -564,6 +598,11 @@ void UCLMainMenuOverlay::HideOverlay()
 
 void UCLMainMenuOverlay::ShowDirectorTab()
 {
+	SetCompactPanel(true);
+	if (TitleLabel)
+	{
+		TitleLabel->SetText(FText::FromString(TEXT("Director")));
+	}
 	if (DirectorBox)
 	{
 		DirectorBox->SetVisibility(ESlateVisibility::Visible);
@@ -576,10 +615,19 @@ void UCLMainMenuOverlay::ShowDirectorTab()
 	{
 		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
+	if (ArmoryBox)
+	{
+		ArmoryBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UCLMainMenuOverlay::ShowLobbyTab()
 {
+	SetCompactPanel(true);
+	if (TitleLabel)
+	{
+		TitleLabel->SetText(FText::FromString(TEXT("Director")));
+	}
 	if (DirectorBox)
 	{
 		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
@@ -591,6 +639,10 @@ void UCLMainMenuOverlay::ShowLobbyTab()
 	if (KeybindsBox)
 	{
 		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (ArmoryBox)
+	{
+		ArmoryBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (SaveDefaultLabel)
 	{
@@ -614,6 +666,11 @@ void UCLMainMenuOverlay::ShowLobbyTab()
 
 void UCLMainMenuOverlay::ShowKeybindsTab()
 {
+	SetCompactPanel(true);
+	if (TitleLabel)
+	{
+		TitleLabel->SetText(FText::FromString(TEXT("Director")));
+	}
 	if (DirectorBox)
 	{
 		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
@@ -626,9 +683,43 @@ void UCLMainMenuOverlay::ShowKeybindsTab()
 	{
 		KeybindsBox->SetVisibility(ESlateVisibility::Visible);
 	}
+	if (ArmoryBox)
+	{
+		ArmoryBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
 	if (KeybindEditor)
 	{
 		KeybindEditor->RefreshBindRows();
+	}
+	SetKeyboardFocus();
+}
+
+void UCLMainMenuOverlay::ShowArmoryTab()
+{
+	SetCompactPanel(false);
+	if (TitleLabel)
+	{
+		TitleLabel->SetText(FText::FromString(TEXT("Armory")));
+	}
+	if (DirectorBox)
+	{
+		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (LobbyBox)
+	{
+		LobbyBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (KeybindsBox)
+	{
+		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (ArmoryBox)
+	{
+		ArmoryBox->SetVisibility(ESlateVisibility::Visible);
+	}
+	if (ArmoryWidget)
+	{
+		ArmoryWidget->Refresh();
 	}
 	SetKeyboardFocus();
 }
@@ -684,6 +775,7 @@ FReply UCLMainMenuOverlay::NativeOnMouseWheel(const FGeometry& InGeometry, const
 void UCLMainMenuOverlay::HandleDirectorTabClicked() { ShowDirectorTab(); }
 void UCLMainMenuOverlay::HandleLobbyTabClicked() { ShowLobbyTab(); }
 void UCLMainMenuOverlay::HandleKeybindsTabClicked() { ShowKeybindsTab(); }
+void UCLMainMenuOverlay::HandleArmoryTabClicked() { ShowArmoryTab(); }
 void UCLMainMenuOverlay::HandleComposeClicked() { JumpToActivity(ECLSceneId::Composer); }
 void UCLMainMenuOverlay::HandlePvpClicked() { JumpToActivity(ECLSceneId::Pvp); }
 void UCLMainMenuOverlay::HandleRaidClicked() { JumpToActivity(ECLSceneId::Raid); }

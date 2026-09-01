@@ -1,0 +1,124 @@
+{
+  "weaponFrames": [
+    {
+      "id": "pistol_frame",
+      "classId": "pistol",
+      "muzzle": [16.8, 0, 2.3],
+      "ejector": [4.2, 2.8, 2.6],
+      "visuals": [
+        { "socket": "frame", "mesh": "cube", "loc": [-1, 0, -1.6], "scale": [0.16, 0.032, 0.07], "rot": [0, 0, 0] },
+        { "socket": "rail", "mesh": "cube", "loc": [1.6, 0, 2.5], "scale": [0.20, 0.028, 0.024], "rot": [0, 0, 0] },
+        { "socket": "shroud", "mesh": "cube", "loc": [5.4, 0, 0.2], "scale": [0.12, 0.032, 0.022], "rot": [0, 0, 0] },
+        { "socket": "barrel", "mesh": "cylinder", "loc": [10.2, 0, 2.3], "scale": [0.012, 0.012, 0.13], "rot": [90, 0, 0] },
+        { "socket": "muzzle", "mesh": "cylinder", "loc": [16.2, 0, 2.3], "scale": [0.016, 0.016, 0.028], "rot": [90, 0, 0] },
+        { "socket": "stock", "mesh": "cube", "loc": [-8.4, 0, 0.4], "scale": [0.06, 0.018, 0.028], "rot": [0, 0, 0] },
+        { "socket": "brace", "mesh": "cube", "loc": [-7.2, 0, 0.2], "scale": [0.05, 0.016, 0.022], "rot": [12, 0, 0] }
+      ]
+    },
+    {
+      "id": "smg_frame",
+      "classId": "smg",
+      "muzzle": [22.0, 0, 2.4],
+      "ejector": [5.0, 3.0, 2.6],
+      "visuals": [
+        { "socket": "frame", "mesh": "cube", "loc": [0.4, 0, 0.2], "scale": [0.18, 0.038, 0.06], "rot": [0, 0, 0] },
+        { "socket": "rail", "mesh": "cube", "loc": [2.0, 0, 3.4], "scale": [0.22, 0.02, 0.012], "rot": [0, 0, 0] },
+        { "socket": "shroud", "mesh": "cube", "loc": [8.0, 0, 1.6], "scale": [0.14, 0.036, 0.03], "rot": [0, 0, 0] },
+        { "socket": "barrel", "mesh": "cylinder", "loc": [14.5, 0, 2.4], "scale": [0.014, 0.014, 0.16], "rot": [90, 0, 0] },
+        { "socket": "muzzle", "mesh": "cylinder", "loc": [21.0, 0, 2.4], "scale": [0.018, 0.018, 0.032], "rot": [90, 0, 0] },
+        { "socket": "stock", "mesh": "cube", "loc": [-10.5, 0, 1.2], "scale": [0.10, 0.022, 0.04], "rot": [0, 0, 0] },
+        { "socket": "brace", "mesh": "cube", "loc": [-9.2, 0, 0.8], "scale": [0.08, 0.018, 0.028], "rot": [8, 0, 0] }
+      ]
+    },
+    {
+      "id": "rifle_frame",
+      "classId": "rifle",
+      "muzzle": [28.0, 0, 2.6],
+      "ejector": [5.4, 3.2, 2.8],
+      "visuals": [
+        { "socket": "frame", "mesh": "cube", "loc": [0.6, 0, 0.4], "scale": [0.22, 0.042, 0.07], "rot": [0, 0, 0] },
+        { "socket": "rail", "mesh": "cube", "loc": [4.0, 0, 3.8], "scale": [0.28, 0.022, 0.012], "rot": [0, 0, 0] },
+        { "socket": "shroud", "mesh": "cube", "loc": [10.0, 0, 1.8], "scale": [0.18, 0.04, 0.032], "rot": [0, 0, 0] },
+        { "socket": "barrel", "mesh": "cylinder", "loc": [18.5, 0, 2.6], "scale": [0.016, 0.016, 0.22], "rot": [90, 0, 0] },
+        { "socket": "muzzle", "mesh": "cylinder", "loc": [27.0, 0, 2.6], "scale": [0.022, 0.022, 0.036], "rot": [90, 0, 0] },
+        { "socket": "stock", "mesh": "cube", "loc": [-12.5, 0, 1.4], "scale": [0.14, 0.028, 0.05], "rot": [0, 0, 0] },
+        { "socket": "brace", "mesh": "cube", "loc": [-10.0, 0, 1.0], "scale": [0.09, 0.02, 0.03], "rot": [8, 0, 0] }
+      ]
+    },
+    {
+      "id": "dmr_frame",
+      "classId": "dmr",
+      "muzzle": [32.0, 0, 2.8],
+      "ejector": [5.8, 3.2, 3.0],
+      "visuals": [
+        { "socket": "frame", "mesh": "cube", "loc": [0.8, 0, 0.5], "scale": [0.24, 0.044, 0.074], "rot": [0, 0, 0] },
+        { "socket": "rail", "mesh": "cube", "loc": [5.0, 0, 4.0], "scale": [0.32, 0.022, 0.012], "rot": [0, 0, 0] },
+        { "socket": "shroud", "mesh": "cube", "loc": [12.0, 0, 1.9], "scale": [0.20, 0.042, 0.034], "rot": [0, 0, 0] },
+        { "socket": "barrel", "mesh": "cylinder", "loc": [21.0, 0, 2.8], "scale": [0.016, 0.016, 0.26], "rot": [90, 0, 0] },
+        { "socket": "muzzle", "mesh": "cylinder", "loc": [31.0, 0, 2.8], "scale": [0.022, 0.022, 0.038], "rot": [90, 0, 0] },
+        { "socket": "stock", "mesh": "cube", "loc": [-13.5, 0, 1.5], "scale": [0.16, 0.03, 0.055], "rot": [0, 0, 0] },
+        { "socket": "brace", "mesh": "cube", "loc": [-11.0, 0, 1.1], "scale": [0.09, 0.02, 0.03], "rot": [8, 0, 0] }
+      ]
+    },
+    {
+      "id": "shotgun_frame",
+      "classId": "shotgun",
+      "muzzle": [30.0, 0, 2.2],
+      "ejector": [6.0, 3.4, 2.6],
+      "visuals": [
+        { "socket": "frame", "mesh": "cube", "loc": [0.5, 0, 0.2], "scale": [0.22, 0.046, 0.068], "rot": [0, 0, 0] },
+        { "socket": "rail", "mesh": "cube", "loc": [3.0, 0, 3.6], "scale": [0.18, 0.02, 0.012], "rot": [0, 0, 0] },
+        { "socket": "shroud", "mesh": "cube", "loc": [10.0, 0, 0.8], "scale": [0.16, 0.038, 0.028], "rot": [0, 0, 0] },
+        { "socket": "barrel", "mesh": "cylinder", "loc": [20.0, 0, 2.2], "scale": [0.022, 0.022, 0.24], "rot": [90, 0, 0] },
+        { "socket": "muzzle", "mesh": "cylinder", "loc": [29.0, 0, 2.2], "scale": [0.028, 0.028, 0.04], "rot": [90, 0, 0] },
+        { "socket": "stock", "mesh": "cube", "loc": [-13.0, 0, 1.2], "scale": [0.15, 0.03, 0.052], "rot": [0, 0, 0] },
+        { "socket": "brace", "mesh": "cube", "loc": [-10.5, 0, 0.8], "scale": [0.08, 0.02, 0.028], "rot": [8, 0, 0] }
+      ]
+    },
+    {
+      "id": "sniper_frame",
+      "classId": "sniper_rifle",
+      "muzzle": [36.0, 0, 3.0],
+      "ejector": [6.2, 3.4, 3.2],
+      "visuals": [
+        { "socket": "frame", "mesh": "cube", "loc": [1.0, 0, 0.6], "scale": [0.26, 0.048, 0.08], "rot": [0, 0, 0] },
+        { "socket": "rail", "mesh": "cube", "loc": [6.0, 0, 4.4], "scale": [0.36, 0.024, 0.014], "rot": [0, 0, 0] },
+        { "socket": "shroud", "mesh": "cube", "loc": [14.0, 0, 2.0], "scale": [0.22, 0.044, 0.036], "rot": [0, 0, 0] },
+        { "socket": "barrel", "mesh": "cylinder", "loc": [24.0, 0, 3.0], "scale": [0.018, 0.018, 0.30], "rot": [90, 0, 0] },
+        { "socket": "muzzle", "mesh": "cylinder", "loc": [35.0, 0, 3.0], "scale": [0.028, 0.028, 0.05], "rot": [90, 0, 0] },
+        { "socket": "stock", "mesh": "cube", "loc": [-14.5, 0, 1.6], "scale": [0.18, 0.032, 0.06], "rot": [0, 0, 0] },
+        { "socket": "brace", "mesh": "cube", "loc": [-11.5, 0, 1.2], "scale": [0.09, 0.02, 0.03], "rot": [8, 0, 0] }
+      ]
+    },
+    {
+      "id": "grenade_rifle_frame",
+      "classId": "grenade_rifle",
+      "muzzle": [19.6, 0, 1.8],
+      "ejector": [2.2, 3.4, 2.4],
+      "visuals": [
+        { "socket": "frame", "mesh": "cube", "loc": [0.4, 0, 0.6], "scale": [0.14, 0.05, 0.07], "rot": [0, 0, 0] },
+        { "socket": "rail", "mesh": "cube", "loc": [-2.9, 0, 5.2], "scale": [0.04, 0.03, 0.012], "rot": [0, 0, 0] },
+        { "socket": "shroud", "mesh": "cube", "loc": [-4.2, 0, 1.4], "scale": [0.06, 0.055, 0.08], "rot": [0, 0, 0] },
+        { "socket": "barrel", "mesh": "cylinder", "loc": [8.5, 0, 1.8], "scale": [0.055, 0.055, 0.22], "rot": [90, 0, 0] },
+        { "socket": "muzzle", "mesh": "cylinder", "loc": [18.8, 0, 1.8], "scale": [0.06, 0.06, 0.04], "rot": [90, 0, 0] },
+        { "socket": "stock", "mesh": "cube", "loc": [-11.0, 0, 1.0], "scale": [0.12, 0.03, 0.05], "rot": [0, 0, 0] },
+        { "socket": "brace", "mesh": "cube", "loc": [-9.0, 0, 0.6], "scale": [0.08, 0.022, 0.03], "rot": [8, 0, 0] }
+      ]
+    },
+    {
+      "id": "grenade_launcher_frame",
+      "classId": "grenade_launcher",
+      "muzzle": [18.0, 0, 1.6],
+      "ejector": [1.5, 3.0, 2.0],
+      "visuals": [
+        { "socket": "frame", "mesh": "cube", "loc": [-1.0, 0, 0.2], "scale": [0.12, 0.048, 0.06], "rot": [0, 0, 0] },
+        { "socket": "rail", "mesh": "cube", "loc": [-2.4, 0, 4.2], "scale": [0.03, 0.024, 0.01], "rot": [0, 0, 0] },
+        { "socket": "shroud", "mesh": "cube", "loc": [-3.6, 0, 1.0], "scale": [0.05, 0.05, 0.07], "rot": [0, 0, 0] },
+        { "socket": "barrel", "mesh": "cylinder", "loc": [7.5, 0, 1.6], "scale": [0.07, 0.07, 0.20], "rot": [90, 0, 0] },
+        { "socket": "muzzle", "mesh": "cylinder", "loc": [17.2, 0, 1.6], "scale": [0.078, 0.078, 0.036], "rot": [90, 0, 0] },
+        { "socket": "stock", "mesh": "cube", "loc": [-10.5, 0, 0.8], "scale": [0.13, 0.028, 0.048], "rot": [0, 0, 0] },
+        { "socket": "brace", "mesh": "cube", "loc": [-8.5, 0, 0.5], "scale": [0.07, 0.02, 0.028], "rot": [8, 0, 0] }
+      ]
+    }
+  ]
+}

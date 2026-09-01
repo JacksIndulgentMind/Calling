@@ -255,17 +255,19 @@ void ACLPlayerCharacter::Tick(float DeltaSeconds)
 
 	if (WeaponMotor)
 	{
-		const bool bGrenade = WeaponMotor->UsesGrenadeProjectile();
+		const FName Band = WeaponMotor->GetClassBandId();
+		const ECLWeaponStock Stock = WeaponMotor->GetEquippedStock();
+		const bool bComp = WeaponMotor->GetActiveItem().FinalStats.Compensator > 0.05f;
 		const FName Sight = WeaponMotor->GetSightId();
 		if (ViewWeaponRoot)
 		{
 			CLViewWeapon::UpdateAdsPose(ViewWeaponRoot, WeaponMotor->GetAdsEase(), Sight, WeaponMotor->GetViewKickPitch());
-			CLViewWeapon::ShowFamily(ViewWeaponRoot, bGrenade);
+			CLViewWeapon::ShowFamily(ViewWeaponRoot, Band, Stock, bComp);
 			CLViewWeapon::ShowSight(ViewWeaponRoot, Sight);
 		}
 		if (WorldWeaponRoot)
 		{
-			CLViewWeapon::ShowFamily(WorldWeaponRoot, bGrenade);
+			CLViewWeapon::ShowFamily(WorldWeaponRoot, Band, Stock, bComp);
 			CLViewWeapon::ShowSight(WorldWeaponRoot, Sight);
 		}
 	}
@@ -303,9 +305,11 @@ void ACLPlayerCharacter::UpdateThirdPersonPeek(float DeltaSeconds)
 	CameraBoom->TargetArmLength = Ease * Cam.ThirdPersonArmLength;
 	CameraBoom->SocketOffset = FVector(0.f, 0.f, 28.f * Ease);
 
-	const bool bGrenade = WeaponMotor && WeaponMotor->UsesGrenadeProjectile();
+	const FName Band = WeaponMotor ? WeaponMotor->GetClassBandId() : NAME_None;
+	const ECLWeaponStock Stock = WeaponMotor ? WeaponMotor->GetEquippedStock() : ECLWeaponStock::None;
+	const bool bComp = WeaponMotor && WeaponMotor->GetActiveItem().FinalStats.Compensator > 0.05f;
 	const FName Sight = WeaponMotor ? WeaponMotor->GetSightId() : NAME_None;
-	CLViewWeapon::SetThirdPersonPeek(ViewWeaponRoot, WorldWeaponRoot, Ease > 0.05f, bGrenade, Sight);
+	CLViewWeapon::SetThirdPersonPeek(ViewWeaponRoot, WorldWeaponRoot, Ease > 0.05f, Band, Stock, Sight, bComp);
 	if (ViewKnife)
 	{
 		const bool bSlash = KnifeSlashRemaining > 0.f;
@@ -1106,7 +1110,7 @@ void ACLPlayerCharacter::ApplyProfileLoadout()
 				{
 					return false;
 				}
-				const FCLWeaponClassDef* ClassDef = Loot->FindWeaponClass(Item.DefinitionId);
+				const FCLWeaponClassDef* ClassDef = nullptr;
 				WeaponMotor->EquipItem(Item, ClassDef);
 				if (HealthShield)
 				{
@@ -1126,8 +1130,7 @@ void ACLPlayerCharacter::ApplyProfileLoadout()
 	auto EquipStarter = [&](FName ClassId)
 	{
 		FCLItemInstance Starter = Loot->MakeWeaponOfClass(ClassId, ECLItemRarity::Common, TEXT("starter"));
-		const FCLWeaponClassDef* ClassDef = Loot->FindWeaponClass(Starter.DefinitionId);
-		WeaponMotor->EquipItem(Starter, ClassDef);
+		WeaponMotor->EquipItem(Starter, nullptr);
 		if (HealthShield)
 		{
 			HealthShield->SetFlinchResist(Starter.FinalStats.FlinchResist);

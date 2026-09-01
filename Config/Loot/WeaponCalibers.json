@@ -1,0 +1,28 @@
+{
+  "weaponCalibers": [
+    { "id": "9x19", "band": "pistol", "ammoGrains": 124, "muzzleVelocityMps": 350 },
+    { "id": "10mm", "band": "pistol", "ammoGrains": 180, "muzzleVelocityMps": 370 },
+    { "id": "45acp", "band": "pistol", "ammoGrains": 230, "muzzleVelocityMps": 260 },
+    { "id": "556", "band": "rifle", "ammoGrains": 62, "muzzleVelocityMps": 900 },
+    { "id": "545", "band": "rifle", "ammoGrains": 53, "muzzleVelocityMps": 900 },
+    { "id": "762x39", "band": "rifle", "ammoGrains": 123, "muzzleVelocityMps": 715 },
+    { "id": "68spear", "band": "rifle", "ammoGrains": 135, "muzzleVelocityMps": 850 },
+    { "id": "762nato", "band": "rifle", "ammoGrains": 147, "muzzleVelocityMps": 840 },
+    { "id": "3006", "band": "rifle", "ammoGrains": 150, "muzzleVelocityMps": 850 },
+    { "id": "338lm", "band": "rifle", "ammoGrains": 250, "muzzleVelocityMps": 900 },
+    { "id": "12ga", "band": "shot_shell", "ammoGrains": 437, "muzzleVelocityMps": 400 },
+    { "id": "40x46lv", "band": "grenade_mv", "ammoGrains": 3500, "muzzleVelocityMps": 76 },
+    { "id": "30x42mv", "band": "grenade_mv", "ammoGrains": 2390, "muzzleVelocityMps": 207 },
+    { "id": "50bmg", "band": "amr", "ammoGrains": 661, "muzzleVelocityMps": 860 },
+    { "id": "357mag", "band": "pistol", "ammoGrains": 158, "muzzleVelocityMps": 440 },
+    { "id": "44mag", "band": "pistol", "ammoGrains": 240, "muzzleVelocityMps": 360 },
+    { "id": "4570", "band": "rifle", "ammoGrains": 405, "muzzleVelocityMps": 400 },
+    { "id": "57x28", "band": "pistol", "ammoGrains": 31, "muzzleVelocityMps": 715 },
+    { "id": "50ae", "band": "pistol", "ammoGrains": 300, "muzzleVelocityMps": 470 },
+    { "id": "4ga", "band": "shot_shell", "ammoGrains": 770, "muzzleVelocityMps": 320 },
+    { "id": "762x54r", "band": "rifle", "ammoGrains": 174, "muzzleVelocityMps": 800 },
+    { "id": "46hk", "band": "pistol", "ammoGrains": 31, "muzzleVelocityMps": 725 },
+    { "id": "9x18", "band": "pistol", "ammoGrains": 95, "muzzleVelocityMps": 320 },
+    { "id": "380acp", "band": "pistol", "ammoGrains": 95, "muzzleVelocityMps": 290 }
+  ]
+}

@@ -11,9 +11,11 @@ class UCanvasPanel;
 class UVerticalBox;
 class UCLDirectorPanel;
 class UCLKeybindEditor;
+class UCLArmoryWidget;
 class UComboBoxString;
 class UTextBlock;
 class UEditableTextBox;
+class USizeBox;
 
 /**
  * Director + keybinds overlay. I / Esc / F1 / Start (not remappable). Activities from here; remaps save immediately.
@@ -61,6 +63,7 @@ public:
 	void ShowDirectorTab();
 	void ShowKeybindsTab();
 	void ShowLobbyTab();
+	void ShowArmoryTab();
 
 	bool IsListening() const;
 	void CancelListen();
@@ -81,6 +84,8 @@ protected:
 	void BuildDirectorPanel(class UVerticalBox* RootCol);
 	void BuildLobbyPanel(class UVerticalBox* RootCol);
 	void BuildKeybindEditor(class UVerticalBox* RootCol);
+	void BuildArmoryPanel(class UVerticalBox* RootCol);
+	void SetCompactPanel(bool bCompact);
 
 	UFUNCTION()
 	void HandleDirectorTabClicked();
@@ -90,6 +95,9 @@ protected:
 
 	UFUNCTION()
 	void HandleKeybindsTabClicked();
+
+	UFUNCTION()
+	void HandleArmoryTabClicked();
 
 	UFUNCTION()
 	void HandlePvpClicked();
@@ -179,6 +187,15 @@ protected:
 	TObjectPtr<UCLKeybindEditor> KeybindEditor;
 
 	UPROPERTY()
+	TObjectPtr<UCLArmoryWidget> ArmoryWidget;
+
+	UPROPERTY()
+	TObjectPtr<USizeBox> PanelSize;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> TitleLabel;
+
+	UPROPERTY()
 	TObjectPtr<UCanvasPanel> RootCanvas;
 
 	UPROPERTY()
@@ -189,6 +206,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> KeybindsBox;
+
+	UPROPERTY()
+	TObjectPtr<UVerticalBox> ArmoryBox;
 
 	UPROPERTY()
 	TObjectPtr<UComboBoxString> LoopbackJoinCombo;

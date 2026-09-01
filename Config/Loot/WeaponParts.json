@@ -1,0 +1,34 @@
+{
+  "weaponParts": [
+    {
+      "id": "brace",
+      "displayName": "Brace",
+      "slot": "brace",
+      "allowedClassIds": ["pistol", "smg"]
+    },
+    {
+      "id": "stock",
+      "displayName": "Stock",
+      "slot": "stock",
+      "allowedClassIds": ["smg", "rifle", "dmr", "shotgun", "sniper_rifle", "grenade_rifle", "grenade_launcher"]
+    },
+    {
+      "id": "compensator",
+      "displayName": "Compensator",
+      "slot": "compensator",
+      "allowedClassIds": ["pistol", "smg", "rifle", "dmr", "shotgun", "sniper_rifle"]
+    },
+    {
+      "id": "flash_hider",
+      "displayName": "Flash Hider",
+      "slot": "flash_hider",
+      "allowedClassIds": ["pistol", "smg", "rifle", "dmr", "sniper_rifle"]
+    },
+    {
+      "id": "suppressor",
+      "displayName": "Suppressor",
+      "slot": "suppressor",
+      "allowedClassIds": ["pistol", "smg", "rifle", "dmr", "sniper_rifle"]
+    }
+  ]
+}

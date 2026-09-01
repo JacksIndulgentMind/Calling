@@ -1,18 +1,44 @@
 # Calling
 
-This is an FPS looter-shooter **game starter** inspired by Destiny. Please fork it and make some awesome games. If you have suggestions, leave comments. If this helps you, consider [hitting that coffee button](https://www.buymeacoffee.com/ahkilleux).
+An Unreal Engine **5.8** C++ looter FPS. Movement is the gunfight. Social is home. There is no live service and no online account.
 
-**Work in progress.** We will keep improving it over time.
+Inspired by Destiny-class shooters, then built as its own game: a handful of verbs, greybox spaces you can actually fight in, and a listen-server so two windows on one PC are already multiplayer. Apache 2.0 — see [LICENSE](LICENSE).
 
-Calling is an Unreal Engine **5.8** C++ project: gunplay, movement, greybox maps, a listen-server session hub, and a localhost agent API so tools (and Cursor) can drive pawns the same way a player does. Apache 2.0 — see [LICENSE](LICENSE).
+Please fork it and make some awesome games. Suggestions welcome. If this helps you, consider [hitting that coffee button](https://www.buymeacoffee.com/ahkilleux).
 
-## Overview
+**Work in progress.** The verbs and routing are the part we intend to keep.
 
-You boot into a local profile, land in a social square, then compose a match or jump into practice / raid placeholders. Combat is a **digital dance**: slide, dodge, dash, and air-dive chain without dead frames. Loot is data-driven JSON (weapon classes, sights, modifiers). There is no online account and no live service — saves live under `Saved/Calling/Profiles/`.
+## Intent
 
-Agents are **seats**, not extra HTTP pawn ids. Anytime an agent drives a pawn, use **BotBooks** (PlantUML) on the hub — see [Docs/BotBooks.md](Docs/BotBooks.md). How a leaf lands a point (`jump` / `airDive` / `slide` vs Recast `goto`): [Docs/NavAbilities.md](Docs/NavAbilities.md). `POST /hub` on `127.0.0.1:18765` and WebSocket `ws://127.0.0.1:18766` share one codec. `POST /director` is the I-menu overlay only (compose PvP, ready, go). The game rejects non-loopback HTTP.
+Learn a small set of moves by doing them. No tutorial popups, no “new ability” briefings between activities. If a system needs a tooltip to be usable, the system is wrong.
 
-Types and assets use the `CL*` / `Calling` prefix. Do not retune `AirControl=0.35` or `BaseStrafeSpeed=380` unless you are chasing a new feel bug.
+The fight is **sprint → slide → jump**, and you shoot through all of it. Dodge, dash, and air-dive are close seconds: recover a bad hop, skip cover, chain into the next beat. Legal chains have **no dead frames** — land from a dive and slide the same tick; cancel a slide into a dash; ADS on or off mid-slide. That is the **digital dance**. Shooting is the solver. Class abilities set up or survive a gunfight; they do not replace it.
+
+The HUD shows **state**, not instructions: your shield and health, ammo, ability cool-downs, a noisy motion radar. No world-space enemy health bars. A compact readout appears only while something living is on the barrel.
+
+A **game mode** has to put a kill bar in conflict with a place-to-be. Chase the gunfight and you lose the ground; sit on the ground and you lose the race. Deathmatch with no objective, or a hold with no kill pressure, is not a Calling mode. PvP **shrine clash** is the first: ten final blows versus a rotating shrine. Raid encounters use the same idea — occupy a pad while waves and a boss team press you.
+
+Raids and bosses are hard because of variety, accuracy, numbers, and terrain — not fatter HP. Difficulty is **intellect**: how they track you and how they answer a change. Loot should respect time (the vault is inventory). Pity rolls and player-count trophies are next, not in this build.
+
+## A session
+
+You boot a **local profile**, then land in **Social**. That square is home. Activities are entered from there, and leaving a match always returns you to *your* Social default: private (local, no listen), public/friends/party (listen host), or join by IP. Overlay **Lobby** reloads that instance. Overlay **Director** composes a PvP match, or sends you to raid / practice. When you leave Social for an activity, the listen session is torn first so a guest is not dragged into the raid.
+
+Maps are greybox on purpose: a social square, a three-lane courtyard, an Obelisk raid chain (four chambers, in-map doors), and a practice pad. Same locomotion everywhere.
+
+## What’s in the box
+
+Three classes — **Vanguard**, **Pathfinder**, **Warden** — with JSON kits. Weapons, sights, modifiers, and drop tables are data. Overlay **Armory** lists every make and where it drops (raid, PvP, world, faction vendor) — it is not the vault. Sessions are a listen server on LAN (NULL online subsystem). Same-PC two-window join is first-class. Types and assets use the `CL*` / `Calling` prefix.
+
+Agents are **seats**, not a second pawn API. A human, a Cursor session, or a bot occupies the same seat, possession, and loot rules. Drive a pawn with **BotBooks** (PlantUML on the hub) — same input path as the controller. Localhost HTTP/WebSocket only.
+
+- BotBooks: [Docs/BotBooks.md](Docs/BotBooks.md)
+- Two windows: [Docs/VirtualMp.md](Docs/VirtualMp.md)
+- Agent recipes: [AGENTS.md](AGENTS.md)
+
+## Where it’s headed
+
+Near-term is the missing *front* on systems that already run: a **vault UI** (browse what you own; Armory already lists what you can chase), fire and melee **anim polish**, placeholder **audio**, and practice-range furniture. Then instance/party chat, party and friends lists, loot pity and trophies by player count, and more authored space on the same verbs. Steam / Deck later. Xbox is parked.
 
 ## Requirements
 
@@ -22,56 +48,36 @@ Types and assets use the `CL*` / `Calling` prefix. Do not retune `AirControl=0.3
 
 ## Build
 
-1. Clone this repo.
-2. Right-click `Calling.uproject` and Generate Visual Studio project files, or build from the engine:
-
-```
-Build.bat CallingEditor Win64 Development -Project=<path-to>/Calling.uproject -WaitMutex
-```
-
-Never run `Build.bat` while Unreal Editor is open — it locks `UnrealEditor-Calling.dll`. Prefer:
+Stop Unreal Editor first — it locks `UnrealEditor-Calling.dll`. Prefer:
 
 ```
 Scripts/dl-rebuild.ps1
 ```
 
-That stops the editor, builds, and relaunches standalone `-game` (then Compose PvP by default). `-Activity none` skips director travel.
+That stops the editor, builds, and relaunches standalone `-game` (Compose PvP by default). `-Activity social` lands in Social; `-Activity none` skips director travel.
 
-3. Open `Calling.uproject` in Unreal Editor, or launch:
+Or generate project files from `Calling.uproject` and:
 
 ```
+Build.bat CallingEditor Win64 Development -Project=<path-to>/Calling.uproject -WaitMutex
 UnrealEditor.exe Calling.uproject -game
 ```
 
-Default boot is standalone. Agent HTTP (localhost only) is `127.0.0.1:18765`.
+Saves live under `Saved/Calling/Profiles/`. Agent HTTP is localhost `127.0.0.1:18765`.
+
+Sim is **30 Hz** fixed; net **20 Hz**; render unbounded. Input samples every render frame; the sim step consumes it.
 
 ## Maps
 
-| Level asset path | Intended GameMode |
-|------------------|-------------------|
+| Level | GameMode |
+|-------|----------|
 | `/Game/Maps/CL_Boot` | `ACLBootGameMode` |
 | `/Game/Maps/CL_Social` | `ACLSocialGameMode` |
 | `/Game/Maps/CL_PvpArena` | `ACLPvpGameMode` |
 | `/Game/Maps/CL_Raid_01` … `_04` | `ACLRaidGameMode` |
 | `/Game/Maps/CL_Practice` | `ACLPracticeGameMode` |
 
-Composer reuses `/Game/Maps/CL_Social` with `?game=/Script/Calling.CLComposerGameMode`. Map names are in `Config/DefaultCalling.ini` under `CLSceneSettings`.
-
-## Tick model
-
-| Layer | Default | Notes |
-|-------|---------|-------|
-| Render | unbounded | Remote pawns interpolate |
-| Game sim | 30 Hz fixed | `FCLTickClock` / `UCLTickSubsystem` |
-| Net | 20 Hz | Listen-server peer state |
-
-Input is sampled every render frame into accumulators; the fixed sim step consumes them.
-
-## Identity / networking
-
-- No online account. Local profile JSON under `Saved/Calling/Profiles/`.
-- Vault is the only inventory; drops go there and raise earn badges.
-- Sessions: listen server + LAN / NULL OSS. Host is authority.
+Composer reuses `/Game/Maps/CL_Social` with `?game=/Script/Calling.CLComposerGameMode`. Map names: `Config/DefaultCalling.ini` (`CLSceneSettings`).
 
 ## Config
 
@@ -79,21 +85,21 @@ Input is sampled every render frame into accumulators; the fixed sim step consum
 - `Config/Loot/*.json` — weapon classes, modifier pool, drop tables
 - `Config/Classes/AbilityCatalog.json` — ability types and slots
 - `Config/Classes/Vanguard.json`, `Pathfinder.json`, `Warden.json` — one bind per slot
+- `Config/GameModes/*.json` — shrine clash, obelisk raid, and the next rulesets
 
-Loot rules are enforced locally only. Editing saves/config can grant anything; that is intentional for this demo.
+Loot rules are local only. Editing saves or config can grant anything; that is intentional for this demo.
 
-## Agent circle run (local Windows + UE 5.8)
+## Verify (local Windows + UE 5.8)
 
-After a rebuild, with the game up:
+Cursor **cloud** agents cannot run Unreal. On a machine with 5.8 installed, after a rebuild:
 
 ```
 Scripts/dl-verify-dual-composer.ps1 -Sequence ring
+Scripts/dl-verify-social-two-box.ps1
 ```
 
-Expect `VERIFY_OK`, `diving=true`, and megalith sticks `8/8`. Radar-only: `-Sequence radar`.
-
-Cursor **cloud** agents cannot run Unreal. This recipe is for a Windows machine with UE 5.8 installed. See [AGENTS.md](AGENTS.md) and `.cursor/skills/` (`dl-agent-control`, `dl-agent-nav`, `dl-circle-run`).
+Circle-run pass: `VERIFY_OK`, `diving=true`, megalith sticks `8/8`. Social two-box: six join/default cases. Details: [AGENTS.md](AGENTS.md) and `.cursor/skills/`.
 
 ## Contributing
 
-Fork, experiment, open issues or discussions with suggestions. Do not commit `Binaries/`, `Intermediate/`, `Saved/`, or editor-generated `.sln` files.
+Fork, experiment, open issues or discussions. Do not commit `Binaries/`, `Intermediate/`, `Saved/`, or editor-generated `.sln` files.

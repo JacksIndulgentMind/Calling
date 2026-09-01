@@ -1,8 +1,11 @@
 #include "Player/CLViewWeapon.h"
 #include "Loot/CLLootRulesService.h"
+#include "Game/CLGameInstance.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
+#include "Engine/GameInstance.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 
@@ -98,11 +101,77 @@ namespace
 		return Sock;
 	}
 
+	USceneComponent* BuildFamilyFromFrame(
+		USceneComponent* Root,
+		const FCLWeaponFrameDef& Frame,
+		const TCHAR* PartPrefix,
+		UStaticMesh* Cube,
+		UStaticMesh* Cyl,
+		UMaterialInterface* Black,
+		UMaterialInterface* Dark,
+		UMaterialInterface* Red,
+		UMaterialInterface* Glass,
+		const FWeaponSee& See)
+	{
+		const FString FamilyName = FString::Printf(TEXT("Family_%s"), *Frame.ClassId.ToString());
+		USceneComponent* Family = NewObject<USceneComponent>(Root->GetOwner(), FName(*FamilyName));
+		Family->SetupAttachment(Root);
+		Family->RegisterComponent();
+
+		auto PartName = [PartPrefix](const TCHAR* Leaf) -> FString
+		{
+			return FString::Printf(TEXT("%s%s"), PartPrefix, Leaf);
+		};
+
+		for (const FCLWeaponSocketDef& Sock : Frame.Visuals)
+		{
+			UStaticMesh* Mesh = (Sock.Mesh == FName(TEXT("cylinder"))) ? Cyl : Cube;
+			const FString Leaf = Sock.Socket.ToString();
+			AddPart(Family, *PartName(*Leaf), Mesh, Sock.Loc, Sock.Scale, Sock.Rot, Dark, See);
+		}
+
+		AddSocket(Family, *PartName(TEXT("Muzzle")), Frame.Muzzle);
+		AddSocket(Family, *PartName(TEXT("Ejector")), Frame.Ejector);
+
+		const bool bGrenade = Frame.ClassId.ToString().Contains(TEXT("grenade"));
+		const FVector OpticAt = bGrenade ? FVector(-2.9f, 0.f, 5.35f) : FVector(-2.8f, 0.f, 4.45f);
+		AddPart(Family, *PartName(TEXT("OpticHoodL")), Cube, OpticAt + FVector(0.f, -1.35f, 0.f), FVector(0.01f, 0.005f, 0.034f), FRotator::ZeroRotator, Black, See);
+		AddPart(Family, *PartName(TEXT("OpticHoodR")), Cube, OpticAt + FVector(0.f, 1.35f, 0.f), FVector(0.01f, 0.005f, 0.034f), FRotator::ZeroRotator, Black, See);
+		AddPart(Family, *PartName(TEXT("OpticHoodB")), Cube, OpticAt + FVector(0.f, 0.f, -0.93f), FVector(0.01f, 0.03f, 0.005f), FRotator::ZeroRotator, Black, See);
+		if (Glass)
+		{
+			AddPart(Family, *PartName(TEXT("OpticGlass")), Cube, OpticAt + FVector(0.08f, 0.f, 0.f), FVector(0.0015f, 0.022f, 0.026f), FRotator::ZeroRotator, Glass, See);
+		}
+		AddPart(Family, *PartName(TEXT("OpticLed")), Cube, OpticAt + FVector(0.12f, 0.f, 0.f), FVector(0.003f, 0.003f, 0.003f), FRotator::ZeroRotator, Red, See);
+		AddPart(Family, *PartName(TEXT("ScopeTube")), Cyl, FVector(6.f, 0.f, 3.8f), FVector(0.048f, 0.048f, 0.14f), FRotator(90.f, 0.f, 0.f), Black, See);
+		AddPart(Family, *PartName(TEXT("GlSight")), Cube, FVector(-3.4f, 0.f, 5.2f), FVector(0.012f, 0.02f, 0.028f), FRotator::ZeroRotator, Dark, See);
+		return Family;
+	}
+
+	UCLLootRulesService* LootFrom(USceneComponent* Parent)
+	{
+		if (!Parent)
+		{
+			return nullptr;
+		}
+		AActor* Owner = Parent->GetOwner();
+		if (!Owner)
+		{
+			return nullptr;
+		}
+		if (UGameInstance* GI = Owner->GetGameInstance())
+		{
+			if (UCLGameInstance* CLGI = Cast<UCLGameInstance>(GI))
+			{
+				return CLGI->GetLootRulesService();
+			}
+		}
+		return nullptr;
+	}
+
 	USceneComponent* BuildOnParent(
 		USceneComponent* Parent,
 		FName RootName,
-		FName GlockName,
-		FName GrenadeName,
 		const TCHAR* PartPrefix,
 		const FVector& RelLoc,
 		float UniformScale,
@@ -118,14 +187,6 @@ namespace
 		Root->SetRelativeLocation(RelLoc);
 		Root->SetRelativeScale3D(FVector(UniformScale));
 		Root->RegisterComponent();
-
-		USceneComponent* GlockRoot = NewObject<USceneComponent>(Parent->GetOwner(), GlockName);
-		GlockRoot->SetupAttachment(Root);
-		GlockRoot->RegisterComponent();
-
-		USceneComponent* GrenadeRoot = NewObject<USceneComponent>(Parent->GetOwner(), GrenadeName);
-		GrenadeRoot->SetupAttachment(Root);
-		GrenadeRoot->RegisterComponent();
 
 		UStaticMesh* Cube = CubeMesh();
 		UStaticMesh* Cyl = CylinderMesh();
@@ -144,54 +205,44 @@ namespace
 			? MakeColor(Parent->GetOwner(), GlassBase, FLinearColor(0.55f, 0.62f, 0.68f, 0.22f))
 			: nullptr;
 
-		auto PartName = [PartPrefix](const TCHAR* Leaf) -> FString
+		bool bBuilt = false;
+		if (const UCLLootRulesService* Loot = LootFrom(Parent))
 		{
-			return FString::Printf(TEXT("%s%s"), PartPrefix, Leaf);
-		};
-
-		AddPart(GlockRoot, *PartName(TEXT("Frame")), Cube, FVector(-1.f, 0.f, -1.6f), FVector(0.16f, 0.032f, 0.07f), FRotator::ZeroRotator, Black, See);
-		AddPart(GlockRoot, *PartName(TEXT("Slide")), Cube, FVector(1.6f, 0.f, 2.5f), FVector(0.20f, 0.028f, 0.024f), FRotator::ZeroRotator, Dark, See);
-		AddPart(GlockRoot, *PartName(TEXT("DustCover")), Cube, FVector(5.4f, 0.f, 0.2f), FVector(0.12f, 0.032f, 0.022f), FRotator::ZeroRotator, Black, See);
-		AddPart(GlockRoot, *PartName(TEXT("Barrel")), Cyl, FVector(10.2f, 0.f, 2.3f), FVector(0.012f, 0.012f, 0.13f), FRotator(90.f, 0.f, 0.f), Dark, See);
-		AddSocket(GlockRoot, *PartName(TEXT("Muzzle")), FVector(16.8f, 0.f, 2.3f));
-		AddSocket(GlockRoot, *PartName(TEXT("Ejector")), FVector(4.2f, 2.8f, 2.6f));
-		AddPart(GlockRoot, *PartName(TEXT("Mag")), Cube, FVector(-3.2f, 0.f, -5.4f), FVector(0.03f, 0.024f, 0.07f), FRotator(8.f, 0.f, 0.f), Black, See);
-		AddPart(GlockRoot, *PartName(TEXT("TriggerGuard")), Cube, FVector(-0.2f, 0.f, -4.2f), FVector(0.04f, 0.024f, 0.032f), FRotator::ZeroRotator, Black, See);
-		AddPart(GlockRoot, *PartName(TEXT("ThumbRest")), Cube, FVector(-1.4f, -2.0f, 0.6f), FVector(0.028f, 0.012f, 0.018f), FRotator(0.f, 12.f, 0.f), Dark, See);
-		// Open C/U red-dot hood: thin frame, air in the window, tiny LED. Not a closed tube.
-		AddPart(GlockRoot, *PartName(TEXT("OpticHoodL")), Cube, FVector(-2.8f, -1.35f, 4.45f), FVector(0.01f, 0.005f, 0.034f), FRotator::ZeroRotator, Black, See);
-		AddPart(GlockRoot, *PartName(TEXT("OpticHoodR")), Cube, FVector(-2.8f, 1.35f, 4.45f), FVector(0.01f, 0.005f, 0.034f), FRotator::ZeroRotator, Black, See);
-		AddPart(GlockRoot, *PartName(TEXT("OpticHoodB")), Cube, FVector(-2.8f, 0.f, 3.52f), FVector(0.01f, 0.03f, 0.005f), FRotator::ZeroRotator, Black, See);
-		if (Glass)
-		{
-			AddPart(GlockRoot, *PartName(TEXT("OpticGlass")), Cube, FVector(-2.72f, 0.f, 4.45f), FVector(0.0015f, 0.022f, 0.026f), FRotator::ZeroRotator, Glass, See);
+			for (const FCLWeaponFrameDef& Frame : Loot->GetWeaponFrames())
+			{
+				BuildFamilyFromFrame(Root, Frame, PartPrefix, Cube, Cyl, Black, Dark, Red, Glass, See);
+				bBuilt = true;
+			}
 		}
-		AddPart(GlockRoot, *PartName(TEXT("OpticLed")), Cube, FVector(-2.68f, 0.f, 4.45f), FVector(0.003f, 0.003f, 0.003f), FRotator::ZeroRotator, Red, See);
-		AddPart(GlockRoot, *PartName(TEXT("ScopeTube")), Cyl, FVector(6.f, 0.f, 3.8f), FVector(0.048f, 0.048f, 0.14f), FRotator(90.f, 0.f, 0.f), Black, See);
-
-		const float VentY[4] = { -0.6f, -0.2f, 0.2f, 0.6f };
-		for (int32 i = 0; i < 4; ++i)
+		if (!bBuilt)
 		{
-			AddPart(GlockRoot, *PartName(*FString::Printf(TEXT("Vent%d"), i)), Cube,
-				FVector(6.4f + i * 0.9f, VentY[i] * 0.15f, 3.55f),
-				FVector(0.012f, 0.01f, 0.008f),
-				FRotator::ZeroRotator, Black, See);
+			FCLWeaponFrameDef Pistol;
+			Pistol.ClassId = FName(TEXT("pistol"));
+			Pistol.Muzzle = FVector(16.8f, 0.f, 2.3f);
+			Pistol.Ejector = FVector(4.2f, 2.8f, 2.6f);
+			FCLWeaponSocketDef FrameSock;
+			FrameSock.Socket = FName(TEXT("frame"));
+			FrameSock.Mesh = FName(TEXT("cube"));
+			FrameSock.Loc = FVector(-1.f, 0.f, -1.6f);
+			FrameSock.Scale = FVector(0.16f, 0.032f, 0.07f);
+			Pistol.Visuals.Add(FrameSock);
+			BuildFamilyFromFrame(Root, Pistol, PartPrefix, Cube, Cyl, Black, Dark, Red, Glass, See);
+
+			FCLWeaponFrameDef Grenade;
+			Grenade.ClassId = FName(TEXT("grenade_rifle"));
+			Grenade.Muzzle = FVector(19.6f, 0.f, 1.8f);
+			Grenade.Ejector = FVector(2.2f, 3.4f, 2.4f);
+			FCLWeaponSocketDef Tube;
+			Tube.Socket = FName(TEXT("barrel"));
+			Tube.Mesh = FName(TEXT("cylinder"));
+			Tube.Loc = FVector(8.5f, 0.f, 1.8f);
+			Tube.Scale = FVector(0.055f, 0.055f, 0.22f);
+			Tube.Rot = FRotator(90.f, 0.f, 0.f);
+			Grenade.Visuals.Add(Tube);
+			BuildFamilyFromFrame(Root, Grenade, PartPrefix, Cube, Cyl, Black, Dark, Red, Glass, See);
 		}
 
-		AddPart(GrenadeRoot, *PartName(TEXT("GlTube")), Cyl, FVector(8.5f, 0.f, 1.8f), FVector(0.055f, 0.055f, 0.22f), FRotator(90.f, 0.f, 0.f), Dark, See);
-		AddSocket(GrenadeRoot, *PartName(TEXT("GlMuzzle")), FVector(19.6f, 0.f, 1.8f));
-		AddSocket(GrenadeRoot, *PartName(TEXT("GlEjector")), FVector(2.2f, 3.4f, 2.4f));
-		AddPart(GrenadeRoot, *PartName(TEXT("GlBody")), Cube, FVector(0.4f, 0.f, 0.6f), FVector(0.14f, 0.05f, 0.07f), FRotator::ZeroRotator, Black, See);
-		AddPart(GrenadeRoot, *PartName(TEXT("GlBreech")), Cube, FVector(-4.2f, 0.f, 1.4f), FVector(0.06f, 0.055f, 0.08f), FRotator::ZeroRotator, Dark, See);
-		AddPart(GrenadeRoot, *PartName(TEXT("GlMag")), Cube, FVector(-1.6f, 0.f, -5.8f), FVector(0.045f, 0.038f, 0.09f), FRotator(10.f, 0.f, 0.f), Black, See);
-		AddPart(GrenadeRoot, *PartName(TEXT("GlGuard")), Cube, FVector(0.6f, 0.f, -3.6f), FVector(0.05f, 0.03f, 0.03f), FRotator::ZeroRotator, Black, See);
-		AddPart(GrenadeRoot, *PartName(TEXT("GlSight")), Cube, FVector(-3.4f, 0.f, 5.2f), FVector(0.012f, 0.02f, 0.028f), FRotator::ZeroRotator, Dark, See);
-		AddPart(GrenadeRoot, *PartName(TEXT("OpticHoodL")), Cube, FVector(-2.9f, -1.35f, 5.35f), FVector(0.01f, 0.005f, 0.034f), FRotator::ZeroRotator, Black, See);
-		AddPart(GrenadeRoot, *PartName(TEXT("OpticHoodR")), Cube, FVector(-2.9f, 1.35f, 5.35f), FVector(0.01f, 0.005f, 0.034f), FRotator::ZeroRotator, Black, See);
-		AddPart(GrenadeRoot, *PartName(TEXT("OpticHoodB")), Cube, FVector(-2.9f, 0.f, 4.42f), FVector(0.01f, 0.03f, 0.005f), FRotator::ZeroRotator, Black, See);
-		AddPart(GrenadeRoot, *PartName(TEXT("OpticLed")), Cube, FVector(-2.78f, 0.f, 5.35f), FVector(0.003f, 0.003f, 0.003f), FRotator::ZeroRotator, Red, See);
-
-		CLViewWeapon::ShowFamily(Root, false);
+		CLViewWeapon::ShowFamily(Root, FName(TEXT("pistol")), ECLWeaponStock::None, false);
 		return Root;
 	}
 }
@@ -199,13 +250,13 @@ namespace
 USceneComponent* CLViewWeapon::BuildOnCamera(USceneComponent* Camera)
 {
 	const FWeaponSee See{ true, false };
-	return BuildOnParent(Camera, TEXT("ViewWeaponRoot"), TEXT("ViewGlock"), TEXT("ViewGrenadeRifle"), TEXT("View"), HipOffset, 1.f, See);
+	return BuildOnParent(Camera, TEXT("ViewWeaponRoot"), TEXT("View"), HipOffset, 1.f, See);
 }
 
 USceneComponent* CLViewWeapon::BuildOnBody(USceneComponent* Body)
 {
 	const FWeaponSee See{ false, true };
-	return BuildOnParent(Body, TEXT("WorldWeaponRoot"), TEXT("WorldGlock"), TEXT("WorldGrenadeRifle"), TEXT("World"), WorldHipOffset, WorldScale, See);
+	return BuildOnParent(Body, TEXT("WorldWeaponRoot"), TEXT("World"), WorldHipOffset, WorldScale, See);
 }
 
 void CLViewWeapon::UpdateAdsPose(USceneComponent* WeaponRoot, float AdsAlpha, FName SightId, float KickPitch)
@@ -229,15 +280,19 @@ void CLViewWeapon::UpdateAdsPose(USceneComponent* WeaponRoot, float AdsAlpha, FN
 	WeaponRoot->SetRelativeRotation(FRotator(KickPitch, 0.f, 0.f));
 }
 
-void CLViewWeapon::ShowFamily(USceneComponent* WeaponRoot, bool bGrenadeRifle)
+void CLViewWeapon::ShowFamily(USceneComponent* WeaponRoot, FName ClassId, ECLWeaponStock Stock, bool bCompensator)
 {
 	if (!WeaponRoot)
 	{
 		return;
 	}
 
+	const FName Band = UCLLootRulesService::CanonicalWeaponClassId(ClassId);
+	const FString Want = FString::Printf(TEXT("Family_%s"), *Band.ToString());
+
 	TArray<USceneComponent*> Children;
 	WeaponRoot->GetChildrenComponents(false, Children);
+	USceneComponent* Shown = nullptr;
 	for (USceneComponent* Child : Children)
 	{
 		if (!Child)
@@ -245,11 +300,43 @@ void CLViewWeapon::ShowFamily(USceneComponent* WeaponRoot, bool bGrenadeRifle)
 			continue;
 		}
 		const FString Name = Child->GetName();
-		const bool bGrenade = Name.Contains(TEXT("GrenadeRifle"));
-		const bool bGlock = Name.Contains(TEXT("Glock"));
-		if (bGrenade || bGlock)
+		if (!Name.Contains(TEXT("Family_")))
 		{
-			Child->SetVisibility(bGrenade ? bGrenadeRifle : !bGrenadeRifle, true);
+			continue;
+		}
+		const bool bMatch = Name.Contains(Want);
+		Child->SetVisibility(bMatch, true);
+		if (bMatch)
+		{
+			Shown = Child;
+		}
+	}
+
+	if (!Shown)
+	{
+		return;
+	}
+
+	TArray<USceneComponent*> Parts;
+	Shown->GetChildrenComponents(true, Parts);
+	for (USceneComponent* Part : Parts)
+	{
+		if (!Part)
+		{
+			continue;
+		}
+		const FString Name = Part->GetName();
+		if (Name.Contains(TEXT("stock"), ESearchCase::IgnoreCase) && !Name.Contains(TEXT("brace"), ESearchCase::IgnoreCase))
+		{
+			Part->SetVisibility(Stock == ECLWeaponStock::Stock, true);
+		}
+		else if (Name.Contains(TEXT("brace"), ESearchCase::IgnoreCase))
+		{
+			Part->SetVisibility(Stock == ECLWeaponStock::Brace, true);
+		}
+		else if (Name.Contains(TEXT("muzzle"), ESearchCase::IgnoreCase) && Part->IsA(UStaticMeshComponent::StaticClass()))
+		{
+			Part->SetVisibility(bCompensator, true);
 		}
 	}
 }
@@ -314,7 +401,7 @@ void CLViewWeapon::ShowSight(USceneComponent* WeaponRoot, FName SightId)
 }
 
 void CLViewWeapon::SetThirdPersonPeek(USceneComponent* ViewRoot, USceneComponent* WorldRoot, bool bPeek,
-	bool bGrenadeRifle, FName SightId)
+	FName ClassId, ECLWeaponStock Stock, FName SightId, bool bCompensator)
 {
 	if (ViewRoot)
 	{
@@ -325,7 +412,7 @@ void CLViewWeapon::SetThirdPersonPeek(USceneComponent* ViewRoot, USceneComponent
 		else
 		{
 			ViewRoot->SetVisibility(true, false);
-			ShowFamily(ViewRoot, bGrenadeRifle);
+			ShowFamily(ViewRoot, ClassId, Stock, bCompensator);
 			ShowSight(ViewRoot, SightId);
 		}
 	}

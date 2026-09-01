@@ -210,5 +210,17 @@ void ACLGameModeBase::AwardDropFromTable(FName TableId, AController* ToControlle
 			}
 			GI->GetVaultSubsystem()->DepositItem(Item);
 		}
+		if (TableId != FName(TEXT("world_any")))
+		{
+			FCLItemInstance WorldItem;
+			if (GI->GetLootRulesService()->RollDrop(FName(TEXT("world_any")), WorldItem))
+			{
+				if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+				{
+					WorldItem.RealmId = Lobby->GetLootRealmId();
+				}
+				GI->GetVaultSubsystem()->DepositItem(WorldItem);
+			}
+		}
 	}
 }

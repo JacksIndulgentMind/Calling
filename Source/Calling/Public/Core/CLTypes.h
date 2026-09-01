@@ -42,7 +42,8 @@ UENUM(BlueprintType)
 enum class ECLItemKind : uint8
 {
 	Weapon UMETA(DisplayName = "Weapon"),
-	Armor UMETA(DisplayName = "Armor")
+	Armor UMETA(DisplayName = "Armor"),
+	Empty UMETA(DisplayName = "Empty")
 };
 
 UENUM(BlueprintType)
