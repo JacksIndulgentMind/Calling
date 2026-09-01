@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Core/CLTypes.h"
+#include "Game/CLLobbyTypes.h"
 #include "Loot/CLItemInstance.h"
 #include "CLProfileSubsystem.generated.h"
 
@@ -61,6 +62,9 @@ struct CALLING_API FCLLocalProfile
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Profile")
 	FGuid EquippedSpecialId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Profile")
+	FCLSocialDefault SocialDefault;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCLOnProfileChanged, const FCLLocalProfile&, Profile);
@@ -112,6 +116,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Calling|Profile")
 	bool ShouldAutoEnterSocial() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Calling|Profile")
+	bool SetSocialDefault(const FCLSocialDefault& Default);
+
+	UFUNCTION(BlueprintPure, Category = "Calling|Profile")
+	FCLSocialDefault GetSocialDefault() const;
 
 	/** C++ only — UHT forbids Blueprint-exposed pointers to USTRUCTs. */
 	FCLLocalProfile* FindProfileMutable(const FGuid& ProfileId);

@@ -3,6 +3,7 @@
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLLobbyTypes.h"
 #include "Game/CLGameModeBase.h"
+#include "Game/CLSessionSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -39,6 +40,13 @@ void CLActivityLauncher::Travel(UObject* WorldContext, ECLSceneId Scene, int32 R
 		else
 		{
 			Lobby->ClearPendingInvoice();
+		}
+	}
+	if (UCLSessionSubsystem* Sessions = GI ? GI->GetSubsystem<UCLSessionSubsystem>() : nullptr)
+	{
+		if (Scene != ECLSceneId::Social)
+		{
+			Sessions->LeaveSocialListen();
 		}
 	}
 	if (UCLSceneRouter* Router = GI ? GI->GetSubsystem<UCLSceneRouter>() : nullptr)

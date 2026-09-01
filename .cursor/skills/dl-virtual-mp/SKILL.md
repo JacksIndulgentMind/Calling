@@ -29,6 +29,17 @@ Default two-box: guest cmdline `-CallingAgentHttpPort=18767 -CallingSessionHubPo
 
 If the guest is launched **without** those flags, 18765/18766 bind fail is expected. Director `virtualhost` / `ready` / `go` only on the **host**. Do not Compose PvP as standalone on both windows. Do not run two `?listen` hosts.
 
+## Social two-box
+
+Login lands in **private** Social (no listen). Overlay **Lobby** is the social composer: Public reloads a listen Social; Join is IP:port (`socialjoin`, not hub `join`). Save as default; Join saves host+port with a private|public fallback. Raid/Practice/Composer **drop** social listen. Script:
+
+```
+Scripts/dl-rebuild.ps1 -Activity social
+Scripts/dl-verify-social-two-box.ps1
+```
+
+Director on host 18765 / guest 18767: `lobbytab`, `socialaudience` `{kind:public}`, `socialjoin` `{host,port}`, `savedefaultsocial` `{kind,host,port,fallback}`. `/state.lobby.access` is `private` when closed and not listening; `listening` / `netMode`; `socialDefault`; events `join_unavailable`.
+
 ## Bring up (verified)
 
 1. Stop extra UnrealEditor processes. Host first:

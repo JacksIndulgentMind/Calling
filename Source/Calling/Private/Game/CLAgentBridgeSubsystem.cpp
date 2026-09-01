@@ -9,6 +9,7 @@
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLSceneRouter.h"
+#include "Game/CLSessionSubsystem.h"
 #include "Game/CLGameModeBase.h"
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLSeatMotor.h"
@@ -571,14 +572,7 @@ bool UCLAgentBridgeSubsystem::HandleDirector(const FHttpServerRequest& Request, 
 		Action = TEXT("toggle");
 	}
 
-	ECLSceneId Scene = ECLSceneId::Boot;
-	if (UWorld* World = GetWorldSafe())
-	{
-		if (const ACLGameModeBase* GM = World->GetAuthGameMode<ACLGameModeBase>())
-		{
-			Scene = GM->GetSceneId();
-		}
-	}
+	const ECLSceneId Scene = FCLAgentStateSerializer::ResolveScene(GetGameInstance());
 	if (Scene == ECLSceneId::Boot)
 	{
 		if (UCLProfileSubsystem* Profiles = GetGameInstance()->GetSubsystem<UCLProfileSubsystem>())
@@ -589,7 +583,11 @@ bool UCLAgentBridgeSubsystem::HandleDirector(const FHttpServerRequest& Request, 
 				return true;
 			}
 		}
-		if (UCLSceneRouter* Scenes = GetGameInstance()->GetSubsystem<UCLSceneRouter>())
+		if (UCLSessionSubsystem* Sessions = GetGameInstance()->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->ApplySocialDefault();
+		}
+		else if (UCLSceneRouter* Scenes = GetGameInstance()->GetSubsystem<UCLSceneRouter>())
 		{
 			Scenes->TravelToScene(ECLSceneId::Social);
 		}
@@ -603,7 +601,7 @@ bool UCLAgentBridgeSubsystem::HandleDirector(const FHttpServerRequest& Request, 
 	}
 
 	ACLPlayerController* PC = Cast<ACLPlayerController>(FindLocalController());
-	const TSharedRef<FJsonObject> Out = FCLDirectorCommandRegistry::Dispatch(GetGameInstance(), PC, Action, &AgentSeatId);
+	const TSharedRef<FJsonObject> Out = FCLDirectorCommandRegistry::Dispatch(GetGameInstance(), PC, Action, &AgentSeatId, Root);
 	FCLAgentStateSerializer::FillSceneMenu(Out, GetGameInstance(), PC);
 	OnComplete(FHttpServerResponse::Create(ReplyJson(GetGameInstance(), Out), TEXT("application/json")));
 	return true;

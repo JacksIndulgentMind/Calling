@@ -12,6 +12,8 @@ class UVerticalBox;
 class UCLDirectorPanel;
 class UCLKeybindEditor;
 class UComboBoxString;
+class UTextBlock;
+class UEditableTextBox;
 
 /**
  * Director + keybinds overlay. I / Esc / F1 / Start (not remappable). Activities from here; remaps save immediately.
@@ -58,6 +60,7 @@ public:
 
 	void ShowDirectorTab();
 	void ShowKeybindsTab();
+	void ShowLobbyTab();
 
 	bool IsListening() const;
 	void CancelListen();
@@ -76,10 +79,14 @@ protected:
 
 	void BuildWidgetTree();
 	void BuildDirectorPanel(class UVerticalBox* RootCol);
+	void BuildLobbyPanel(class UVerticalBox* RootCol);
 	void BuildKeybindEditor(class UVerticalBox* RootCol);
 
 	UFUNCTION()
 	void HandleDirectorTabClicked();
+
+	UFUNCTION()
+	void HandleLobbyTabClicked();
 
 	UFUNCTION()
 	void HandleKeybindsTabClicked();
@@ -113,6 +120,27 @@ protected:
 
 	UFUNCTION()
 	void HandleHostSocialClosedClicked();
+
+	UFUNCTION()
+	void HandleLobbyPrivateClicked();
+
+	UFUNCTION()
+	void HandleLobbyFriendsClicked();
+
+	UFUNCTION()
+	void HandleLobbyPublicClicked();
+
+	UFUNCTION()
+	void HandleLobbyPartyClicked();
+
+	UFUNCTION()
+	void HandleLobbyJoinTabClicked();
+
+	UFUNCTION()
+	void HandleLobbyJoinNowClicked();
+
+	UFUNCTION()
+	void HandleSaveDefaultSocialClicked();
 
 	UFUNCTION()
 	void HandleVirtualHostClicked();
@@ -157,8 +185,28 @@ protected:
 	TObjectPtr<UVerticalBox> DirectorBox;
 
 	UPROPERTY()
+	TObjectPtr<UVerticalBox> LobbyBox;
+
+	UPROPERTY()
 	TObjectPtr<UVerticalBox> KeybindsBox;
 
 	UPROPERTY()
 	TObjectPtr<UComboBoxString> LoopbackJoinCombo;
+
+	UPROPERTY()
+	TObjectPtr<UEditableTextBox> JoinHostBox;
+
+	UPROPERTY()
+	TObjectPtr<UEditableTextBox> JoinPortBox;
+
+	UPROPERTY()
+	TObjectPtr<UComboBoxString> JoinFallbackCombo;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> SaveDefaultLabel;
+
+	UPROPERTY()
+	TObjectPtr<UVerticalBox> JoinFieldsBox;
+
+	ECLSocialDefaultKind LobbyKind = ECLSocialDefaultKind::Private;
 };

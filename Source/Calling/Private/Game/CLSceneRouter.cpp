@@ -1,6 +1,7 @@
 #include "Game/CLSceneRouter.h"
 #include "Game/CLGameInstance.h"
 #include "Game/CLGameModeBase.h"
+#include "Game/CLSessionSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
@@ -81,7 +82,7 @@ FString UCLSceneRouter::GameModePathForScene(ECLSceneId Scene)
 	}
 }
 
-void UCLSceneRouter::SoftTravel(const FString& MapName, ECLSceneId Scene)
+void UCLSceneRouter::SoftTravel(const FString& MapName, ECLSceneId Scene, bool bListen)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -89,11 +90,12 @@ void UCLSceneRouter::SoftTravel(const FString& MapName, ECLSceneId Scene)
 		return;
 	}
 
+	const bool bWantListen = bListen && Scene == ECLSceneId::Social;
 	const FString Options = FString::Printf(
 		TEXT("game=%s?cl=%d?NoSeamlessTravel%s"),
 		*GameModePathForScene(Scene),
 		static_cast<int32>(Scene),
-		(World->GetNetMode() == NM_ListenServer) ? TEXT("?listen") : TEXT(""));
+		bWantListen ? TEXT("?listen") : TEXT(""));
 	const FString URL = FString::Printf(TEXT("%s?%s"), *MapName, *Options);
 
 	FString CurrentShort;
@@ -105,14 +107,19 @@ void UCLSceneRouter::SoftTravel(const FString& MapName, ECLSceneId Scene)
 	const bool bSameMap = !CurrentShort.IsEmpty() && CurrentShort.Equals(DestShort, ESearchCase::IgnoreCase);
 	if (const ACLGameModeBase* GM = Cast<ACLGameModeBase>(World->GetAuthGameMode()))
 	{
-		if (GM->GetSceneId() == Scene)
+		if (GM->GetSceneId() == Scene && World->GetNetMode() != NM_ListenServer && World->GetNetMode() != NM_Client)
 		{
-			return;
+			if (!bWantListen)
+			{
+				return;
+			}
 		}
 	}
 
+	const bool bDropListen = !bWantListen && (World->GetNetMode() == NM_ListenServer || World->GetNetMode() == NM_Client);
+
 	// Same .umap + different GameMode (Social ↔ Composer): ServerTravel often no-ops. OpenLevel reloads.
-	if (bSameMap && World->HasBegunPlay())
+	if ((bSameMap && World->HasBegunPlay()) || bDropListen)
 	{
 		UGameplayStatics::OpenLevel(World, FName(*MapName), true, Options);
 		return;
@@ -127,7 +134,7 @@ void UCLSceneRouter::SoftTravel(const FString& MapName, ECLSceneId Scene)
 	UGameplayStatics::OpenLevel(World, FName(*MapName), true, Options);
 }
 
-void UCLSceneRouter::TravelToScene(ECLSceneId Scene, int32 RaidChamberIndex)
+void UCLSceneRouter::TravelToScene(ECLSceneId Scene, int32 RaidChamberIndex, bool bListen)
 {
 	CurrentScene = Scene;
 	if (Scene == ECLSceneId::Social)
@@ -142,11 +149,11 @@ void UCLSceneRouter::TravelToScene(ECLSceneId Scene, int32 RaidChamberIndex)
 		TWeakObjectPtr<UCLSceneRouter> WeakThis(this);
 		World->GetTimerManager().SetTimer(
 			DeferredTravelTimer,
-			FTimerDelegate::CreateLambda([WeakThis, MapName, Scene]()
+			FTimerDelegate::CreateLambda([WeakThis, MapName, Scene, bListen]()
 			{
 				if (UCLSceneRouter* Router = WeakThis.Get())
 				{
-					Router->TravelDeferred(MapName, Scene);
+					Router->TravelDeferred(MapName, Scene, bListen);
 				}
 			}),
 			0.05f,
@@ -154,16 +161,24 @@ void UCLSceneRouter::TravelToScene(ECLSceneId Scene, int32 RaidChamberIndex)
 		return;
 	}
 
-	SoftTravel(MapName, Scene);
+	SoftTravel(MapName, Scene, bListen);
 }
 
-void UCLSceneRouter::TravelDeferred(const FString& MapName, ECLSceneId Scene)
+void UCLSceneRouter::TravelDeferred(const FString& MapName, ECLSceneId Scene, bool bListen)
 {
-	SoftTravel(MapName, Scene);
+	SoftTravel(MapName, Scene, bListen);
 }
 
 void UCLSceneRouter::ExitActivityToSocial()
 {
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->ApplySocialDefault();
+			return;
+		}
+	}
 	CurrentScene = ECLSceneId::Social;
-	SoftTravel(GetMapNameForScene(ECLSceneId::Social), ECLSceneId::Social);
+	SoftTravel(GetMapNameForScene(ECLSceneId::Social), ECLSceneId::Social, false);
 }

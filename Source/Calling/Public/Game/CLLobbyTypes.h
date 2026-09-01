@@ -15,6 +15,47 @@ enum class ECLLobbyAccess : uint8
 };
 
 UENUM(BlueprintType)
+enum class ECLSocialDefaultKind : uint8
+{
+	Private UMETA(DisplayName = "Private"),
+	Public UMETA(DisplayName = "Public"),
+	Friends UMETA(DisplayName = "Friends"),
+	Party UMETA(DisplayName = "Party"),
+	Join UMETA(DisplayName = "Join")
+};
+
+UENUM(BlueprintType)
+enum class ECLSocialJoinFallback : uint8
+{
+	Private UMETA(DisplayName = "Private"),
+	Public UMETA(DisplayName = "Public")
+};
+
+USTRUCT(BlueprintType)
+struct CALLING_API FCLSocialDefault
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Social")
+	ECLSocialDefaultKind Kind = ECLSocialDefaultKind::Private;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Social")
+	FString JoinHost = TEXT("127.0.0.1");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Social")
+	int32 JoinPort = 7777;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Calling|Social")
+	ECLSocialJoinFallback JoinFallback = ECLSocialJoinFallback::Private;
+
+	static ECLSocialDefaultKind KindFromString(const FString& S);
+	static FString KindToString(ECLSocialDefaultKind Kind);
+	static ECLSocialJoinFallback FallbackFromString(const FString& S);
+	static FString FallbackToString(ECLSocialJoinFallback Fallback);
+	static ECLLobbyAccess AccessForKind(ECLSocialDefaultKind Kind);
+};
+
+UENUM(BlueprintType)
 enum class ECLPossessionMode : uint8
 {
 	OwnPawn UMETA(DisplayName = "Own Pawn"),

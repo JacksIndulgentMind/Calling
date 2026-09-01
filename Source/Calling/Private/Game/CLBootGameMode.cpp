@@ -100,7 +100,10 @@ void ACLBootGameMode::TravelToSocialDeferred()
 		{
 			return;
 		}
-		Router->TravelToScene(ECLSceneId::Social);
+	}
+	if (UCLSessionSubsystem* Sessions = GetGameInstance()->GetSubsystem<UCLSessionSubsystem>())
+	{
+		Sessions->ApplySocialDefault();
 	}
 }
 

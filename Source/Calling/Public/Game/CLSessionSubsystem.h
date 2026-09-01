@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
+#include "Containers/Ticker.h"
 #include "Core/CLTypes.h"
 #include "Game/CLLobbyTypes.h"
 #include "CLSessionSubsystem.generated.h"
@@ -54,6 +55,27 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Session")
 	bool JoinLoopback(const FString& Selected = TEXT(""));
+
+	UFUNCTION(BlueprintCallable, Category = "Calling|Session")
+	void LeaveSocialListen();
+
+	UFUNCTION(BlueprintCallable, Category = "Calling|Session")
+	void ApplySocialDefault();
+
+	UFUNCTION(BlueprintCallable, Category = "Calling|Session")
+	bool HostSocialAudience(ECLSocialDefaultKind Kind);
+
+	UFUNCTION(BlueprintCallable, Category = "Calling|Session")
+	bool JoinSocialHost(const FString& Host, int32 Port);
+
+	UFUNCTION(BlueprintCallable, Category = "Calling|Session")
+	bool SaveSocialDefault(ECLSocialDefaultKind Kind, const FString& JoinHost, int32 JoinPort, ECLSocialJoinFallback Fallback);
+
+	void NotifyJoinFailed(const FString& Reason);
+	void ConsumeJoinUnavailableEvent();
+	FString GetJoinUnavailable() const { return JoinUnavailable; }
+	ECLSocialDefaultKind GetLiveSocialKind() const { return LiveSocialKind; }
+	bool IsSocialListening() const;
 
 	UFUNCTION(BlueprintPure, Category = "Calling|Session")
 	bool IsLoopbackJoinPending() const { return bJoinReadyPending; }
@@ -110,4 +132,30 @@ private:
 
 	UPROPERTY()
 	ECLSceneId SearchActivityFilter = ECLSceneId::Boot;
+
+	UPROPERTY()
+	ECLSocialDefaultKind LiveSocialKind = ECLSocialDefaultKind::Private;
+
+	UPROPERTY()
+	FString JoinUnavailable;
+
+	UPROPERTY()
+	bool bJoinPending = false;
+
+	UPROPERTY()
+	FString PendingJoinHost;
+
+	UPROPERTY()
+	int32 PendingJoinPort = 7777;
+
+	double JoinWatchStartSeconds = 0.0;
+	FTSTicker::FDelegateHandle JoinWatchTicker;
+
+	void HostPrivateSocial();
+	void ApplyJoinFallback();
+	void StartJoinWatch();
+	void StopJoinWatch();
+	bool TickJoinWatch(float DeltaTime);
+	bool HasJoinedPendingHost() const;
+	int32 SocialMaxPlayers() const;
 };

@@ -8,6 +8,7 @@
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLLobbySubsystem.h"
 #include "Game/CLSessionSubsystem.h"
+#include "Game/CLLoopbackJoin.h"
 #include "Loot/CLLootRulesService.h"
 #include "AI/CLEncounterDirector.h"
 #include "AI/CLPracticeDummy.h"
@@ -62,6 +63,28 @@ void ACLSocialGameMode::HandleStartingNewPlayer_Implementation(APlayerController
 	EnsureSocialGreybox();
 	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 	EnsureSocialGreybox();
+	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
+	{
+		Lobby->EnsureNetHumanSeat(NewPlayer);
+	}
+}
+
+void ACLSocialGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
+	{
+		Lobby->EnsureNetHumanSeat(NewPlayer);
+	}
+}
+
+void ACLSocialGameMode::Logout(AController* Exiting)
+{
+	if (UCLLobbySubsystem* Lobby = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCLLobbySubsystem>() : nullptr)
+	{
+		Lobby->RemoveSeatForController(Exiting);
+	}
+	Super::Logout(Exiting);
 }
 
 AActor* ACLSocialGameMode::ChoosePlayerStart_Implementation(AController* Player)
@@ -127,6 +150,18 @@ void ACLSocialGameMode::StartPlay()
 	if (UCLLobbySubsystem* Lobby = GetGameInstance()->GetSubsystem<UCLLobbySubsystem>())
 	{
 		Lobby->BeginOpenScene();
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (World->GetNetMode() == NM_ListenServer)
+		{
+			CLLoopbackJoin::WriteBeacon(World);
+		}
+	}
+	if (UCLSessionSubsystem* Sessions = GetGameInstance()->GetSubsystem<UCLSessionSubsystem>())
+	{
+		Sessions->ConsumeJoinUnavailableEvent();
 	}
 
 	if (UCLActivityStateComponent* Activity = GetActivityState())

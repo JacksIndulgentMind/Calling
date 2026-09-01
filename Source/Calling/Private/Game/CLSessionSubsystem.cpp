@@ -9,6 +9,8 @@
 #include "Misc/ConfigCacheIni.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Game/CLGameStateBase.h"
+#include "HAL/PlatformTime.h"
 
 namespace
 {
@@ -32,6 +34,7 @@ void UCLSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UCLSessionSubsystem::Deinitialize()
 {
+	StopJoinWatch();
 	DestroySession();
 	Super::Deinitialize();
 }
@@ -134,15 +137,36 @@ void UCLSessionSubsystem::HandleCreateSessionComplete(FName SessionName, bool bW
 
 void UCLSessionSubsystem::TravelToMapAsListenServer(const FString& MapName)
 {
-	if (UWorld* World = GetWorld())
+	UWorld* World = GetWorld();
+	if (!World)
 	{
-		FString URL = MapName;
-		if (!URL.Contains(TEXT("listen"), ESearchCase::IgnoreCase))
-		{
-			URL += TEXT("?listen");
-		}
-		World->ServerTravel(URL, true);
+		return;
 	}
+	FString URL = MapName;
+	if (HostedActivity == ECLSceneId::Social && !URL.Contains(TEXT("game="), ESearchCase::IgnoreCase))
+	{
+		URL += TEXT("?game=/Script/Calling.CLSocialGameMode");
+	}
+	if (!URL.Contains(TEXT("listen"), ESearchCase::IgnoreCase))
+	{
+		URL += TEXT("?listen");
+	}
+	if (HostedActivity == ECLSceneId::Social)
+	{
+		FString MapOnly = MapName;
+		int32 Q = INDEX_NONE;
+		if (MapOnly.FindChar(TEXT('?'), Q))
+		{
+			MapOnly.LeftInline(Q);
+		}
+		FString Options;
+		if (URL.Split(TEXT("?"), nullptr, &Options))
+		{
+			UGameplayStatics::OpenLevel(World, FName(*MapOnly), true, Options);
+			return;
+		}
+	}
+	World->ServerTravel(URL, true);
 }
 
 bool UCLSessionSubsystem::StartComposerLoopbackHost()
@@ -345,4 +369,279 @@ void UCLSessionSubsystem::HandleDestroySessionComplete(FName SessionName, bool b
 	bIsHosting = false;
 	CLLoopbackJoin::ClearBeacon();
 	OnSessionEvent.Broadcast(bWasSuccessful, TEXT("Session destroyed."));
+}
+
+int32 UCLSessionSubsystem::SocialMaxPlayers() const
+{
+	int32 MaxPlayers = 16;
+	GConfig->GetInt(TEXT("/Script/Calling.CLSessionSettings"), TEXT("MaxLobbyPlayers_Social"), MaxPlayers, GGameIni);
+	return FMath::Max(1, MaxPlayers);
+}
+
+bool UCLSessionSubsystem::IsSocialListening() const
+{
+	if (UWorld* World = GetWorld())
+	{
+		return World->GetNetMode() == NM_ListenServer && HostedActivity == ECLSceneId::Social;
+	}
+	return false;
+}
+
+void UCLSessionSubsystem::LeaveSocialListen()
+{
+	bJoinPending = false;
+	DestroySession();
+	bIsHosting = false;
+	LiveSocialKind = ECLSocialDefaultKind::Private;
+}
+
+void UCLSessionSubsystem::HostPrivateSocial()
+{
+	LeaveSocialListen();
+	LiveSocialKind = ECLSocialDefaultKind::Private;
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			Lobby->SetPendingInvoice(FCLLobbyInvoice::MakeSocial(ECLLobbyAccess::Closed, ECLSocialPvpMode::Optional, SocialMaxPlayers()));
+		}
+		if (UCLSceneRouter* Router = GI->GetSubsystem<UCLSceneRouter>())
+		{
+			Router->TravelToScene(ECLSceneId::Social, 0, false);
+		}
+	}
+}
+
+bool UCLSessionSubsystem::HostSocialAudience(ECLSocialDefaultKind Kind)
+{
+	if (Kind == ECLSocialDefaultKind::Join)
+	{
+		OnSessionEvent.Broadcast(false, TEXT("join_is_not_host"));
+		return false;
+	}
+	if (Kind == ECLSocialDefaultKind::Private)
+	{
+		HostPrivateSocial();
+		OnSessionEvent.Broadcast(true, TEXT("Private social."));
+		return true;
+	}
+
+	LeaveSocialListen();
+	LiveSocialKind = Kind;
+	const ECLLobbyAccess Access = FCLSocialDefault::AccessForKind(Kind);
+	UGameInstance* GI = GetGameInstance();
+	UCLLobbySubsystem* Lobby = GI ? GI->GetSubsystem<UCLLobbySubsystem>() : nullptr;
+	UCLSceneRouter* Router = GI ? GI->GetSubsystem<UCLSceneRouter>() : nullptr;
+	if (!Lobby || !Router)
+	{
+		OnSessionEvent.Broadcast(false, TEXT("no_lobby"));
+		return false;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (World->GetNetMode() == NM_Client)
+		{
+			OnSessionEvent.Broadcast(false, TEXT("already_client"));
+			return false;
+		}
+	}
+	Lobby->SetPendingInvoice(FCLLobbyInvoice::MakeSocial(Access, ECLSocialPvpMode::Optional, SocialMaxPlayers()));
+	const FString Map = Router->GetMapNameForScene(ECLSceneId::Social);
+	PendingTravelMap = FString::Printf(TEXT("%s?game=/Script/Calling.CLSocialGameMode"), *Map);
+	HostedActivity = ECLSceneId::Social;
+	bIsHosting = true;
+	CLLoopbackJoin::AppendLog(FString::Printf(TEXT("social host %s"), *FCLSocialDefault::KindToString(Kind)));
+	TravelToMapAsListenServer(PendingTravelMap);
+	OnSessionEvent.Broadcast(true, TEXT("Social listen."));
+	return true;
+}
+
+bool UCLSessionSubsystem::JoinSocialHost(const FString& Host, int32 Port)
+{
+	UWorld* World = GetWorld();
+	if (World && (World->GetNetMode() == NM_ListenServer || World->GetNetMode() == NM_DedicatedServer))
+	{
+		OnSessionEvent.Broadcast(false, TEXT("already_host"));
+		return false;
+	}
+	APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+	if (!PC)
+	{
+		OnSessionEvent.Broadcast(false, TEXT("no_pc"));
+		return false;
+	}
+	const FString UseHost = Host.IsEmpty() ? TEXT("127.0.0.1") : Host;
+	const int32 UsePort = Port > 0 ? Port : 7777;
+	const FString Connect = FString::Printf(TEXT("%s:%d"), *UseHost, UsePort);
+	LeaveSocialListen();
+	PendingJoinHost = UseHost;
+	PendingJoinPort = UsePort;
+	LiveSocialKind = ECLSocialDefaultKind::Join;
+	bJoinPending = true;
+	StartJoinWatch();
+	CLLoopbackJoin::AppendLog(FString::Printf(TEXT("social join %s"), *Connect));
+	PC->ClientTravel(Connect, TRAVEL_Absolute);
+	OnSessionEvent.Broadcast(true, FString::Printf(TEXT("Joining %s"), *Connect));
+	return true;
+}
+
+void UCLSessionSubsystem::StartJoinWatch()
+{
+	StopJoinWatch();
+	JoinWatchStartSeconds = FPlatformTime::Seconds();
+	JoinWatchTicker = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateUObject(this, &UCLSessionSubsystem::TickJoinWatch),
+		0.25f);
+}
+
+void UCLSessionSubsystem::StopJoinWatch()
+{
+	if (JoinWatchTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(JoinWatchTicker);
+		JoinWatchTicker.Reset();
+	}
+}
+
+bool UCLSessionSubsystem::TickJoinWatch(float DeltaTime)
+{
+	(void)DeltaTime;
+	if (!bJoinPending)
+	{
+		return false;
+	}
+	if (HasJoinedPendingHost())
+	{
+		bJoinPending = false;
+		LiveSocialKind = ECLSocialDefaultKind::Join;
+		return false;
+	}
+	if (FPlatformTime::Seconds() - JoinWatchStartSeconds >= 8.0)
+	{
+		NotifyJoinFailed(TEXT("timeout"));
+		return false;
+	}
+	return true;
+}
+
+bool UCLSessionSubsystem::HasJoinedPendingHost() const
+{
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() != NM_Client || !World->HasBegunPlay())
+	{
+		return false;
+	}
+	const ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>();
+	if (!GS || GS->GetSceneId() != ECLSceneId::Social)
+	{
+		return false;
+	}
+	const int32 Port = World->URL.Port > 0 ? World->URL.Port : 7777;
+	if (Port != PendingJoinPort)
+	{
+		return false;
+	}
+	if (World->URL.Host.IsEmpty())
+	{
+		return true;
+	}
+	return World->URL.Host.Equals(PendingJoinHost, ESearchCase::IgnoreCase);
+}
+
+void UCLSessionSubsystem::NotifyJoinFailed(const FString& Reason)
+{
+	if (!bJoinPending)
+	{
+		return;
+	}
+	bJoinPending = false;
+	ApplyJoinFallback();
+	(void)Reason;
+}
+
+void UCLSessionSubsystem::ApplyJoinFallback()
+{
+	FCLSocialDefault Def;
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLProfileSubsystem* Profiles = GI->GetSubsystem<UCLProfileSubsystem>())
+		{
+			Def = Profiles->GetSocialDefault();
+		}
+	}
+	const FString FallbackKind = FCLSocialDefault::FallbackToString(Def.JoinFallback);
+	JoinUnavailable = FString::Printf(TEXT("join unavailable, sending to %s"), *FallbackKind);
+	OnSessionEvent.Broadcast(false, JoinUnavailable);
+	if (Def.JoinFallback == ECLSocialJoinFallback::Public)
+	{
+		HostSocialAudience(ECLSocialDefaultKind::Public);
+	}
+	else
+	{
+		HostPrivateSocial();
+	}
+}
+
+void UCLSessionSubsystem::ConsumeJoinUnavailableEvent()
+{
+	if (JoinUnavailable.IsEmpty())
+	{
+		return;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>())
+		{
+			FCLMatchEvent E;
+			E.Code = TEXT("join_unavailable");
+			E.Detail = JoinUnavailable;
+			E.Time = World->GetTimeSeconds();
+			GS->AppendMatchEvent(E);
+		}
+	}
+	JoinUnavailable.Empty();
+}
+
+bool UCLSessionSubsystem::SaveSocialDefault(ECLSocialDefaultKind Kind, const FString& JoinHost, int32 JoinPort, ECLSocialJoinFallback Fallback)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLProfileSubsystem* Profiles = GI->GetSubsystem<UCLProfileSubsystem>())
+		{
+			FCLSocialDefault Def = Profiles->GetSocialDefault();
+			Def.Kind = Kind;
+			if (!JoinHost.IsEmpty())
+			{
+				Def.JoinHost = JoinHost;
+			}
+			if (JoinPort > 0)
+			{
+				Def.JoinPort = JoinPort;
+			}
+			Def.JoinFallback = Fallback;
+			return Profiles->SetSocialDefault(Def);
+		}
+	}
+	return false;
+}
+
+void UCLSessionSubsystem::ApplySocialDefault()
+{
+	FCLSocialDefault Def;
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLProfileSubsystem* Profiles = GI->GetSubsystem<UCLProfileSubsystem>())
+		{
+			Def = Profiles->GetSocialDefault();
+		}
+	}
+	if (Def.Kind == ECLSocialDefaultKind::Join)
+	{
+		if (!JoinSocialHost(Def.JoinHost, Def.JoinPort))
+		{
+			NotifyJoinFailed(TEXT("join_start"));
+		}
+		return;
+	}
+	HostSocialAudience(Def.Kind);
 }

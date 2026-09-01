@@ -19,7 +19,7 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Scene")
-	void TravelToScene(ECLSceneId Scene, int32 RaidChamberIndex = 0);
+	void TravelToScene(ECLSceneId Scene, int32 RaidChamberIndex = 0, bool bListen = false);
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Scene")
 	void ExitActivityToSocial();
@@ -37,8 +37,8 @@ public:
 
 private:
 	void ReloadMapNamesFromConfig();
-	void SoftTravel(const FString& MapName, ECLSceneId Scene);
-	void TravelDeferred(const FString& MapName, ECLSceneId Scene);
+	void SoftTravel(const FString& MapName, ECLSceneId Scene, bool bListen);
+	void TravelDeferred(const FString& MapName, ECLSceneId Scene, bool bListen);
 	static FString GameModePathForScene(ECLSceneId Scene);
 
 	FTimerHandle DeferredTravelTimer;

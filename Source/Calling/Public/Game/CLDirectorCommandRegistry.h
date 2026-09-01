@@ -12,5 +12,6 @@ struct CALLING_API FCLDirectorCommandRegistry
 		UGameInstance* GI,
 		ACLPlayerController* PC,
 		const FString& Action,
-		FGuid* AgentSeatId);
+		FGuid* AgentSeatId,
+		const TSharedPtr<FJsonObject>& Args = nullptr);
 };

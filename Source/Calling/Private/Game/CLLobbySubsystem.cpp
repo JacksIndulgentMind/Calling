@@ -18,6 +18,7 @@
 #include "Game/CLGameInstance.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLSessionHub.h"
+#include "Game/CLSessionSubsystem.h"
 #include "Player/CLPlayerCharacter.h"
 #include "Player/CLPlayerController.h"
 #include "Player/CLCombatPawn.h"
@@ -1106,10 +1107,60 @@ void UCLLobbySubsystem::FillStateJson(const TSharedRef<FJsonObject>& Root) const
 	{
 		Lobby->SetNumberField(TEXT("minPlayers"), Live->MinPlayers);
 		Lobby->SetNumberField(TEXT("maxPlayers"), Live->MaxPlayers);
-		Lobby->SetStringField(TEXT("access"), AccessName(Live->Access));
+		FString Access = AccessName(Live->Access);
+		bool bListening = false;
+		if (UWorld* World = GetWorld())
+		{
+			bListening = World->GetNetMode() == NM_ListenServer;
+			if (!bListening && Live->Access == ECLLobbyAccess::Closed)
+			{
+				Access = TEXT("private");
+			}
+		}
+		Lobby->SetStringField(TEXT("access"), Access);
+		Lobby->SetBoolField(TEXT("listening"), bListening);
+		if (UWorld* World = GetWorld())
+		{
+			const ENetMode Net = World->GetNetMode();
+			Lobby->SetStringField(TEXT("netMode"),
+				Net == NM_ListenServer ? TEXT("listen") : Net == NM_Client ? TEXT("client") : TEXT("standalone"));
+		}
 		if (!Live->GameModeId.IsNone())
 		{
 			Lobby->SetStringField(TEXT("gameMode"), Live->GameModeId.ToString());
+		}
+	}
+	else if (UWorld* World = GetWorld())
+	{
+		const ENetMode Net = World->GetNetMode();
+		Lobby->SetBoolField(TEXT("listening"), Net == NM_ListenServer);
+		Lobby->SetStringField(TEXT("netMode"),
+			Net == NM_ListenServer ? TEXT("listen") : Net == NM_Client ? TEXT("client") : TEXT("standalone"));
+		if (Net == NM_Standalone)
+		{
+			Lobby->SetStringField(TEXT("access"), TEXT("private"));
+		}
+	}
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (const UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Lobby->SetStringField(TEXT("socialKind"), FCLSocialDefault::KindToString(Sessions->GetLiveSocialKind()));
+			const FString JoinFail = Sessions->GetJoinUnavailable();
+			if (!JoinFail.IsEmpty())
+			{
+				Lobby->SetStringField(TEXT("joinUnavailable"), JoinFail);
+			}
+		}
+		if (const UCLProfileSubsystem* Profiles = GI->GetSubsystem<UCLProfileSubsystem>())
+		{
+			const FCLSocialDefault Def = Profiles->GetSocialDefault();
+			TSharedRef<FJsonObject> SocialDef = MakeShared<FJsonObject>();
+			SocialDef->SetStringField(TEXT("kind"), FCLSocialDefault::KindToString(Def.Kind));
+			SocialDef->SetStringField(TEXT("joinHost"), Def.JoinHost);
+			SocialDef->SetNumberField(TEXT("joinPort"), Def.JoinPort);
+			SocialDef->SetStringField(TEXT("joinFallback"), FCLSocialDefault::FallbackToString(Def.JoinFallback));
+			Root->SetObjectField(TEXT("socialDefault"), SocialDef);
 		}
 	}
 	if (LastJoinedSeatId.IsValid())

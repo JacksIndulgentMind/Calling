@@ -19,6 +19,9 @@ public:
 	void ExitToSocial();
 	void UnsetDefaultProfile();
 	void HostSocialLobby(ECLSocialPvpMode Mode);
+	void HostSocialAudience(ECLSocialDefaultKind Kind);
+	void JoinSocialHost(const FString& Host, int32 Port);
+	void SaveSocialDefault(ECLSocialDefaultKind Kind, const FString& Host, int32 Port, ECLSocialJoinFallback Fallback);
 	void RefreshActivityLobbies(ECLSceneId Activity);
 	void JoinListedLobby(int32 Index);
 	void StartLoopbackHost();

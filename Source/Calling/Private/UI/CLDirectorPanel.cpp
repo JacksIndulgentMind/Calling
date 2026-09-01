@@ -56,18 +56,8 @@ void UCLDirectorPanel::UnsetDefaultProfile()
 
 void UCLDirectorPanel::HostSocialLobby(ECLSocialPvpMode Mode)
 {
-	if (UGameInstance* GI = DirectorGameInstance(this))
-	{
-		UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>();
-		UCLSceneRouter* Router = GI->GetSubsystem<UCLSceneRouter>();
-		if (Sessions && Router)
-		{
-			int32 MaxPlayers = 16;
-			GConfig->GetInt(TEXT("/Script/Calling.CLSessionSettings"), TEXT("MaxLobbyPlayers_Social"), MaxPlayers, GGameIni);
-			Sessions->HostSession(FCLLobbyInvoice::MakeSocial(ECLLobbyAccess::Open, Mode, MaxPlayers),
-				Router->GetMapNameForScene(ECLSceneId::Social));
-		}
-	}
+	(void)Mode;
+	HostSocialAudience(ECLSocialDefaultKind::Public);
 }
 
 void UCLDirectorPanel::RefreshActivityLobbies(ECLSceneId Activity)
@@ -156,16 +146,40 @@ void UCLDirectorPanel::RequestGo()
 
 void UCLDirectorPanel::HostSocialClosed()
 {
+	HostSocialAudience(ECLSocialDefaultKind::Private);
+}
+
+void UCLDirectorPanel::HostSocialAudience(ECLSocialDefaultKind Kind)
+{
 	if (UGameInstance* GI = DirectorGameInstance(this))
 	{
-		UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>();
-		UCLSceneRouter* Router = GI->GetSubsystem<UCLSceneRouter>();
-		if (Sessions && Router)
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
 		{
-			int32 MaxPlayers = 16;
-			GConfig->GetInt(TEXT("/Script/Calling.CLSessionSettings"), TEXT("MaxLobbyPlayers_Social"), MaxPlayers, GGameIni);
-			Sessions->HostSession(FCLLobbyInvoice::MakeSocial(ECLLobbyAccess::Closed, ECLSocialPvpMode::Optional, MaxPlayers),
-				Router->GetMapNameForScene(ECLSceneId::Social));
+			Sessions->HostSocialAudience(Kind);
+		}
+	}
+	HideHostOverlay(this);
+}
+
+void UCLDirectorPanel::JoinSocialHost(const FString& Host, int32 Port)
+{
+	if (UGameInstance* GI = DirectorGameInstance(this))
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->JoinSocialHost(Host, Port);
+		}
+	}
+	HideHostOverlay(this);
+}
+
+void UCLDirectorPanel::SaveSocialDefault(ECLSocialDefaultKind Kind, const FString& Host, int32 Port, ECLSocialJoinFallback Fallback)
+{
+	if (UGameInstance* GI = DirectorGameInstance(this))
+	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->SaveSocialDefault(Kind, Host, Port, Fallback);
 		}
 	}
 }

@@ -185,6 +185,13 @@ namespace CLProfileJson
 		Obj->SetArrayField(TEXT("vaultItems"), Vault);
 		Obj->SetStringField(TEXT("equippedPrimaryId"), P.EquippedPrimaryId.ToString(EGuidFormats::DigitsWithHyphens));
 		Obj->SetStringField(TEXT("equippedSpecialId"), P.EquippedSpecialId.ToString(EGuidFormats::DigitsWithHyphens));
+
+		TSharedRef<FJsonObject> Social = MakeShared<FJsonObject>();
+		Social->SetStringField(TEXT("kind"), FCLSocialDefault::KindToString(P.SocialDefault.Kind));
+		Social->SetStringField(TEXT("joinHost"), P.SocialDefault.JoinHost.IsEmpty() ? TEXT("127.0.0.1") : P.SocialDefault.JoinHost);
+		Social->SetNumberField(TEXT("joinPort"), P.SocialDefault.JoinPort > 0 ? P.SocialDefault.JoinPort : 7777);
+		Social->SetStringField(TEXT("joinFallback"), FCLSocialDefault::FallbackToString(P.SocialDefault.JoinFallback));
+		Obj->SetObjectField(TEXT("socialDefault"), Social);
 		return Obj;
 	}
 
@@ -240,6 +247,31 @@ namespace CLProfileJson
 
 		FGuid::Parse(Obj->GetStringField(TEXT("equippedPrimaryId")), P.EquippedPrimaryId);
 		FGuid::Parse(Obj->GetStringField(TEXT("equippedSpecialId")), P.EquippedSpecialId);
+
+		if (const TSharedPtr<FJsonObject> Social = Obj->HasField(TEXT("socialDefault")) ? Obj->GetObjectField(TEXT("socialDefault")) : nullptr)
+		{
+			P.SocialDefault.Kind = FCLSocialDefault::KindFromString(Social->GetStringField(TEXT("kind")));
+			if (Social->HasField(TEXT("joinHost")))
+			{
+				P.SocialDefault.JoinHost = Social->GetStringField(TEXT("joinHost"));
+			}
+			if (Social->HasField(TEXT("joinPort")))
+			{
+				P.SocialDefault.JoinPort = static_cast<int32>(Social->GetNumberField(TEXT("joinPort")));
+			}
+			if (Social->HasField(TEXT("joinFallback")))
+			{
+				P.SocialDefault.JoinFallback = FCLSocialDefault::FallbackFromString(Social->GetStringField(TEXT("joinFallback")));
+			}
+		}
+		if (P.SocialDefault.JoinHost.IsEmpty())
+		{
+			P.SocialDefault.JoinHost = TEXT("127.0.0.1");
+		}
+		if (P.SocialDefault.JoinPort <= 0)
+		{
+			P.SocialDefault.JoinPort = 7777;
+		}
 		return true;
 	}
 }
@@ -482,6 +514,40 @@ bool UCLProfileSubsystem::ShouldAutoEnterSocial() const
 		}
 	}
 	return false;
+}
+
+bool UCLProfileSubsystem::SetSocialDefault(const FCLSocialDefault& Default)
+{
+	if (!ActiveProfileId.IsValid())
+	{
+		EnsurePlayableProfile();
+	}
+	FCLLocalProfile* Profile = FindProfileMutable(ActiveProfileId);
+	if (!Profile)
+	{
+		return false;
+	}
+	Profile->SocialDefault = Default;
+	if (Profile->SocialDefault.JoinHost.IsEmpty())
+	{
+		Profile->SocialDefault.JoinHost = TEXT("127.0.0.1");
+	}
+	if (Profile->SocialDefault.JoinPort <= 0)
+	{
+		Profile->SocialDefault.JoinPort = 7777;
+	}
+	WriteProfileToDisk(*Profile);
+	OnProfileChanged.Broadcast(*Profile);
+	return true;
+}
+
+FCLSocialDefault UCLProfileSubsystem::GetSocialDefault() const
+{
+	if (const FCLLocalProfile* Found = FindProfile(ActiveProfileId))
+	{
+		return Found->SocialDefault;
+	}
+	return FCLSocialDefault();
 }
 
 FCLLocalProfile* UCLProfileSubsystem::FindProfileMutable(const FGuid& ProfileId)

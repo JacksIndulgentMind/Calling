@@ -38,6 +38,12 @@ Same-process composer Host/Guest is still the ring-verify path. A second **windo
 
 `Map?listen` without `game=` would load Social GameMode via map prefixes. Composer listen URL must include `game=/Script/Calling.CLComposerGameMode`.
 
+## Social listen (lobby composer)
+
+Social is a **second** listen path: same `/Game/Maps/CL_Social` umap, `CLSocialGameMode`, invoice `ECLLobbyAccess`. Overlay **Lobby** tab reloads the instance (private = no listen; public/friends/party = `?listen`). Join is `ClientTravel` to IP:port (director `socialjoin`). Profile `socialDefault` is applied on boot and `ExitActivityToSocial`. Leaving Social for Raid/Practice/Composer **drops listen** (no `?listen` on that travel) so guests are not dragged into the activity.
+
+Two-box Social: host Lobby → Public, guest Lobby → Join `127.0.0.1:7777`. Verify: `Scripts/dl-verify-social-two-box.ps1`. Composer **Virtual host** remains the PvP path.
+
 ## Guest MCP (ports + proxy)
 
 `UCLAgentBridgeSubsystem` / `UCLSessionHub` read `AgentHttpPort` / `SessionHubPort`, then cmdline `-CallingAgentHttpPort=` / `-CallingSessionHubPort=`. Default two-box guest is **18767 / 18768**. Each process mints **`instanceId`** (`UCLInstanceIdentitySubsystem`); connecting agents send **`agentId`**. Guest hub `Dispatch` binds a local cursor to the possessed pawn.

@@ -14,6 +14,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/ComboBoxString.h"
+#include "Components/EditableTextBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
@@ -171,16 +172,23 @@ void UCLMainMenuOverlay::BuildWidgetTree()
 	UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Tabs"));
 	UButton* DirectorTab = MakeTextButton(WidgetTree, TEXT("DirectorTab"), TEXT("Director"));
 	DirectorTab->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleDirectorTabClicked);
+	UButton* LobbyTab = MakeTextButton(WidgetTree, TEXT("LobbyTab"), TEXT("Lobby"));
+	LobbyTab->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleLobbyTabClicked);
 	UButton* KeybindsTab = MakeTextButton(WidgetTree, TEXT("KeybindsTab"), TEXT("Keybinds"));
 	KeybindsTab->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleKeybindsTabClicked);
 	if (UHorizontalBoxSlot* T0 = Tabs->AddChildToHorizontalBox(DirectorTab))
 	{
 		T0->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	}
+	if (UHorizontalBoxSlot* T1 = Tabs->AddChildToHorizontalBox(LobbyTab))
+	{
+		T1->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	}
 	Tabs->AddChildToHorizontalBox(KeybindsTab);
 	AddPadded(RootCol, Tabs, 16.f);
 
 	BuildDirectorPanel(RootCol);
+	BuildLobbyPanel(RootCol);
 	BuildKeybindEditor(RootCol);
 }
 
@@ -221,14 +229,6 @@ void UCLMainMenuOverlay::BuildDirectorPanel(UVerticalBox* RootCol)
 	GoBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleGoClicked);
 	AddPadded(DirectorBox, GoBtn);
 
-	UButton* HostOpenBtn = MakeTextButton(WidgetTree, TEXT("HostOpenBtn"), TEXT("Host Social (open)"));
-	HostOpenBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleHostSocialOpenClicked);
-	AddPadded(DirectorBox, HostOpenBtn);
-
-	UButton* HostClosedBtn = MakeTextButton(WidgetTree, TEXT("HostClosedBtn"), TEXT("Host Social (closed)"));
-	HostClosedBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleHostSocialClosedClicked);
-	AddPadded(DirectorBox, HostClosedBtn);
-
 	if (CLLoopbackJoin::ShowUi())
 	{
 		UButton* VirtHostBtn = MakeTextButton(WidgetTree, TEXT("VirtHostBtn"), TEXT("Virtual host"));
@@ -250,6 +250,79 @@ void UCLMainMenuOverlay::BuildDirectorPanel(UVerticalBox* RootCol)
 	SocialBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleExitSocialClicked);
 	AddPadded(DirectorBox, SocialBtn, 0.f);
 	AddPadded(RootCol, DirectorBox, 0.f);
+}
+
+void UCLMainMenuOverlay::BuildLobbyPanel(UVerticalBox* RootCol)
+{
+	LobbyBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("LobbyBox"));
+	LobbyBox->SetVisibility(ESlateVisibility::Collapsed);
+	AddPadded(LobbyBox, MakeLabel(WidgetTree, TEXT("LobbyHint"),
+		TEXT("Social composer. Private / Friends / Public / Party reload this instance. Join uses IP:port. Save as default applies on login and when you exit an activity."), 13), 12.f);
+
+	UButton* PrivateBtn = MakeTextButton(WidgetTree, TEXT("LobbyPrivate"), TEXT("Private"));
+	PrivateBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleLobbyPrivateClicked);
+	AddPadded(LobbyBox, PrivateBtn);
+
+	UButton* FriendsBtn = MakeTextButton(WidgetTree, TEXT("LobbyFriends"), TEXT("Friends"));
+	FriendsBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleLobbyFriendsClicked);
+	AddPadded(LobbyBox, FriendsBtn);
+
+	UButton* PublicBtn = MakeTextButton(WidgetTree, TEXT("LobbyPublic"), TEXT("Public"));
+	PublicBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleLobbyPublicClicked);
+	AddPadded(LobbyBox, PublicBtn);
+
+	UButton* PartyBtn = MakeTextButton(WidgetTree, TEXT("LobbyParty"), TEXT("Party"));
+	PartyBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleLobbyPartyClicked);
+	AddPadded(LobbyBox, PartyBtn);
+
+	UButton* JoinTabBtn = MakeTextButton(WidgetTree, TEXT("LobbyJoinTab"), TEXT("Join"));
+	JoinTabBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleLobbyJoinTabClicked);
+	AddPadded(LobbyBox, JoinTabBtn);
+
+	JoinFieldsBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("JoinFields"));
+	JoinFieldsBox->SetVisibility(ESlateVisibility::Collapsed);
+	AddPadded(JoinFieldsBox, MakeLabel(WidgetTree, TEXT("JoinHostLbl"), TEXT("Host"), 12), 4.f);
+	JoinHostBox = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("JoinHost"));
+	JoinHostBox->SetText(FText::FromString(TEXT("127.0.0.1")));
+	AddPadded(JoinFieldsBox, JoinHostBox, 8.f);
+	AddPadded(JoinFieldsBox, MakeLabel(WidgetTree, TEXT("JoinPortLbl"), TEXT("Port"), 12), 4.f);
+	JoinPortBox = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("JoinPort"));
+	JoinPortBox->SetText(FText::FromString(TEXT("7777")));
+	AddPadded(JoinFieldsBox, JoinPortBox, 8.f);
+	UButton* JoinNowBtn = MakeTextButton(WidgetTree, TEXT("JoinNow"), TEXT("Join now"));
+	JoinNowBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleLobbyJoinNowClicked);
+	AddPadded(JoinFieldsBox, JoinNowBtn);
+	AddPadded(LobbyBox, JoinFieldsBox, 8.f);
+
+	UHorizontalBox* SaveRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("SaveRow"));
+	UButton* SaveBtn = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("SaveDefaultSocial"));
+	SaveDefaultLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("SaveDefaultLabel"));
+	SaveDefaultLabel->SetText(FText::FromString(TEXT("Save as default")));
+	FSlateFontInfo SaveFont = SaveDefaultLabel->GetFont();
+	SaveFont.Size = 14;
+	SaveDefaultLabel->SetFont(SaveFont);
+	StyleButtonLabel(SaveBtn, SaveDefaultLabel);
+	SaveBtn->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleSaveDefaultSocialClicked);
+	if (UHorizontalBoxSlot* SaveSlot = SaveRow->AddChildToHorizontalBox(SaveBtn))
+	{
+		SaveSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		FSlateChildSize Fill(ESlateSizeRule::Fill);
+		Fill.Value = 1.4f;
+		SaveSlot->SetSize(Fill);
+	}
+	JoinFallbackCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("JoinFallback"));
+	JoinFallbackCombo->AddOption(TEXT("private"));
+	JoinFallbackCombo->AddOption(TEXT("public"));
+	JoinFallbackCombo->SetSelectedOption(TEXT("private"));
+	JoinFallbackCombo->SetVisibility(ESlateVisibility::Collapsed);
+	if (UHorizontalBoxSlot* FbSlot = SaveRow->AddChildToHorizontalBox(JoinFallbackCombo))
+	{
+		FSlateChildSize Fill(ESlateSizeRule::Fill);
+		Fill.Value = 0.8f;
+		FbSlot->SetSize(Fill);
+	}
+	AddPadded(LobbyBox, SaveRow, 0.f);
+	AddPadded(RootCol, LobbyBox, 0.f);
 }
 
 void UCLMainMenuOverlay::BuildKeybindEditor(UVerticalBox* RootCol)
@@ -495,10 +568,48 @@ void UCLMainMenuOverlay::ShowDirectorTab()
 	{
 		DirectorBox->SetVisibility(ESlateVisibility::Visible);
 	}
+	if (LobbyBox)
+	{
+		LobbyBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
 	if (KeybindsBox)
 	{
 		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
+}
+
+void UCLMainMenuOverlay::ShowLobbyTab()
+{
+	if (DirectorBox)
+	{
+		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (LobbyBox)
+	{
+		LobbyBox->SetVisibility(ESlateVisibility::Visible);
+	}
+	if (KeybindsBox)
+	{
+		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (SaveDefaultLabel)
+	{
+		SaveDefaultLabel->SetText(FText::FromString(
+			LobbyKind == ECLSocialDefaultKind::Join
+				? TEXT("Save current join config as default social")
+				: TEXT("Save as default")));
+	}
+	if (JoinFallbackCombo)
+	{
+		JoinFallbackCombo->SetVisibility(LobbyKind == ECLSocialDefaultKind::Join
+			? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+	if (JoinFieldsBox)
+	{
+		JoinFieldsBox->SetVisibility(LobbyKind == ECLSocialDefaultKind::Join
+			? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+	SetKeyboardFocus();
 }
 
 void UCLMainMenuOverlay::ShowKeybindsTab()
@@ -506,6 +617,10 @@ void UCLMainMenuOverlay::ShowKeybindsTab()
 	if (DirectorBox)
 	{
 		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (LobbyBox)
+	{
+		LobbyBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (KeybindsBox)
 	{
@@ -567,6 +682,7 @@ FReply UCLMainMenuOverlay::NativeOnMouseWheel(const FGeometry& InGeometry, const
 }
 
 void UCLMainMenuOverlay::HandleDirectorTabClicked() { ShowDirectorTab(); }
+void UCLMainMenuOverlay::HandleLobbyTabClicked() { ShowLobbyTab(); }
 void UCLMainMenuOverlay::HandleKeybindsTabClicked() { ShowKeybindsTab(); }
 void UCLMainMenuOverlay::HandleComposeClicked() { JumpToActivity(ECLSceneId::Composer); }
 void UCLMainMenuOverlay::HandlePvpClicked() { JumpToActivity(ECLSceneId::Pvp); }
@@ -607,14 +723,95 @@ void UCLMainMenuOverlay::HandleGoClicked()
 
 void UCLMainMenuOverlay::HandleHostSocialOpenClicked()
 {
-	HostSocialLobby(ECLSocialPvpMode::Optional);
+	HandleLobbyPublicClicked();
 }
 
 void UCLMainMenuOverlay::HandleHostSocialClosedClicked()
 {
+	HandleLobbyPrivateClicked();
+}
+
+void UCLMainMenuOverlay::HandleLobbyPrivateClicked()
+{
+	LobbyKind = ECLSocialDefaultKind::Private;
 	if (DirectorPanel)
 	{
-		DirectorPanel->HostSocialClosed();
+		DirectorPanel->HostSocialAudience(ECLSocialDefaultKind::Private);
+	}
+}
+
+void UCLMainMenuOverlay::HandleLobbyFriendsClicked()
+{
+	LobbyKind = ECLSocialDefaultKind::Friends;
+	if (DirectorPanel)
+	{
+		DirectorPanel->HostSocialAudience(ECLSocialDefaultKind::Friends);
+	}
+}
+
+void UCLMainMenuOverlay::HandleLobbyPublicClicked()
+{
+	LobbyKind = ECLSocialDefaultKind::Public;
+	if (DirectorPanel)
+	{
+		DirectorPanel->HostSocialAudience(ECLSocialDefaultKind::Public);
+	}
+}
+
+void UCLMainMenuOverlay::HandleLobbyPartyClicked()
+{
+	LobbyKind = ECLSocialDefaultKind::Party;
+	if (DirectorPanel)
+	{
+		DirectorPanel->HostSocialAudience(ECLSocialDefaultKind::Party);
+	}
+}
+
+void UCLMainMenuOverlay::HandleLobbyJoinTabClicked()
+{
+	LobbyKind = ECLSocialDefaultKind::Join;
+	ShowLobbyTab();
+}
+
+void UCLMainMenuOverlay::HandleLobbyJoinNowClicked()
+{
+	FString Host = TEXT("127.0.0.1");
+	int32 Port = 7777;
+	if (JoinHostBox)
+	{
+		Host = JoinHostBox->GetText().ToString();
+	}
+	if (JoinPortBox)
+	{
+		Port = FCString::Atoi(*JoinPortBox->GetText().ToString());
+	}
+	LobbyKind = ECLSocialDefaultKind::Join;
+	if (DirectorPanel)
+	{
+		DirectorPanel->JoinSocialHost(Host, Port);
+	}
+}
+
+void UCLMainMenuOverlay::HandleSaveDefaultSocialClicked()
+{
+	FString Host = TEXT("127.0.0.1");
+	int32 Port = 7777;
+	ECLSocialJoinFallback Fallback = ECLSocialJoinFallback::Private;
+	if (JoinHostBox)
+	{
+		Host = JoinHostBox->GetText().ToString();
+	}
+	if (JoinPortBox)
+	{
+		Port = FCString::Atoi(*JoinPortBox->GetText().ToString());
+	}
+	if (JoinFallbackCombo)
+	{
+		Fallback = FCLSocialDefault::FallbackFromString(JoinFallbackCombo->GetSelectedOption());
+	}
+	if (DirectorPanel)
+	{
+		DirectorPanel->SaveSocialDefault(LobbyKind, Host, Port, Fallback);
 	}
 }
 

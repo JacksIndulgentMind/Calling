@@ -194,7 +194,7 @@ namespace
 	}
 }
 
-void FCLAgentStateSerializer::FillSceneMenu(TSharedRef<FJsonObject> Root, UGameInstance* GI, APlayerController* LocalPC)
+ECLSceneId FCLAgentStateSerializer::ResolveScene(UGameInstance* GI)
 {
 	ECLSceneId Scene = ECLSceneId::Boot;
 	if (GI)
@@ -204,17 +204,25 @@ void FCLAgentStateSerializer::FillSceneMenu(TSharedRef<FJsonObject> Root, UGameI
 			Scene = Scenes->GetCurrentScene();
 		}
 	}
-	if (GI && GI->GetWorld())
+	UWorld* World = GI ? GI->GetWorld() : nullptr;
+	if (!World)
 	{
-		if (const ACLGameModeBase* GM = GI->GetWorld()->GetAuthGameMode<ACLGameModeBase>())
-		{
-			Scene = GM->GetSceneId();
-		}
-		else if (const ACLGameStateBase* GS = GI->GetWorld()->GetGameState<ACLGameStateBase>())
-		{
-			Scene = GS->GetSceneId();
-		}
+		return Scene;
 	}
+	if (const ACLGameModeBase* GM = World->GetAuthGameMode<ACLGameModeBase>())
+	{
+		return GM->GetSceneId();
+	}
+	if (const ACLGameStateBase* GS = World->GetGameState<ACLGameStateBase>())
+	{
+		return GS->GetSceneId();
+	}
+	return Scene;
+}
+
+void FCLAgentStateSerializer::FillSceneMenu(TSharedRef<FJsonObject> Root, UGameInstance* GI, APlayerController* LocalPC)
+{
+	const ECLSceneId Scene = ResolveScene(GI);
 	Root->SetStringField(TEXT("scene"), SceneName(Scene));
 	bool bMenu = false;
 	if (const ACLPlayerController* PC = Cast<ACLPlayerController>(LocalPC))

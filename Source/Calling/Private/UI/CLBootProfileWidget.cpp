@@ -1,6 +1,7 @@
 #include "UI/CLBootProfileWidget.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLSceneRouter.h"
+#include "Game/CLSessionSubsystem.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -245,6 +246,11 @@ void UCLBootProfileWidget::EnterSocial()
 {
 	if (UGameInstance* GI = GetGameInstance())
 	{
+		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
+		{
+			Sessions->ApplySocialDefault();
+			return;
+		}
 		if (UCLSceneRouter* Router = GI->GetSubsystem<UCLSceneRouter>())
 		{
 			Router->TravelToScene(ECLSceneId::Social);
