@@ -25,7 +25,8 @@ public:
 
 	/** Server only. Client traces must not mutate replicated health. */
 	UFUNCTION(BlueprintCallable, Category = "Calling|Combat")
-	float ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision);
+	float ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision,
+		FName Kind = NAME_None, FName Source = NAME_None);
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Combat")
 	void ApplyFlinch(float Strength);

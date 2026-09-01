@@ -1,0 +1,14 @@
+{
+  "id": "raid_boss_smart",
+  "role": "boss",
+  "intellect": {
+    "changeResponseSeconds": 0.08,
+    "botBook": "patrol_to_live_occupy",
+    "botBookSkill": 4,
+    "bulkApperception": false
+  },
+  "abilityStack": {
+    "kit": "vanguard",
+    "cooldownScale": 0.55
+  }
+}

@@ -38,11 +38,11 @@ If `GET /state` `scene` is **`boot`**, there is no locked-in profile (saves are 
 Scripts/dl-rebuild.ps1
 ```
 
-Defaults: standalone `-game`, then Compose PvP **through** host/ready/guest/go into the **pvp** match (`navTiles` ready). `-Activity composer` stops in the lobby; `-Activity arena` is the old solo courtyard skip; `-Activity none` skips director. After a rebuild, do not leave the editor down.
+Defaults: standalone `-game`, then Compose PvP **through** host/ready/guest/go into the **pvp** match (`navTiles` ready). `-Activity raid` loads Obelisk (`scene=raid`); spawn/monitor on [dl-agent-nav](../dl-agent-nav/SKILL.md) **Raid Obelisk**. `-Activity composer` stops in the lobby; `-Activity arena` is the old solo courtyard skip; `-Activity none` skips director. After a rebuild, do not leave the editor down.
 
 Composer has an invoice and **no combat gate** (walk, join, pick teams). Host **Go** queues countdown only if `ready >= minPlayers` (composer default **2**). Ready toggles until Go; after Go, ready is locked. Unready before Go cancels a premature countdown. Direct `arena` / overlay Launch PvP still uses a gated min-1 skip.
 
-`GET /state?seat=<id>` samples **that seat’s driven pawn**. Two seats must not share one probe. After `appendBotBook`, treat `botBook.followAlert` / `executionError` / `followed=false` / `modeResult=fail` with `modeFailReason` `botbook_*` as an immediate fail — dump `/state.events` and stop. `/state` also returns **`instanceId`** (this Unreal process) and **`agentId`** when the caller sent one. `/state.lobby.unlocked` is true in composer (no gate). After composer launch, PvP consumes the invoice roster, spawns by team, and skips a second Ready round.
+`GET /state?seat=<id>` samples **that seat’s driven pawn**. Two seats must not share one probe. After `appendBotBook`, treat `botBook.followAlert` / `executionError` / `followed=false` / `modeResult=fail` with `modeFailReason` `botbook_*` or `raid_spawn_*` as an immediate fail — dump `/state.events` and stop. Also sample `alive` / `health` / `shield`. Match-wide **`lastHit`** (any applied damage) and **`lastShot`** (last instigated `hitscan`/`ability`, with `killerName` + killer x/y/z) — pawn `hit` / `shot`. **`lastDeath`** and pawn **`death`** name a take-out — `events` `code=death` `detail=kind|source|killerName`. Status DoT updates `lastHit` and does not clobber `lastShot`. A dead goto does **not** fire `loc_still`; dump `lastDeath` before chasing Recast. Raid/debug stroll: fail-fast on `lastDeath.valid`. PvP circle-run: `WaitAlive` — [dl-circle-run](../dl-circle-run/SKILL.md). `/state` also returns **`instanceId`** (this Unreal process) and **`agentId`** when the caller sent one. `/state.lobby.unlocked` is true in composer (no gate). After composer launch, PvP consumes the invoice roster, spawns by team, and skips a second Ready round.
 
 ## Hub (default stroll)
 
@@ -103,6 +103,6 @@ MCP tools: `hub`, `state` (`seat` query), `director`, `boot`. `hold`/`sequence`/
 | `weapon` | pulse | `"primary"` or `"special"` — dedicated slot, not the Swap toggle |
 | `sight` | pulse | `"iron"` / `"red_dot"` / `"scope"` — any sight on the equipped gun |
 
-Unreal yaw **0 = +X**. `/state` also has `air`, `diving`, `sliding`, `health`, `shield`.
+Unreal yaw **0 = +X**. `/state` also has `air`, `diving`, `sliding`, `health`, `shield`, `alive`, `lastHit`, `lastShot`, `lastDeath`, pawn `hit` / `shot` / `death`.
 
-If `/state` says `no_local_pawn` on a live scene, `POST /respawn` once (void / KillZ) for the listen-server human only. Greybox **void rescue** teleports below rescue Z to the **south court lip** (not spawn). **Pad recall:** standing on the island 0.45 s uses the same lip teleport. If `/respawn` 404s, PIE is the old binary or not running — stop.
+If `/state` says `no_local_pawn` on a live scene, `POST /respawn` once (void / KillZ) for the listen-server human only. Greybox **void rescue** yanks **player-controller** pawns below rescue Z (walkable floor − buffer, not elevated spawn Z). **PvP 3-lane:** south court lip (not spawn); **pad recall** on the island 0.45 s uses the same lip. **Raid:** layout spawn / west overlook (no edge pad). AI below min Z take void damage (`lastDeath.kind=void`). If `/respawn` 404s, PIE is the old binary or not running — stop.

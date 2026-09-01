@@ -22,6 +22,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Calling|AI")
 	void ApplyRolledPersonality(const FCLAIPersonalityWeight& Personality);
 
+	UFUNCTION(BlueprintCallable, Category = "Calling|AI")
+	void SetBotBookDriven(bool bDriven) { bBotBookDriven = bDriven; }
+
 protected:
 	void AcquireNearestPlayer();
 
@@ -35,4 +38,5 @@ protected:
 	TWeakObjectPtr<AActor> CurrentTarget;
 
 	float AcquireTimer = 0.f;
+	bool bBotBookDriven = false;
 };

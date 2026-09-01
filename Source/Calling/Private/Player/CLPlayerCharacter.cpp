@@ -369,6 +369,144 @@ bool ACLPlayerCharacter::IsCombatAlive() const
 	return true;
 }
 
+ECLPvpTeam ACLPlayerCharacter::CombatTeamOf(const AActor* Actor)
+{
+	const ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(Actor);
+	if (Char && Char->CombatTeam != ECLPvpTeam::Unassigned)
+	{
+		return Char->CombatTeam;
+	}
+	const APawn* Pawn = Cast<APawn>(Actor);
+	const AController* Ctrl = Pawn ? Pawn->GetController() : Cast<AController>(Actor);
+	if (Ctrl && Actor)
+	{
+		if (UWorld* World = Actor->GetWorld())
+		{
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+				{
+					if (const UCLParticipantSeat* Seat = Lobby->FindSeatForController(Ctrl))
+					{
+						return Seat->GetTeam();
+					}
+				}
+			}
+		}
+	}
+	return Char ? Char->CombatTeam : ECLPvpTeam::Unassigned;
+}
+
+bool ACLPlayerCharacter::AreCombatAllies(const AActor* A, const AActor* B)
+{
+	if (!A || !B || A == B)
+	{
+		return false;
+	}
+	const ECLPvpTeam TA = CombatTeamOf(A);
+	const ECLPvpTeam TB = CombatTeamOf(B);
+	return TA != ECLPvpTeam::Unassigned && TA == TB;
+}
+
+void ACLPlayerCharacter::RecordHit(AController* InstigatorController, FName Kind, FName Source, float Applied)
+{
+	LastHit.Kind = (Kind.IsNone() ? FName(TEXT("unknown")) : Kind).ToString();
+	LastHit.Source = Source.IsNone() ? LastHit.Kind : Source.ToString();
+	LastHit.Killer.Reset();
+	LastHit.KillerName.Reset();
+	LastHit.KillerX = 0.f;
+	LastHit.KillerY = 0.f;
+	LastHit.KillerZ = 0.f;
+	if (InstigatorController)
+	{
+		LastDamageInstigator = InstigatorController;
+		if (UWorld* World = GetWorld())
+		{
+			DamageTimes.FindOrAdd(InstigatorController) = World->GetTimeSeconds();
+		}
+		if (APawn* Pawn = InstigatorController->GetPawn())
+		{
+			LastHit.Killer = Pawn->GetName();
+			const FVector KLoc = Pawn->GetActorLocation();
+			LastHit.KillerX = KLoc.X;
+			LastHit.KillerY = KLoc.Y;
+			LastHit.KillerZ = KLoc.Z;
+			if (const ACLPlayerCharacter* Other = Cast<ACLPlayerCharacter>(Pawn))
+			{
+				if (!Other->GetBotDefId().IsNone())
+				{
+					LastHit.KillerName = Other->GetBotDefId().ToString();
+				}
+			}
+			if (LastHit.KillerName.IsEmpty())
+			{
+				if (UGameInstance* GI = GetGameInstance())
+				{
+					if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+					{
+						if (const UCLParticipantSeat* Seat = Lobby->FindSeatForController(InstigatorController))
+						{
+							LastHit.KillerName = Seat->GetDisplayName();
+						}
+					}
+				}
+			}
+			if (LastHit.KillerName.IsEmpty())
+			{
+				LastHit.KillerName = LastHit.Killer;
+			}
+		}
+		else
+		{
+			LastHit.Killer = InstigatorController->GetName();
+			LastHit.KillerName = LastHit.Killer;
+		}
+	}
+
+	LastHit.bValid = true;
+	LastHit.Amount = Applied;
+	if (const UCLDamageableComponent* Dmg = Damageable.Get())
+	{
+		LastHit.Health = Dmg->GetHealth();
+		LastHit.Shield = Dmg->GetShield();
+	}
+	else if (const UCLHealthShieldComponent* HS = HealthShield.Get())
+	{
+		LastHit.Health = HS->GetHealth();
+		LastHit.Shield = HS->GetShield();
+	}
+	LastHit.Victim = GetName();
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+		{
+			if (const UCLParticipantSeat* Seat = Lobby->FindSeatForController(GetController()))
+			{
+				LastHit.Victim = Seat->GetDisplayName();
+			}
+		}
+	}
+	const FVector Loc = GetActorLocation();
+	LastHit.X = Loc.X;
+	LastHit.Y = Loc.Y;
+	LastHit.Z = Loc.Z;
+	if (const UWorld* World = GetWorld())
+	{
+		LastHit.Time = World->GetTimeSeconds();
+	}
+	const bool bShot = !LastHit.KillerName.IsEmpty()
+		&& LastHit.Kind != TEXT("status")
+		&& LastHit.Kind != TEXT("void");
+	if (bShot)
+	{
+		LastShot = LastHit;
+	}
+	if (ACLGameStateBase* GS = GetWorld() ? GetWorld()->GetGameState<ACLGameStateBase>() : nullptr)
+	{
+		GS->NoteHit(LastHit);
+	}
+}
+
 void ACLPlayerCharacter::NoteIncomingDamage(AController* InstigatorController, float Applied)
 {
 	if (Applied <= 0.f || !InstigatorController || InstigatorController == GetController())
@@ -427,9 +565,28 @@ void ACLPlayerCharacter::HandleDeath()
 	if (ACLGameStateBase* GS = World ? World->GetGameState<ACLGameStateBase>() : nullptr)
 	{
 		GS->RegisterTakeOut(Killer, this, Assists);
+		LastDeath = LastHit;
+		LastDeath.bValid = true;
+		LastDeath.Victim = GetName();
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>())
+			{
+				if (const UCLParticipantSeat* Seat = Lobby->FindSeatForController(GetController()))
+				{
+					LastDeath.Victim = Seat->GetDisplayName();
+				}
+			}
+		}
+		const FVector Loc = GetActorLocation();
+		LastDeath.X = Loc.X;
+		LastDeath.Y = Loc.Y;
+		LastDeath.Z = Loc.Z;
+		LastDeath.Time = Now;
+		GS->NoteDeath(LastDeath);
 	}
 
-	if (World)
+	if (World && Cast<APlayerController>(GetController()))
 	{
 		World->GetTimerManager().SetTimer(RespawnTimer, this, &ACLPlayerCharacter::RequestTakeOutRespawn, 2.f, false);
 	}
@@ -712,13 +869,21 @@ void ACLPlayerCharacter::Landed(const FHitResult& Hit)
 
 void ACLPlayerCharacter::FellOutOfWorld(const UDamageType& DmgType)
 {
-	if (UWorld* World = GetWorld())
+	if (Cast<APlayerController>(GetController()))
 	{
-		if (ACLGameModeBase* GM = World->GetAuthGameMode<ACLGameModeBase>())
+		if (UWorld* World = GetWorld())
 		{
-			GM->RequestRespawn(GetController());
-			return;
+			if (ACLGameModeBase* GM = World->GetAuthGameMode<ACLGameModeBase>())
+			{
+				GM->RequestRespawn(GetController());
+				return;
+			}
 		}
+	}
+	if (HealthShield)
+	{
+		HealthShield->ApplyDamage(99999.f, nullptr, false, FName(TEXT("void")), FName(TEXT("fellOutOfWorld")));
+		return;
 	}
 	Super::FellOutOfWorld(DmgType);
 }

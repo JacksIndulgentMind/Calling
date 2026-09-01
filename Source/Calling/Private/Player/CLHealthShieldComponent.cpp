@@ -1,5 +1,6 @@
 #include "Player/CLHealthShieldComponent.h"
 #include "Player/CLCombatMovementComponent.h"
+#include "Player/CLPlayerCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "Misc/ConfigCacheIni.h"
 #include "GameFramework/Controller.h"
@@ -32,7 +33,8 @@ void UCLHealthShieldComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 	DOREPLIFETIME(UCLHealthShieldComponent, bAlive);
 }
 
-float UCLHealthShieldComponent::ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision)
+float UCLHealthShieldComponent::ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision,
+	FName Kind, FName Source)
 {
 	const AActor* Owner = GetOwner();
 	if (Owner && !Owner->HasAuthority())
@@ -68,6 +70,14 @@ float UCLHealthShieldComponent::ApplyDamage(float Damage, AController* Instigato
 	TimeSinceDamaged = 0.f;
 	ApplyFlinch(bPrecision ? 1.25f : 1.f);
 	OnHealthChanged.Broadcast(Health, Shield, Applied);
+
+	if (Applied > 0.f)
+	{
+		if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(GetOwner()))
+		{
+			Char->RecordHit(InstigatorController, Kind, Source, Applied);
+		}
+	}
 
 	if (Health <= 0.f)
 	{

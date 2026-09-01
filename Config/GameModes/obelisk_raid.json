@@ -1,0 +1,311 @@
+{
+  "id": "obelisk_raid",
+  "requireTags": [
+    "spawn.player",
+    "spawn.npc.portal",
+    "space.ring",
+    "space.main",
+    "door.encounter"
+  ],
+  "encounters": [
+    {
+      "id": "chamber_1",
+      "type": "waveHold",
+      "opensMarker": "door_ch1",
+      "phases": [
+        {
+          "id": "I",
+          "occupy": {
+            "marker": "ch1_ring_I",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 10, "damagePerSecond": 10 }
+          },
+          "spawner": {
+            "originMarker": "ch1_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_grunt", "weight": 4 }, { "bot": "raid_elite", "weight": 1 }],
+            "count": { "min": 3, "max": 4 },
+            "intervalSeconds": 8,
+            "waves": 2
+          }
+        },
+        {
+          "id": "II",
+          "occupy": {
+            "marker": "ch1_ring_II",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 10 }
+          },
+          "spawner": {
+            "originMarker": "ch1_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_grunt", "weight": 3 }, { "bot": "raid_elite", "weight": 2 }],
+            "count": { "min": 3, "max": 5 },
+            "intervalSeconds": 8,
+            "waves": 2
+          }
+        },
+        {
+          "id": "III",
+          "occupy": {
+            "marker": "ch1_ring_III",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 10 }
+          },
+          "spawner": {
+            "originMarker": "ch1_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_grunt", "weight": 2 }, { "bot": "raid_elite", "weight": 2 }],
+            "count": { "min": 4, "max": 5 },
+            "intervalSeconds": 7,
+            "waves": 2
+          }
+        },
+        {
+          "id": "main",
+          "occupy": {
+            "marker": "ch1_main",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 12 }
+          },
+          "spawner": {
+            "originMarker": "ch1_main",
+            "radiusCm": 280,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_boss", "weight": 1 }],
+            "count": { "min": 2, "max": 2 },
+            "intervalSeconds": 4,
+            "waves": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "chamber_2",
+      "type": "waveHold",
+      "opensMarker": "door_ch2",
+      "phases": [
+        {
+          "id": "I",
+          "occupy": {
+            "marker": "ch2_ring_I",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 12 }
+          },
+          "spawner": {
+            "originMarker": "ch2_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_grunt", "weight": 3 }, { "bot": "raid_elite", "weight": 2 }],
+            "count": { "min": 4, "max": 5 },
+            "intervalSeconds": 7,
+            "waves": 3
+          }
+        },
+        {
+          "id": "II",
+          "occupy": {
+            "marker": "ch2_ring_II",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 12 }
+          },
+          "spawner": {
+            "originMarker": "ch2_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_grunt", "weight": 2 }, { "bot": "raid_elite", "weight": 3 }],
+            "count": { "min": 4, "max": 5 },
+            "intervalSeconds": 7,
+            "waves": 3
+          }
+        },
+        {
+          "id": "III",
+          "occupy": {
+            "marker": "ch2_ring_III",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 12 }
+          },
+          "spawner": {
+            "originMarker": "ch2_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_elite", "weight": 3 }, { "bot": "raid_grunt", "weight": 1 }],
+            "count": { "min": 4, "max": 6 },
+            "intervalSeconds": 6,
+            "waves": 3
+          }
+        },
+        {
+          "id": "main",
+          "occupy": {
+            "marker": "ch2_main",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 14 }
+          },
+          "spawner": {
+            "originMarker": "ch2_main",
+            "radiusCm": 280,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_boss", "weight": 1 }],
+            "count": { "min": 2, "max": 3 },
+            "intervalSeconds": 4,
+            "waves": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "chamber_3",
+      "type": "waveHold",
+      "opensMarker": "door_ch3",
+      "phases": [
+        {
+          "id": "I",
+          "occupy": {
+            "marker": "ch3_ring_I",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 14 }
+          },
+          "spawner": {
+            "originMarker": "ch3_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_grunt", "weight": 2 }, { "bot": "raid_elite", "weight": 3 }],
+            "count": { "min": 5, "max": 6 },
+            "intervalSeconds": 6,
+            "waves": 3
+          }
+        },
+        {
+          "id": "II",
+          "occupy": {
+            "marker": "ch3_ring_II",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 14 }
+          },
+          "spawner": {
+            "originMarker": "ch3_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_elite", "weight": 3 }, { "bot": "raid_grunt", "weight": 1 }],
+            "count": { "min": 5, "max": 6 },
+            "intervalSeconds": 6,
+            "waves": 3
+          }
+        },
+        {
+          "id": "III",
+          "occupy": {
+            "marker": "ch3_ring_III",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 14 }
+          },
+          "spawner": {
+            "originMarker": "ch3_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_elite", "weight": 4 }],
+            "count": { "min": 5, "max": 6 },
+            "intervalSeconds": 6,
+            "waves": 3
+          }
+        },
+        {
+          "id": "main",
+          "occupy": {
+            "marker": "ch3_main",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 16 }
+          },
+          "spawner": {
+            "originMarker": "ch3_main",
+            "radiusCm": 320,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_boss", "weight": 2 }, { "bot": "raid_boss_smart", "weight": 1 }],
+            "count": { "min": 3, "max": 3 },
+            "intervalSeconds": 4,
+            "waves": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "chamber_4",
+      "type": "waveHold",
+      "phases": [
+        {
+          "id": "I",
+          "occupy": {
+            "marker": "ch4_ring_I",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 16 }
+          },
+          "spawner": {
+            "originMarker": "ch4_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_elite", "weight": 3 }, { "bot": "raid_grunt", "weight": 1 }],
+            "count": { "min": 5, "max": 6 },
+            "intervalSeconds": 6,
+            "waves": 3
+          }
+        },
+        {
+          "id": "II",
+          "occupy": {
+            "marker": "ch4_ring_II",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 16 }
+          },
+          "spawner": {
+            "originMarker": "ch4_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_elite", "weight": 4 }],
+            "count": { "min": 5, "max": 6 },
+            "intervalSeconds": 6,
+            "waves": 3
+          }
+        },
+        {
+          "id": "III",
+          "occupy": {
+            "marker": "ch4_ring_III",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 16 }
+          },
+          "spawner": {
+            "originMarker": "ch4_portal",
+            "radiusCm": 400,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_elite", "weight": 3 }, { "bot": "raid_boss", "weight": 1 }],
+            "count": { "min": 5, "max": 6 },
+            "intervalSeconds": 5,
+            "waves": 3
+          }
+        },
+        {
+          "id": "main",
+          "occupy": {
+            "marker": "ch4_main",
+            "offVolume": { "type": "damageOverTime", "graceSeconds": 8, "damagePerSecond": 18 }
+          },
+          "spawner": {
+            "originMarker": "ch4_main",
+            "radiusCm": 320,
+            "clearRadiusCm": 70,
+            "clearTries": 16,
+            "pool": [{ "bot": "raid_boss_smart", "weight": 1 }],
+            "count": { "min": 3, "max": 3 },
+            "intervalSeconds": 4,
+            "waves": 1
+          }
+        }
+      ]
+    }
+  ]
+}

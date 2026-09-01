@@ -7,6 +7,11 @@
 #include "Game/CLVaultSubsystem.h"
 #include "Game/CLProfileSubsystem.h"
 #include "Game/CLLobbySubsystem.h"
+#include "Game/CLGameModeCatalog.h"
+#include "Game/CLEncounterRules.h"
+#include "Game/CLErrorBoundary.h"
+#include "Core/CLError.h"
+#include "AI/CLTaskMarker.h"
 #include "Game/CLSessionSubsystem.h"
 #include "Loot/CLLootRulesService.h"
 #include "AI/CLEncounterDirector.h"
@@ -44,24 +49,28 @@ ACLRaidGameMode::ACLRaidGameMode()
 	SceneId = ECLSceneId::Raid;
 	GameStateClass = ACLRaidGameState::StaticClass();
 	EncounterDirector = CreateDefaultSubobject<UCLEncounterDirector>(TEXT("EncounterDirector"));
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
 }
 
 void ACLRaidGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
-	const int32 Chamber = InferChamberIndexFromMap();
-	if (ACLGreyboxFloors* Floors = ACLGreyboxFloors::SpawnIfMissing(GetWorld(), GreyboxLayoutForChamber(Chamber)))
-	{
-		if (EncounterDirector)
-		{
-			EncounterDirector->ArenaHalfExtent = Floors->GetSuggestedArenaHalfExtent();
-		}
-	}
+	ACLGreyboxFloors::SpawnIfMissing(GetWorld(), ECLGreyboxLayout::RaidObelisk);
+}
+
+void ACLRaidGameMode::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
 }
 
 void ACLRaidGameMode::StartPlay()
 {
 	Super::StartPlay();
+	for (TActorIterator<ACLGreyboxFloors> It(GetWorld()); It; ++It)
+	{
+		It->RebuildNavigation();
+	}
 	if (UCLLobbySubsystem* Lobby = GetGameInstance()->GetSubsystem<UCLLobbySubsystem>())
 	{
 		Lobby->BeginGatedScene(ECLSceneId::Raid);
@@ -74,39 +83,103 @@ void ACLRaidGameMode::StartPlay()
 
 void ACLRaidGameMode::HandleLobbyGo()
 {
-	BeginChamber(InferChamberIndexFromMap());
+	BindObeliskRaid();
 }
 
-int32 ACLRaidGameMode::InferChamberIndexFromMap() const
+void ACLRaidGameMode::BindObeliskRaid()
 {
-	const FString MapName = GetWorld() ? GetWorld()->GetMapName() : FString();
-	if (MapName.Contains(TEXT("Raid_02")))
+	UWorld* World = GetWorld();
+	UGameInstance* GI = GetGameInstance();
+	if (!World || !GI)
 	{
-		return 1;
+		return;
 	}
-	if (MapName.Contains(TEXT("Raid_03")))
+	UCLGameModeCatalog* Catalog = GI->GetSubsystem<UCLGameModeCatalog>();
+	UCLLobbySubsystem* Lobby = GI->GetSubsystem<UCLLobbySubsystem>();
+	if (!Catalog)
 	{
-		return 2;
+		return;
 	}
-	if (MapName.Contains(TEXT("Raid_04")))
+	Catalog->LoadFiles();
+	FName ModeId = FName(TEXT("obelisk_raid"));
+	if (Lobby && Lobby->GetInvoice() && !Lobby->GetInvoice()->GameModeId.IsNone())
 	{
-		return 3;
+		ModeId = Lobby->GetInvoice()->GameModeId;
 	}
-	return 0;
+	Catalog->ApplyMarkerTags(World, CatalogMapId);
+	if (const ACLTaskMarker* Spawn = ACLTaskMarker::FindByTag(World, FName(TEXT("spawn.player"))))
+	{
+		ACLGreyboxFloors::EnsurePlayerStart(World, Spawn->GetActorLocation());
+	}
+	const FCLStatus Status = Catalog->Validate(World, CatalogMapId, ModeId);
+	if (!Status.IsOk())
+	{
+		UCLErrorBoundary::ReportStatic(this, Status.Error);
+		return;
+	}
+	TArray<const FCLWaveHoldEncounter*> Holds;
+	if (const FCLGameModeDef* Mode = Catalog->FindMode(ModeId))
+	{
+		Mode->CollectWaveHold(Holds);
+	}
+	if (Holds.Num() == 0)
+	{
+		UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+			ECLErrorKind::Logic, TEXT("raid_missing_waveHold"), ModeId.ToString()));
+		return;
+	}
+	bModeFinished = false;
+	if (ACLGameStateBase* GS = GetGameState<ACLGameStateBase>())
+	{
+		GS->SetModeOutcome(TEXT("in_progress"), TEXT(""), TEXT(""));
+	}
+	if (EncounterDirector)
+	{
+		EncounterDirector->BindWaveHold(Holds);
+		EncounterDirector->BeginFirstEncounter();
+	}
 }
 
-ECLGreyboxLayout ACLRaidGameMode::GreyboxLayoutForChamber(int32 ChamberIndex)
+void ACLRaidGameMode::NotifyEncounterBegin(int32 InEncounterIndex)
 {
-	switch (ChamberIndex)
+	BeginChamber(InEncounterIndex);
+}
+
+void ACLRaidGameMode::NotifyEncounterComplete(int32 InEncounterIndex, FName OpensMarker)
+{
+	if (ACLRaidGameState* GS = GetGameState<ACLRaidGameState>())
 	{
-	case 1:
-		return ECLGreyboxLayout::RaidApproach;
-	case 2:
-		return ECLGreyboxLayout::RaidArena;
-	case 3:
-		return ECLGreyboxLayout::RaidPit;
-	default:
-		return ECLGreyboxLayout::RaidCourt;
+		GS->bChamberCleared = true;
+		GS->ChambersCompleted = InEncounterIndex + 1;
+	}
+	const FName TableId(*FString::Printf(TEXT("raid_chamber_%d"), InEncounterIndex + 1));
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		AwardDropFromTable(TableId, It->Get());
+	}
+	if (!OpensMarker.IsNone())
+	{
+		for (TActorIterator<ACLGreyboxFloors> It(GetWorld()); It; ++It)
+		{
+			It->OpenDoor(OpensMarker);
+		}
+	}
+}
+
+void ACLRaidGameMode::FailBook(const FString& Reason)
+{
+	if (bModeFinished)
+	{
+		return;
+	}
+	bModeFinished = true;
+	if (ACLGameStateBase* GS = GetGameState<ACLGameStateBase>())
+	{
+		GS->SetModeOutcome(TEXT("fail"), TEXT(""), Reason);
+	}
+	if (UCLActivityStateComponent* Activity = GetActivityState())
+	{
+		Activity->BeginResults();
 	}
 }
 
@@ -121,10 +194,6 @@ void ACLRaidGameMode::BeginChamber(int32 ChamberIndex)
 	if (UCLActivityStateComponent* Activity = GetActivityState())
 	{
 		Activity->BeginInProgress();
-	}
-	if (EncounterDirector)
-	{
-		EncounterDirector->BuildAndSpawnChamber(ChamberIndex);
 	}
 }
 
@@ -153,29 +222,26 @@ void ACLRaidGameMode::CompleteChamber()
 
 void ACLRaidGameMode::AdvanceOrFinishRaid()
 {
-	ACLRaidGameState* GS = GetGameState<ACLRaidGameState>();
-	if (!GS)
+	if (bModeFinished)
 	{
 		return;
 	}
-
-	const int32 Next = GS->GetRaidChamberIndex() + 1;
-	if (Next >= ChamberCount)
+	bModeFinished = true;
+	if (ACLGameStateBase* GS = GetGameState<ACLGameStateBase>())
 	{
-		if (UCLProfileSubsystem* Profiles = GetGameInstance()->GetSubsystem<UCLProfileSubsystem>())
+		GS->SetModeOutcome(TEXT("winner"), TEXT(""), TEXT(""));
+	}
+	if (UCLProfileSubsystem* Profiles = GetGameInstance()->GetSubsystem<UCLProfileSubsystem>())
+	{
+		if (FCLLocalProfile* Profile = Profiles->FindProfileMutable(Profiles->GetActiveProfile().ProfileId))
 		{
-			if (FCLLocalProfile* Profile = Profiles->FindProfileMutable(Profiles->GetActiveProfile().ProfileId))
-			{
-				Profile->Stats.RaidsCompleted += 1;
-				Profiles->SaveActiveProfile();
-			}
+			Profile->Stats.RaidsCompleted += 1;
+			Profiles->SaveActiveProfile();
 		}
-		RequestExitToSocial();
-		return;
 	}
-
-	if (UCLSceneRouter* Router = GetGameInstance()->GetSubsystem<UCLSceneRouter>())
+	if (UCLActivityStateComponent* Activity = GetActivityState())
 	{
-		Router->TravelToScene(ECLSceneId::Raid, Next);
+		Activity->BeginResults();
 	}
+	RequestExitToSocial();
 }

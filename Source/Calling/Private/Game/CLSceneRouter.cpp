@@ -34,10 +34,7 @@ void UCLSceneRouter::ReloadMapNamesFromConfig()
 	if (RaidChamberMapNames.Num() == 0)
 	{
 		RaidChamberMapNames = {
-			TEXT("/Game/Maps/CL_Raid_01"),
-			TEXT("/Game/Maps/CL_Raid_02"),
-			TEXT("/Game/Maps/CL_Raid_03"),
-			TEXT("/Game/Maps/CL_Raid_04")
+			TEXT("/Game/Maps/CL_Raid_01")
 		};
 	}
 }
@@ -52,10 +49,7 @@ FString UCLSceneRouter::GetMapNameForScene(ECLSceneId Scene, int32 RaidChamberIn
 	case ECLSceneId::Pvp: return PvpMapName;
 	case ECLSceneId::Practice: return PracticeMapName;
 	case ECLSceneId::Raid:
-		if (RaidChamberMapNames.IsValidIndex(RaidChamberIndex))
-		{
-			return RaidChamberMapNames[RaidChamberIndex];
-		}
+		(void)RaidChamberIndex;
 		return RaidChamberMapNames.Num() > 0 ? RaidChamberMapNames[0] : TEXT("/Game/Maps/CL_Raid_01");
 	default: return SocialMapName;
 	}

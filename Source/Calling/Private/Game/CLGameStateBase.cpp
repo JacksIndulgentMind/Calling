@@ -27,12 +27,18 @@ void ACLGameStateBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ACLGameStateBase, TeamAKills);
 	DOREPLIFETIME(ACLGameStateBase, TeamBKills);
 	DOREPLIFETIME(ACLGameStateBase, LiveShrine);
+	DOREPLIFETIME(ACLGameStateBase, EncounterId);
+	DOREPLIFETIME(ACLGameStateBase, PhaseId);
+	DOREPLIFETIME(ACLGameStateBase, WavesDone);
 	DOREPLIFETIME(ACLGameStateBase, bShrineHeldRed);
 	DOREPLIFETIME(ACLGameStateBase, bShrineHeldBlue);
 	DOREPLIFETIME(ACLGameStateBase, ModeResult);
 	DOREPLIFETIME(ACLGameStateBase, WinningTeam);
 	DOREPLIFETIME(ACLGameStateBase, ModeFailReason);
 	DOREPLIFETIME(ACLGameStateBase, MatchEvents);
+	DOREPLIFETIME(ACLGameStateBase, LastHit);
+	DOREPLIFETIME(ACLGameStateBase, LastShot);
+	DOREPLIFETIME(ACLGameStateBase, LastDeath);
 	DOREPLIFETIME(ACLGameStateBase, SeatScores);
 	DOREPLIFETIME(ACLGameStateBase, LobbySeats);
 	DOREPLIFETIME(ACLGameStateBase, LobbyReady);
@@ -260,6 +266,16 @@ void ACLGameStateBase::SetLiveShrine(FName Id)
 	}
 }
 
+void ACLGameStateBase::SetEncounterProgress(FName InEncounterId, FName InPhaseId, int32 InWavesDone)
+{
+	if (HasAuthority())
+	{
+		EncounterId = InEncounterId;
+		PhaseId = InPhaseId;
+		WavesDone = InWavesDone;
+	}
+}
+
 void ACLGameStateBase::SetShrineHeld(ECLPvpTeam Team, bool bHeld)
 {
 	if (!HasAuthority())
@@ -303,6 +319,35 @@ void ACLGameStateBase::SetModeOutcome(const FString& Result, const FString& Winn
 	ModeResult = Result;
 	WinningTeam = Winner;
 	ModeFailReason = FailReason;
+}
+
+void ACLGameStateBase::NoteHit(const FCLHitRecord& Record)
+{
+	LastHit = Record;
+	const bool bShot = !Record.KillerName.IsEmpty()
+		&& Record.Kind != TEXT("status")
+		&& Record.Kind != TEXT("void");
+	if (bShot)
+	{
+		LastShot = Record;
+	}
+	UE_LOG(LogCalling, Display, TEXT("Hit kind=%s source=%s killer=%s (%s) amount=%.1f victim=%s hp=%.0f sh=%.0f"),
+		*Record.Kind, *Record.Source, *Record.Killer, *Record.KillerName, Record.Amount, *Record.Victim,
+		Record.Health, Record.Shield);
+}
+
+void ACLGameStateBase::NoteDeath(const FCLHitRecord& Record)
+{
+	LastDeath = Record;
+	FCLMatchEvent E;
+	E.Code = TEXT("death");
+	E.Detail = FString::Printf(TEXT("%s|%s|%s"), *Record.Kind, *Record.Source, *Record.KillerName);
+	E.X = Record.X;
+	E.Y = Record.Y;
+	E.Time = Record.Time;
+	AppendMatchEvent(E);
+	UE_LOG(LogCalling, Display, TEXT("Death kind=%s source=%s killer=%s (%s) victim=%s"),
+		*Record.Kind, *Record.Source, *Record.Killer, *Record.KillerName, *Record.Victim);
 }
 
 void ACLGameStateBase::AppendMatchEvent(const FCLMatchEvent& Event)

@@ -99,12 +99,21 @@ void ACLPvpGameMode::BindShrineClash()
 	}
 	if (const FCLGameModeDef* Mode = Catalog->FindMode(ModeId))
 	{
-		TeamFinalBlows = Mode->TeamFinalBlows;
-		OccupyTag = Mode->OccupyTag;
-		RotateSeconds = Mode->RotateSeconds;
-		bStealIfTenWithoutShrine = Mode->bStealIfTenWithoutShrine;
-		bFailIfEitherTeamKillsZero = Mode->bFailIfEitherTeamKillsZero;
-		FailTimeoutSeconds = Mode->FailTimeoutSeconds;
+		if (const FCLShrineClashEncounter* Clash = Mode->FindShrineClash())
+		{
+			TeamFinalBlows = Clash->TeamFinalBlows;
+			OccupyTag = Clash->OccupyTag;
+			RotateSeconds = Clash->RotateSeconds;
+			bStealIfTenWithoutShrine = Clash->bStealIfTenWithoutShrine;
+			bFailIfEitherTeamKillsZero = Clash->bFailIfEitherTeamKillsZero;
+			FailTimeoutSeconds = Clash->FailTimeoutSeconds;
+		}
+		else
+		{
+			UCLErrorBoundary::ReportStatic(this, FCLError::Make(
+				ECLErrorKind::Logic, TEXT("pvp_missing_shrineClash"), ModeId.ToString()));
+			return;
+		}
 	}
 	TArray<ACLTaskMarker*> Shrines;
 	ACLTaskMarker::CollectByTag(World, OccupyTag, Shrines);

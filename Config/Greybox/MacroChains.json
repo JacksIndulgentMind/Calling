@@ -1,5 +1,5 @@
 {
-  "comment": "Sketch only — not loaded this pass. A Three-lane+courtyard block is one assembly. Chain macros into snakes, folded loops, or triangles instead of unique mega-maps.",
+  "comment": "Module (5 m StampModule) → assembly JSON → layout chain. PvpThreeLane is one assembly. RaidObelisk is the first loaded chain (Config/Greybox/RaidObelisk.json).",
   "moduleMeters": 5,
   "macros": {
     "three_lane_courtyard": {

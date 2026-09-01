@@ -37,6 +37,61 @@ struct CALLING_API FCLMatchEvent
 	float Time = 0.f;
 };
 
+/** Last applied damage (lastHit), last instigated shot (lastShot), or killing blow (lastDeath). */
+USTRUCT(BlueprintType)
+struct CALLING_API FCLHitRecord
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	bool bValid = false;
+
+	UPROPERTY()
+	FString Kind;
+
+	UPROPERTY()
+	FString Source;
+
+	UPROPERTY()
+	FString Killer;
+
+	UPROPERTY()
+	FString KillerName;
+
+	UPROPERTY()
+	FString Victim;
+
+	UPROPERTY()
+	float Amount = 0.f;
+
+	UPROPERTY()
+	float Health = 0.f;
+
+	UPROPERTY()
+	float Shield = 0.f;
+
+	UPROPERTY()
+	float X = 0.f;
+
+	UPROPERTY()
+	float Y = 0.f;
+
+	UPROPERTY()
+	float Z = 0.f;
+
+	UPROPERTY()
+	float KillerX = 0.f;
+
+	UPROPERTY()
+	float KillerY = 0.f;
+
+	UPROPERTY()
+	float KillerZ = 0.f;
+
+	UPROPERTY()
+	float Time = 0.f;
+};
+
 USTRUCT(BlueprintType)
 struct CALLING_API FCLSeatScore
 {
@@ -121,11 +176,20 @@ public:
 	bool GetShrineHeldBlue() const { return bShrineHeldBlue; }
 
 	void SetLiveShrine(FName Id);
+	void SetEncounterProgress(FName EncounterId, FName PhaseId, int32 WavesDone);
+	FName GetEncounterId() const { return EncounterId; }
+	FName GetPhaseId() const { return PhaseId; }
+	int32 GetWavesDone() const { return WavesDone; }
 	void SetShrineHeld(ECLPvpTeam Team, bool bHeld);
 	void SetModeOutcome(const FString& Result, const FString& Winner, const FString& FailReason);
 	void AppendMatchEvent(const FCLMatchEvent& Event);
 	void ClearMatchEvents();
 	const TArray<FCLMatchEvent>& GetMatchEvents() const { return MatchEvents; }
+	void NoteHit(const FCLHitRecord& Record);
+	void NoteDeath(const FCLHitRecord& Record);
+	const FCLHitRecord& GetLastHit() const { return LastHit; }
+	const FCLHitRecord& GetLastShot() const { return LastShot; }
+	const FCLHitRecord& GetLastDeath() const { return LastDeath; }
 
 	void SetLobbySnapshot(const TArray<FCLLobbySeatSnap>& Seats, int32 Ready, int32 MinPlayers, bool bQueued);
 	const TArray<FCLLobbySeatSnap>& GetLobbySeats() const { return LobbySeats; }
@@ -162,6 +226,15 @@ protected:
 	FName LiveShrine;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FName EncounterId;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FName PhaseId;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	int32 WavesDone = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
 	bool bShrineHeldRed = false;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
@@ -178,6 +251,15 @@ protected:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
 	TArray<FCLMatchEvent> MatchEvents;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FCLHitRecord LastHit;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FCLHitRecord LastShot;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Mode")
+	FCLHitRecord LastDeath;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Calling|Score")
 	TArray<FCLSeatScore> SeatScores;

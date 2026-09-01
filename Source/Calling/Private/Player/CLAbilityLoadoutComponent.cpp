@@ -90,6 +90,22 @@ UCLAbility* UCLAbilityLoadoutComponent::GetSlot(ECLAbilitySlot Slot) const
 	}
 }
 
+void UCLAbilityLoadoutComponent::ScaleCooldowns(float Scale)
+{
+	if (Scale <= 0.f || FMath::IsNearlyEqual(Scale, 1.f))
+	{
+		return;
+	}
+	UCLAbility* Slots[] = { Grenade, Shield, Evasion, Dash, Melee, Jump, SuperAbility };
+	for (UCLAbility* Ability : Slots)
+	{
+		if (Ability)
+		{
+			Ability->Cooldown *= Scale;
+		}
+	}
+}
+
 bool UCLAbilityLoadoutComponent::TryActivate(ECLAbilitySlot Slot)
 {
 	UCLAbility* Ability = GetSlot(Slot);

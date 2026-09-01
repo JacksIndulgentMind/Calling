@@ -25,7 +25,8 @@ public:
 	virtual void BeginPlay() override;
 
 	UFUNCTION(BlueprintCallable, Category = "Calling|Combat")
-	float ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision);
+	float ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision,
+		FName Kind = NAME_None, FName Source = NAME_None);
 
 	UFUNCTION(BlueprintPure, Category = "Calling|Combat")
 	bool IsAlive() const;

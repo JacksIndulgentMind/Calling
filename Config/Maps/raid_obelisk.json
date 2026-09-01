@@ -1,0 +1,33 @@
+{
+  "id": "raid_obelisk",
+  "umap": "/Game/Maps/CL_Raid_01",
+  "minPlayers": 1,
+  "maxPlayers": 6,
+  "supportedGameModes": ["obelisk_raid"],
+  "markers": {
+    "spawn_player": ["spawn.player", "space.safe"],
+    "ch1_portal": ["spawn.npc.portal"],
+    "ch1_ring_I": ["space.ring"],
+    "ch1_ring_II": ["space.ring"],
+    "ch1_ring_III": ["space.ring"],
+    "ch1_main": ["space.main"],
+    "door_ch1": ["door.encounter"],
+    "ch2_portal": ["spawn.npc.portal"],
+    "ch2_ring_I": ["space.ring"],
+    "ch2_ring_II": ["space.ring"],
+    "ch2_ring_III": ["space.ring"],
+    "ch2_main": ["space.main"],
+    "door_ch2": ["door.encounter"],
+    "ch3_portal": ["spawn.npc.portal"],
+    "ch3_ring_I": ["space.ring"],
+    "ch3_ring_II": ["space.ring"],
+    "ch3_ring_III": ["space.ring"],
+    "ch3_main": ["space.main"],
+    "door_ch3": ["door.encounter"],
+    "ch4_portal": ["spawn.npc.portal"],
+    "ch4_ring_I": ["space.ring"],
+    "ch4_ring_II": ["space.ring"],
+    "ch4_ring_III": ["space.ring"],
+    "ch4_main": ["space.main"]
+  }
+}

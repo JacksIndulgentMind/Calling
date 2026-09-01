@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+class UWorld;
 class ACLGreyboxFloors;
 enum class ECLGreyboxLayout : uint8;
 
@@ -67,3 +68,6 @@ public:
 };
 
 TUniquePtr<ICLGreyboxLayout> CLMakeGreyboxLayout(ECLGreyboxLayout Id);
+void CLBuildRaidObelisk(ACLGreyboxFloors& Floors);
+void CLStampRaidObeliskMarkers(UWorld* World, ACLGreyboxFloors& Floors);
+FVector CLRaidObeliskPlayerStart();

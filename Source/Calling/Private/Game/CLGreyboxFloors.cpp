@@ -421,9 +421,11 @@ FVector ACLGreyboxFloors::GetPlayerStartLocation() const
 	case ECLGreyboxLayout::PracticePillar:
 		return FVector(0.f, 0.f, 130.f);
 	case ECLGreyboxLayout::RaidApproach:
-		return FVector(-3500.f, 0.f, 130.f);
 	case ECLGreyboxLayout::RaidPit:
-		return FVector(0.f, 0.f, 130.f);
+	case ECLGreyboxLayout::RaidCourt:
+	case ECLGreyboxLayout::RaidArena:
+	case ECLGreyboxLayout::RaidObelisk:
+		return CLRaidObeliskPlayerStart();
 	default:
 		return FVector(0.f, 0.f, 200.f);
 	}
@@ -456,6 +458,10 @@ float ACLGreyboxFloors::GetRescueMinZ() const
 		Move.LoadFromIni();
 		return -CLNavAbility::AirDivePadDropFromLipCm(Move) - 500.f;
 	}
+	if (CachedWalkableMinZ < TNumericLimits<float>::Max() * 0.5f)
+	{
+		return CachedWalkableMinZ - 500.f;
+	}
 	return GetPlayerStartLocation().Z - 150.f;
 }
 
@@ -484,13 +490,11 @@ float ACLGreyboxFloors::GetSuggestedArenaHalfExtent() const
 	switch (Layout)
 	{
 	case ECLGreyboxLayout::RaidCourt:
-		return 2200.f;
 	case ECLGreyboxLayout::RaidApproach:
-		return 600.f;
 	case ECLGreyboxLayout::RaidArena:
-		return 1600.f;
 	case ECLGreyboxLayout::RaidPit:
-		return 700.f;
+	case ECLGreyboxLayout::RaidObelisk:
+		return 18000.f;
 	default:
 		return 2500.f;
 	}
@@ -513,6 +517,8 @@ void ACLGreyboxFloors::EnsureBuilt()
 		}
 	}
 	Platforms.Empty();
+	DoorBlocks.Empty();
+	CachedWalkableMinZ = TNumericLimits<float>::Max();
 	BuildLayout();
 	ApplyVisibleShading();
 	StampTaskMarkers();
@@ -568,6 +574,7 @@ void ACLGreyboxFloors::AddBox(const FVector& CenterCm, const FVector& SizeCm, co
 	if (!bExcludeFromNav)
 	{
 		FNavigationSystem::UpdateComponentData(*Mesh);
+		CachedWalkableMinZ = FMath::Min(CachedWalkableMinZ, CenterCm.Z - SizeCm.Z * 0.5f);
 	}
 	Platforms.Add(Mesh);
 }
@@ -617,9 +624,18 @@ void ACLGreyboxFloors::StampModule(FName Id, const FVector& CenterCm, const FRot
 	{
 		Size = FVector(80.f, 500.f, 220.f);
 	}
+	else if (Key == TEXT("obelisk"))
+	{
+		Size = FVector(400.f, 400.f, 9000.f);
+	}
+	else if (Key == TEXT("door_arch"))
+	{
+		Size = FVector(80.f, 800.f, 700.f);
+	}
 	const bool bCoverObstacle = (Key == TEXT("cover_half") || Key == TEXT("cover_full"));
 	const bool bVaultableCover = (Key == TEXT("cover_half"));
-	AddBox(CenterCm, Size, Rot, bCoverObstacle, bVaultableCover);
+	const bool bMonument = (Key == TEXT("obelisk"));
+	AddBox(CenterCm, Size, Rot, bCoverObstacle || bMonument, bVaultableCover);
 }
 
 void ACLGreyboxFloors::StampCornerShrines(const FCLPvpThreeLaneRecipe& Recipe, float PitZ)
@@ -1005,6 +1021,15 @@ void ACLGreyboxFloors::StampTaskMarkers()
 		ACLTaskMarker::SpawnAt(World, FName(TEXT("dash_end")), FVector(950.f, 0.f, PitZ));
 		return;
 	}
+	if (Layout == ECLGreyboxLayout::RaidObelisk
+		|| Layout == ECLGreyboxLayout::RaidCourt
+		|| Layout == ECLGreyboxLayout::RaidApproach
+		|| Layout == ECLGreyboxLayout::RaidArena
+		|| Layout == ECLGreyboxLayout::RaidPit)
+	{
+		CLStampRaidObeliskMarkers(World, *this);
+		return;
+	}
 	if (Layout == ECLGreyboxLayout::PracticePillar)
 	{
 		FCLMovementTune Move;
@@ -1066,7 +1091,7 @@ void ACLGreyboxFloors::RebuildNavigation()
 	FBox Box(ForceInit);
 	for (UStaticMeshComponent* Mesh : Platforms)
 	{
-		if (Mesh)
+		if (Mesh && Mesh->CanEverAffectNavigation())
 		{
 			Box += Mesh->Bounds.GetBox();
 		}
@@ -1314,4 +1339,35 @@ void ACLGreyboxFloors::RebuildNavigation()
 		Recast ? Recast->GetNumActiveTiles() : 0,
 		Platforms.Num(),
 		(Recast && Recast->bGenerateNavLinks) ? TEXT("on") : TEXT("off"));
+}
+
+void ACLGreyboxFloors::RegisterDoor(FName Id)
+{
+	if (Id.IsNone() || Platforms.Num() == 0)
+	{
+		return;
+	}
+	if (UStaticMeshComponent* Mesh = Platforms.Last())
+	{
+		Mesh->ComponentTags.Add(Id);
+		DoorBlocks.Add(Id, Mesh);
+	}
+}
+
+void ACLGreyboxFloors::OpenDoor(FName Id)
+{
+	if (Id.IsNone())
+	{
+		return;
+	}
+	TObjectPtr<UStaticMeshComponent>* Found = DoorBlocks.Find(Id);
+	if (!Found || !Found->Get())
+	{
+		return;
+	}
+	UStaticMeshComponent* Mesh = Found->Get();
+	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Mesh->SetCanEverAffectNavigation(false);
+	Mesh->SetHiddenInGame(true);
+	RebuildNavigation();
 }

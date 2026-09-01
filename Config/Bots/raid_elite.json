@@ -1,0 +1,14 @@
+{
+  "id": "raid_elite",
+  "role": "mob",
+  "intellect": {
+    "changeResponseSeconds": 0.22,
+    "botBook": "patrol_to_live_occupy",
+    "botBookSkill": 2,
+    "bulkApperception": false
+  },
+  "abilityStack": {
+    "kit": "vanguard",
+    "cooldownScale": 0.85
+  }
+}

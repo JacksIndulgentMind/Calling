@@ -41,7 +41,7 @@ namespace
 		for (TActorIterator<APawn> It(World); It; ++It)
 		{
 			APawn* Pawn = *It;
-			if (!Pawn || Pawn == Instigator)
+			if (!Pawn || Pawn == Instigator || ACLPlayerCharacter::AreCombatAllies(Instigator, Pawn))
 			{
 				continue;
 			}
@@ -138,6 +138,10 @@ bool CLHitscanService::Fire(UWorld* World, AActor* InstigatorActor, AController*
 	{
 		return false;
 	}
+	if (ACLPlayerCharacter::AreCombatAllies(InstigatorActor, HitActor))
+	{
+		return false;
+	}
 	UCLDamageableComponent* Damageable = HitActor->FindComponentByClass<UCLDamageableComponent>();
 	UCLHealthShieldComponent* TargetHS = HitActor->FindComponentByClass<UCLHealthShieldComponent>();
 	if (!Damageable && !TargetHS)
@@ -167,9 +171,17 @@ bool CLHitscanService::Fire(UWorld* World, AActor* InstigatorActor, AController*
 	{
 		Damage = 9999.f;
 	}
+	FName Source = FName(TEXT("hitscan"));
+	if (ACLPlayerCharacter* Shooter = Cast<ACLPlayerCharacter>(InstigatorActor))
+	{
+		if (const UCLWeaponMotorComponent* Gun = Shooter->GetWeaponMotor())
+		{
+			Source = FName(*Gun->GetActiveItem().DisplayName);
+		}
+	}
 	if (Damageable)
 	{
-		Damageable->ApplyDamage(Damage, InstigatorController, bPrecision);
+		Damageable->ApplyDamage(Damage, InstigatorController, bPrecision, FName(TEXT("hitscan")), Source);
 		if (!Damageable->IsAlive())
 		{
 			if (UCLWeaponBehaviorComponent* Behavior = Request.Behavior.Get())
@@ -181,7 +193,7 @@ bool CLHitscanService::Fire(UWorld* World, AActor* InstigatorActor, AController*
 	}
 	else
 	{
-		TargetHS->ApplyDamage(Damage, InstigatorController, bPrecision);
+		TargetHS->ApplyDamage(Damage, InstigatorController, bPrecision, FName(TEXT("hitscan")), Source);
 		if (!TargetHS->IsAlive())
 		{
 			if (UCLWeaponBehaviorComponent* Behavior = Request.Behavior.Get())

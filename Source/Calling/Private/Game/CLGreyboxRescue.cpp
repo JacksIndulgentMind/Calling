@@ -2,6 +2,7 @@
 #include "Game/CLGreyboxFloors.h"
 #include "Game/CLGameModeBase.h"
 #include "Player/CLPlayerCharacter.h"
+#include "Player/CLHealthShieldComponent.h"
 #include "Player/CLCombatMovementComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -50,9 +51,18 @@ void UCLGreyboxRescue::RescueFallenPawns() const
 	for (TActorIterator<ACLPlayerCharacter> It(World); It; ++It)
 	{
 		ACLPlayerCharacter* Char = *It;
-		if (Char && Char->GetActorLocation().Z < MinZ)
+		if (!Char || Char->GetActorLocation().Z >= MinZ)
+		{
+			continue;
+		}
+		if (Cast<APlayerController>(Char->GetController()))
 		{
 			TeleportToLip(Char, Lip);
+			continue;
+		}
+		if (UCLHealthShieldComponent* HS = Char->FindComponentByClass<UCLHealthShieldComponent>())
+		{
+			HS->ApplyDamage(99999.f, nullptr, false, FName(TEXT("void")), FName(TEXT("fellOutOfWorld")));
 		}
 	}
 }

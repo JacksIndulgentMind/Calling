@@ -24,11 +24,11 @@ Pawn scripting is **SeatMotor + BotBook** (catalog or JIT PlantUML). Anytime an 
 Scripts/dl-rebuild.ps1
 ```
 
-Defaults: standalone `-game`, then Compose PvP **through** host/ready/guest/go into the **pvp** match (waits for `navTiles`). `-Activity composer` stops in the lobby. `-Activity arena` is the solo skip. `-Activity none` skips director. `-Mode editor` opens the editor and requests PIE.
+Defaults: standalone `-game`, then Compose PvP **through** host/ready/guest/go into the **pvp** match (waits for `navTiles`). `-Activity raid` loads Obelisk (`scene=raid`; spawn/monitor in the nav skill). `-Activity composer` stops in the lobby. `-Activity arena` is the solo skip. `-Activity none` skips director. `-Mode editor` opens the editor and requests PIE.
 
 3. If `GET http://127.0.0.1:18765/state` `scene` is `boot`, `POST /director {"action":"enter"}` creates a default Player / Vanguard and travels to Social. Rebuild does this automatically.
 
-Agent HTTP is **localhost only** (`127.0.0.1:18765`; two-box guest **18767**). WebSocket hub is `ws://127.0.0.1:18766` (guest **18768**). Same JSON codec as `POST /hub`. Each Unreal process mints **`instanceId`**; send **`agentId`** on hub/director/state. Drive pawns with `appendBotBook` / `branchBotBook`. After a book starts, `GET /state?seat=` `botBook.followAlert` / `executionError` is an immediate fail — the engine also sets `modeResult=fail` and appends `/state.events`. Dump the event log and stop; do not wait for shrine/`zero_kills`. Loopback `type: plan` / `/intent` / `/sequence` / `/goto` are debug only.
+Agent HTTP is **localhost only** (`127.0.0.1:18765`; two-box guest **18767**). WebSocket hub is `ws://127.0.0.1:18766` (guest **18768**). Same JSON codec as `POST /hub`. Each Unreal process mints **`instanceId`**; send **`agentId`** on hub/director/state. Drive pawns with `appendBotBook` / `branchBotBook`. After a book starts, `GET /state?seat=` `botBook.followAlert` / `executionError` is an immediate fail — the engine also sets `modeResult=fail` and appends `/state.events`. Dump the event log and stop; do not wait for shrine/`zero_kills`. Pool drop while alive: dump `lastHit` / `lastShot` (`kind`/`source`/`killerName`/killer loc). `lastDeath.valid` / `alive=false` is a take-out — dump that before chasing `loc_still`. Raid stroll fail-fasts on it; PvP circle-run `WaitAlive`. Loopback `type: plan` / `/intent` / `/sequence` / `/goto` are debug only.
 
 Stdio MCP: `Scripts/dl-agent-mcp/index.mjs` (tools `hub`, `state`, `director`, `boot`; loopback `intent` / `sequence` / `goto` are no-lobby only).
 

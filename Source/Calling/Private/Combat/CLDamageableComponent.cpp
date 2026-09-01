@@ -68,7 +68,8 @@ float UCLDamageableComponent::GetMaxShield() const
 	return 0.f;
 }
 
-float UCLDamageableComponent::ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision)
+float UCLDamageableComponent::ApplyDamage(float Damage, AController* InstigatorController, bool bPrecision,
+	FName Kind, FName Source)
 {
 	const AActor* Owner = GetOwner();
 	if (Owner && !Owner->HasAuthority())
@@ -100,7 +101,7 @@ float UCLDamageableComponent::ApplyDamage(float Damage, AController* InstigatorC
 
 	if (UCLHealthShieldComponent* HS = HealthShield.Get())
 	{
-		const float Applied = HS->ApplyDamage(Remaining, InstigatorController, bPrecision);
+		const float Applied = HS->ApplyDamage(Remaining, InstigatorController, bPrecision, Kind, Source);
 		OnDamaged.Broadcast(HS->GetHealth(), Applied);
 		if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(GetOwner()))
 		{
@@ -116,6 +117,11 @@ float UCLDamageableComponent::ApplyDamage(float Damage, AController* InstigatorC
 	const float Applied = FMath::Min(Health, Remaining);
 	Health -= Applied;
 	OnDamaged.Broadcast(Health, Applied);
+	if (ACLPlayerCharacter* Char = Cast<ACLPlayerCharacter>(GetOwner()))
+	{
+		Char->RecordHit(InstigatorController, Kind, Source, Applied);
+		Char->NoteIncomingDamage(InstigatorController, Applied);
+	}
 	if (Health <= 0.f && bAlive)
 	{
 		bAlive = false;
