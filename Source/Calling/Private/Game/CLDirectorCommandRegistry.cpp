@@ -171,6 +171,16 @@ TSharedRef<FJsonObject> FCLDirectorCommandRegistry::Dispatch(
 		PC->SetMainMenuOpen(true);
 		Menu->ShowLobbyTab();
 	}
+	else if (Action == TEXT("armory") || Action == TEXT("armorytab"))
+	{
+		PC->SetMainMenuOpen(true);
+		Menu->ShowArmoryTab();
+	}
+	else if (Action == TEXT("vault") || Action == TEXT("vaulttab"))
+	{
+		PC->SetMainMenuOpen(true);
+		Menu->ShowVaultTab();
+	}
 	else if (Action == TEXT("socialaudience"))
 	{
 		FString KindStr;

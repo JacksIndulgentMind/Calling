@@ -19,6 +19,7 @@
 #include "Game/CLParticipantSeat.h"
 #include "Game/CLSessionSubsystem.h"
 #include "Game/CLInputBindSubsystem.h"
+#include "Game/CLVaultSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
@@ -714,9 +715,28 @@ void ACLPlayerController::ToggleMainMenu()
 	}
 
 	EnsureMainMenu();
+	if (MainMenuInstance && MainMenuInstance->IsOverlayVisible() && MainMenuInstance->TryVaultNavigateBack())
+	{
+		return;
+	}
 	if (MainMenuInstance)
 	{
 		MainMenuInstance->ToggleOverlay();
 		ApplyMenuInputMode(MainMenuInstance->IsOverlayVisible());
 	}
+}
+
+bool ACLPlayerController::EquipVaultWeapon(FGuid InstanceId)
+{
+	UGameInstance* GI = GetGameInstance();
+	UCLVaultSubsystem* Vault = GI ? GI->GetSubsystem<UCLVaultSubsystem>() : nullptr;
+	if (!Vault || !Vault->EquipWeapon(InstanceId))
+	{
+		return false;
+	}
+	if (ACLPlayerCharacter* Body = Cast<ACLPlayerCharacter>(GetPawn()))
+	{
+		Body->ApplyProfileLoadout();
+	}
+	return true;
 }

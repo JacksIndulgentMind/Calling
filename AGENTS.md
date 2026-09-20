@@ -36,7 +36,7 @@ Stdio MCP: `Scripts/dl-agent-mcp/index.mjs` (tools `hub`, `state`, `director`, `
 
 | Plane | Where | Use for |
 |-------|--------|---------|
-| Overlay | `POST /director` | I-menu: `open`, `pvp` / `composer`, `host`, `guest`, `ready`, `go`, `virtualhost` / `virtualjoin`, `social`, `raid`, `practice`, `arena` |
+| Overlay | `POST /director` | I-menu: `open`, `armory` / `armorytab`, `vault` / `vaulttab`, `pvp` / `composer`, `host`, `guest`, `ready`, `go`, `virtualhost` / `virtualjoin`, `social`, `raid`, `practice`, `arena` |
 | Hub | `POST /hub` and WS 18766 | `join`, `subscribe`, `mindControl`, `setTeam`, `ready`, `go`, `appendBotBook`, `branchBotBook`, `view`. Loopback: `plan`, `goto` |
 
 Director is not the pawn motor. Drive seats through the hub. See the control skill.

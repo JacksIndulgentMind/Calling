@@ -5,6 +5,7 @@
 #include "Core/CLTypes.h"
 #include "Game/CLLobbyTypes.h"
 #include "Input/CLInputTypes.h"
+#include "Loot/CLItemInstance.h"
 #include "CLMainMenuOverlay.generated.h"
 
 class UCanvasPanel;
@@ -12,6 +13,7 @@ class UVerticalBox;
 class UCLDirectorPanel;
 class UCLKeybindEditor;
 class UCLArmoryWidget;
+class UCLVaultWidget;
 class UComboBoxString;
 class UTextBlock;
 class UEditableTextBox;
@@ -64,6 +66,8 @@ public:
 	void ShowKeybindsTab();
 	void ShowLobbyTab();
 	void ShowArmoryTab();
+	void ShowVaultTab();
+	bool TryVaultNavigateBack();
 
 	bool IsListening() const;
 	void CancelListen();
@@ -85,7 +89,10 @@ protected:
 	void BuildLobbyPanel(class UVerticalBox* RootCol);
 	void BuildKeybindEditor(class UVerticalBox* RootCol);
 	void BuildArmoryPanel(class UVerticalBox* RootCol);
+	void BuildVaultPanel(class UVerticalBox* RootCol);
 	void SetCompactPanel(bool bCompact);
+	void CollapseAllTabBoxes();
+	void RefreshVaultTabLabel();
 
 	UFUNCTION()
 	void HandleDirectorTabClicked();
@@ -98,6 +105,12 @@ protected:
 
 	UFUNCTION()
 	void HandleArmoryTabClicked();
+
+	UFUNCTION()
+	void HandleVaultTabClicked();
+
+	UFUNCTION()
+	void HandleVaultLootEarned(const FCLItemInstance& Item);
 
 	UFUNCTION()
 	void HandlePvpClicked();
@@ -190,6 +203,9 @@ protected:
 	TObjectPtr<UCLArmoryWidget> ArmoryWidget;
 
 	UPROPERTY()
+	TObjectPtr<UCLVaultWidget> VaultWidget;
+
+	UPROPERTY()
 	TObjectPtr<USizeBox> PanelSize;
 
 	UPROPERTY()
@@ -209,6 +225,12 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> ArmoryBox;
+
+	UPROPERTY()
+	TObjectPtr<UVerticalBox> VaultBox;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> VaultTabLabel;
 
 	UPROPERTY()
 	TObjectPtr<UComboBoxString> LoopbackJoinCombo;

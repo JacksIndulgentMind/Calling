@@ -40,6 +40,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Calling|UI")
 	void SetMainMenuOpen(bool bOpen);
 
+	bool EquipVaultWeapon(FGuid InstanceId);
+
 	UCLMainMenuOverlay* GetMainMenu();
 	const UCLMainMenuOverlay* GetMainMenu() const { return MainMenuInstance; }
 

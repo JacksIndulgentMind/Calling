@@ -89,6 +89,7 @@ namespace CLProfileJson
 		Obj->SetObjectField(TEXT("finalStats"), WeaponStatsToJson(Item.FinalStats));
 		Obj->SetStringField(TEXT("sourceTableId"), Item.SourceTableId);
 		Obj->SetStringField(TEXT("sightId"), Item.SightId.ToString());
+		Obj->SetStringField(TEXT("realmId"), Item.RealmId.IsNone() ? TEXT("local") : Item.RealmId.ToString());
 		Obj->SetStringField(TEXT("earnedAt"), Item.EarnedAt.ToIso8601());
 
 		TArray<TSharedPtr<FJsonValue>> Mods;
@@ -123,6 +124,15 @@ namespace CLProfileJson
 		if (Obj->HasField(TEXT("sightId")))
 		{
 			Item.SightId = FName(*Obj->GetStringField(TEXT("sightId")));
+		}
+		if (Obj->HasField(TEXT("realmId")))
+		{
+			const FString Realm = Obj->GetStringField(TEXT("realmId"));
+			Item.RealmId = Realm.IsEmpty() ? FName(TEXT("local")) : FName(*Realm);
+		}
+		else
+		{
+			Item.RealmId = FName(TEXT("local"));
 		}
 		FDateTime::ParseIso8601(*Obj->GetStringField(TEXT("earnedAt")), Item.EarnedAt);
 

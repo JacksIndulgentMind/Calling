@@ -2,6 +2,8 @@
 #include "UI/CLDirectorPanel.h"
 #include "UI/CLKeybindEditor.h"
 #include "UI/CLArmoryWidget.h"
+#include "UI/CLVaultWidget.h"
+#include "Game/CLVaultSubsystem.h"
 #include "Game/CLErrorBoundary.h"
 #include "Core/CLError.h"
 #include "Game/CLSessionSubsystem.h"
@@ -80,6 +82,7 @@ UCLMainMenuOverlay::UCLMainMenuOverlay(const FObjectInitializer& ObjectInitializ
 	DirectorPanel = CreateDefaultSubobject<UCLDirectorPanel>(TEXT("DirectorPanel"));
 	KeybindEditor = CreateDefaultSubobject<UCLKeybindEditor>(TEXT("KeybindEditor"));
 	ArmoryWidget = CreateDefaultSubobject<UCLArmoryWidget>(TEXT("ArmoryWidget"));
+	VaultWidget = CreateDefaultSubobject<UCLVaultWidget>(TEXT("VaultWidget"));
 }
 
 TSharedRef<SWidget> UCLMainMenuOverlay::RebuildWidget()
@@ -100,7 +103,12 @@ void UCLMainMenuOverlay::NativeConstruct()
 		{
 			Sessions->OnSessionEvent.AddDynamic(this, &UCLMainMenuOverlay::HandleSessionEvent);
 		}
+		if (UCLVaultSubsystem* Vault = GI->GetSubsystem<UCLVaultSubsystem>())
+		{
+			Vault->OnLootEarned.AddDynamic(this, &UCLMainMenuOverlay::HandleVaultLootEarned);
+		}
 	}
+	RefreshVaultTabLabel();
 }
 
 void UCLMainMenuOverlay::NativeDestruct()
@@ -110,6 +118,10 @@ void UCLMainMenuOverlay::NativeDestruct()
 		if (UCLSessionSubsystem* Sessions = GI->GetSubsystem<UCLSessionSubsystem>())
 		{
 			Sessions->OnSessionEvent.RemoveDynamic(this, &UCLMainMenuOverlay::HandleSessionEvent);
+		}
+		if (UCLVaultSubsystem* Vault = GI->GetSubsystem<UCLVaultSubsystem>())
+		{
+			Vault->OnLootEarned.RemoveDynamic(this, &UCLMainMenuOverlay::HandleVaultLootEarned);
 		}
 	}
 	Super::NativeDestruct();
@@ -194,13 +206,29 @@ void UCLMainMenuOverlay::BuildWidgetTree()
 	{
 		T2->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 	}
-	Tabs->AddChildToHorizontalBox(ArmoryTab);
+	if (UHorizontalBoxSlot* T3 = Tabs->AddChildToHorizontalBox(ArmoryTab))
+	{
+		T3->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	}
+	UButton* VaultTab = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("VaultTab"));
+	VaultTabLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("VaultTabLabel"));
+	VaultTabLabel->SetText(FText::FromString(TEXT("Vault")));
+	{
+		FSlateFontInfo Font = VaultTabLabel->GetFont();
+		Font.Size = 14;
+		VaultTabLabel->SetFont(Font);
+	}
+	StyleButtonLabel(VaultTab, VaultTabLabel);
+	VaultTab->OnClicked.AddDynamic(this, &UCLMainMenuOverlay::HandleVaultTabClicked);
+	Tabs->AddChildToHorizontalBox(VaultTab);
 	AddPadded(RootCol, Tabs, 16.f);
 
 	BuildDirectorPanel(RootCol);
 	BuildLobbyPanel(RootCol);
 	BuildKeybindEditor(RootCol);
 	BuildArmoryPanel(RootCol);
+	BuildVaultPanel(RootCol);
+	RefreshVaultTabLabel();
 }
 
 void UCLMainMenuOverlay::BuildDirectorPanel(UVerticalBox* RootCol)
@@ -548,6 +576,67 @@ void UCLMainMenuOverlay::BuildArmoryPanel(UVerticalBox* RootCol)
 	AddPadded(RootCol, ArmoryBox, 0.f);
 }
 
+void UCLMainMenuOverlay::BuildVaultPanel(UVerticalBox* RootCol)
+{
+	VaultBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("VaultBox"));
+	VaultBox->SetVisibility(ESlateVisibility::Collapsed);
+	AddPadded(VaultBox, MakeLabel(WidgetTree, TEXT("VaultHint"),
+		TEXT("What you have — not Armory."), 12), 8.f);
+	if (VaultWidget)
+	{
+		VaultWidget->Build(WidgetTree, VaultBox);
+	}
+	AddPadded(RootCol, VaultBox, 0.f);
+}
+
+void UCLMainMenuOverlay::CollapseAllTabBoxes()
+{
+	if (DirectorBox)
+	{
+		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (LobbyBox)
+	{
+		LobbyBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (KeybindsBox)
+	{
+		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (ArmoryBox)
+	{
+		ArmoryBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (VaultBox)
+	{
+		VaultBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UCLMainMenuOverlay::RefreshVaultTabLabel()
+{
+	if (!VaultTabLabel)
+	{
+		return;
+	}
+	int32 Unread = 0;
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLVaultSubsystem* Vault = GI->GetSubsystem<UCLVaultSubsystem>())
+		{
+			Unread = Vault->GetUnreadEarnCount();
+		}
+	}
+	VaultTabLabel->SetText(FText::FromString(
+		Unread > 0 ? FString::Printf(TEXT("Vault (%d)"), Unread) : TEXT("Vault")));
+}
+
+void UCLMainMenuOverlay::HandleVaultLootEarned(const FCLItemInstance& Item)
+{
+	(void)Item;
+	RefreshVaultTabLabel();
+}
+
 void UCLMainMenuOverlay::SetCompactPanel(bool bCompact)
 {
 	if (!PanelSize)
@@ -592,6 +681,10 @@ void UCLMainMenuOverlay::ShowOverlay()
 void UCLMainMenuOverlay::HideOverlay()
 {
 	CancelListen();
+	if (VaultWidget)
+	{
+		VaultWidget->ResetToMakes();
+	}
 	bVisible = false;
 	SetVisibility(ESlateVisibility::Collapsed);
 }
@@ -603,21 +696,10 @@ void UCLMainMenuOverlay::ShowDirectorTab()
 	{
 		TitleLabel->SetText(FText::FromString(TEXT("Director")));
 	}
+	CollapseAllTabBoxes();
 	if (DirectorBox)
 	{
 		DirectorBox->SetVisibility(ESlateVisibility::Visible);
-	}
-	if (LobbyBox)
-	{
-		LobbyBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (KeybindsBox)
-	{
-		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (ArmoryBox)
-	{
-		ArmoryBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
@@ -628,21 +710,10 @@ void UCLMainMenuOverlay::ShowLobbyTab()
 	{
 		TitleLabel->SetText(FText::FromString(TEXT("Director")));
 	}
-	if (DirectorBox)
-	{
-		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
+	CollapseAllTabBoxes();
 	if (LobbyBox)
 	{
 		LobbyBox->SetVisibility(ESlateVisibility::Visible);
-	}
-	if (KeybindsBox)
-	{
-		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (ArmoryBox)
-	{
-		ArmoryBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (SaveDefaultLabel)
 	{
@@ -671,21 +742,10 @@ void UCLMainMenuOverlay::ShowKeybindsTab()
 	{
 		TitleLabel->SetText(FText::FromString(TEXT("Director")));
 	}
-	if (DirectorBox)
-	{
-		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (LobbyBox)
-	{
-		LobbyBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
+	CollapseAllTabBoxes();
 	if (KeybindsBox)
 	{
 		KeybindsBox->SetVisibility(ESlateVisibility::Visible);
-	}
-	if (ArmoryBox)
-	{
-		ArmoryBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (KeybindEditor)
 	{
@@ -701,18 +761,7 @@ void UCLMainMenuOverlay::ShowArmoryTab()
 	{
 		TitleLabel->SetText(FText::FromString(TEXT("Armory")));
 	}
-	if (DirectorBox)
-	{
-		DirectorBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (LobbyBox)
-	{
-		LobbyBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (KeybindsBox)
-	{
-		KeybindsBox->SetVisibility(ESlateVisibility::Collapsed);
-	}
+	CollapseAllTabBoxes();
 	if (ArmoryBox)
 	{
 		ArmoryBox->SetVisibility(ESlateVisibility::Visible);
@@ -722,6 +771,42 @@ void UCLMainMenuOverlay::ShowArmoryTab()
 		ArmoryWidget->Refresh();
 	}
 	SetKeyboardFocus();
+}
+
+void UCLMainMenuOverlay::ShowVaultTab()
+{
+	SetCompactPanel(false);
+	if (TitleLabel)
+	{
+		TitleLabel->SetText(FText::FromString(TEXT("Vault")));
+	}
+	CollapseAllTabBoxes();
+	if (VaultBox)
+	{
+		VaultBox->SetVisibility(ESlateVisibility::Visible);
+	}
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UCLVaultSubsystem* Vault = GI->GetSubsystem<UCLVaultSubsystem>())
+		{
+			Vault->ConsumeEarnBadges();
+		}
+	}
+	if (VaultWidget)
+	{
+		VaultWidget->Refresh();
+	}
+	RefreshVaultTabLabel();
+	SetKeyboardFocus();
+}
+
+bool UCLMainMenuOverlay::TryVaultNavigateBack()
+{
+	if (!bVisible || !VaultBox || VaultBox->GetVisibility() != ESlateVisibility::Visible)
+	{
+		return false;
+	}
+	return VaultWidget && VaultWidget->TryNavigateBack();
 }
 
 bool UCLMainMenuOverlay::IsListening() const
@@ -776,6 +861,7 @@ void UCLMainMenuOverlay::HandleDirectorTabClicked() { ShowDirectorTab(); }
 void UCLMainMenuOverlay::HandleLobbyTabClicked() { ShowLobbyTab(); }
 void UCLMainMenuOverlay::HandleKeybindsTabClicked() { ShowKeybindsTab(); }
 void UCLMainMenuOverlay::HandleArmoryTabClicked() { ShowArmoryTab(); }
+void UCLMainMenuOverlay::HandleVaultTabClicked() { ShowVaultTab(); }
 void UCLMainMenuOverlay::HandleComposeClicked() { JumpToActivity(ECLSceneId::Composer); }
 void UCLMainMenuOverlay::HandlePvpClicked() { JumpToActivity(ECLSceneId::Pvp); }
 void UCLMainMenuOverlay::HandleRaidClicked() { JumpToActivity(ECLSceneId::Raid); }
